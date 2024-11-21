@@ -1,17 +1,33 @@
-use std::net::TcpListener;
+use std::error::Error;
 
-use axum::{routing::get, serve::Serve, Router};
+use axum::{routing::get, Router};
 
-pub fn new<S>() -> Router<S>
-where
-    S: Clone + Send + Sync + 'static,
-{
+#[cfg(feature = "lambda")]
+pub mod lambda_adapter;
+
+pub mod logger;
+
+pub fn new() -> Router {
     let app = Router::new().route("/version", get(version));
 
-    #[cfg(feature = "local")]
-    let app = app.layer(tower_livereload::LiveReloadLayer::new());
-
     app
+}
+
+pub async fn serve<M, S>(
+    _tcp_listener: tokio::net::TcpListener,
+    app: Router,
+) -> Result<(), Box<dyn Error>> {
+    #[cfg(not(feature = "lambda"))]
+    let _ = axum::serve(_tcp_listener, app);
+
+    #[cfg(feature = "lambda")]
+    {
+        lambda_runtime::run(lambda_adapter::LambdaAdapter::from(app))
+            .await
+            .unwrap();
+    }
+
+    Ok(())
 }
 
 async fn version() -> String {
