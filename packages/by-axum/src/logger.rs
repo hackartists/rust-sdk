@@ -1,4 +1,4 @@
-use slog::{Drain, OwnedKV, SendSyncRefUnwindSafeKV};
+use slog::Drain;
 use static_str_ops::staticize;
 use std::result;
 
@@ -34,24 +34,16 @@ where
     }
 }
 
-pub fn root() -> slog::Logger {
+pub fn root(service_name: &str) -> slog::Logger {
     let decorator = slog_term::PlainSyncDecorator::new(std::io::stdout());
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let drain = RuntimeLevelFilter { drain }.fuse();
 
-    slog::Logger::root(drain, slog::o!("service" => "dagit"))
+    slog::Logger::root(drain, slog::o!("service" => service_name.to_string()))
 }
 
-pub fn new<T>(values: OwnedKV<T>) -> slog::Logger
-where
-    T: SendSyncRefUnwindSafeKV + 'static,
-{
-    let root = root();
-    root.new(values)
-}
-
-pub fn new_api(method: &'static str, api: &str) -> slog::Logger {
+pub fn new_log_for_api(log: slog::Logger, method: &'static str, api: &str) -> slog::Logger {
     let api = staticize(api);
 
-    new(slog::o!("API Method" => method, "API Endpoint" => api))
+    log.new(slog::o!("API Method" => method, "API Endpoint" => api))
 }
