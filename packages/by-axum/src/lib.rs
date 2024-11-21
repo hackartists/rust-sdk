@@ -13,7 +13,7 @@ pub fn new() -> Router {
     app
 }
 
-pub async fn serve<M, S>(
+pub async fn serve(
     _tcp_listener: tokio::net::TcpListener,
     app: Router,
 ) -> Result<(), Box<dyn Error>> {
