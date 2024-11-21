@@ -1,0 +1,14 @@
+[package]
+name = "by-axum"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7.9"
+dioxus-aws = { version = "0.6.4", optional = true }
+tower-livereload = { version = "0.9.4", optional = true }
+
+[features]
+default = []
+prod = ["dioxus-aws"]
+local = ["tower-livereload"]

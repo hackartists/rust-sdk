@@ -1,0 +1,6 @@
+[workspace]
+members = ["packages/by-axum","examples/basic-api"]
+resolver = "2"
+
+[workspace.dependencies]
+by-axum = { path = "packages/by-axum" }
