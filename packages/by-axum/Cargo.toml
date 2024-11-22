@@ -8,6 +8,7 @@ keywords = ["axum", "lambda", "api", "serverless"]
 repository = "https://github.com/biyard/biyard-api.git"
 
 [dependencies]
+aide = { version = "0.13.4", features = ["axum"] }
 axum = "0.7.9"
 axum-core = "0.4.5"
 dioxus-aws = { version = "0.6.4", optional = true }

@@ -1,28 +1,45 @@
 use std::error::Error;
 
-use axum::{routing::get, Router};
+use aide::{
+    axum::{routing::get, ApiRouter, IntoApiResponse},
+    openapi::{Info, OpenApi},
+};
+use axum::{Extension, Json};
 
 #[cfg(feature = "lambda")]
 pub mod lambda_adapter;
 
 pub mod logger;
 
-pub fn new() -> Router {
-    let app = Router::new().route("/version", get(version));
+pub fn new() -> ApiRouter {
+    let app = ApiRouter::new().api_route("/version", get(version));
 
     app
 }
 
 pub async fn serve(
     _tcp_listener: tokio::net::TcpListener,
-    app: Router,
+    app: ApiRouter,
 ) -> Result<(), Box<dyn Error>> {
+    let mut api = OpenApi {
+        info: Info {
+            description: Some("Open API Specification".to_string()),
+            ..Info::default()
+        },
+        ..OpenApi::default()
+    };
+
+    let app = app
+        .route("/spec", get(serve_api))
+        .finish_api(&mut api)
+        .layer(Extension(api));
+
     #[cfg(not(feature = "lambda"))]
-    let _ = axum::serve(_tcp_listener, app);
+    let _ = axum::serve(_tcp_listener, app.into_make_service()).await?;
 
     #[cfg(feature = "lambda")]
     {
-        lambda_runtime::run(lambda_adapter::LambdaAdapter::from(app))
+        lambda_runtime::run(lambda_adapter::LambdaAdapter::from(app.into_service()))
             .await
             .unwrap();
     }
@@ -42,4 +59,8 @@ async fn version() -> String {
         },
     }
     .to_string()
+}
+
+async fn serve_api(Extension(api): Extension<OpenApi>) -> impl IntoApiResponse {
+    Json(api)
 }
