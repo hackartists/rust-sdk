@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use ::axum::{Extension, Json};
 use aide::{
     axum::{routing::get, ApiRouter, IntoApiResponse},
@@ -22,7 +20,7 @@ pub fn new() -> ApiRouter {
 pub async fn serve(
     _tcp_listener: tokio::net::TcpListener,
     app: ApiRouter,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut api = OpenApi {
         info: Info {
             description: Some("Open API Specification".to_string()),
