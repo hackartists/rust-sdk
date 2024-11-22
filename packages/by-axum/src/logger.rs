@@ -34,12 +34,15 @@ where
     }
 }
 
-pub fn root(service_name: &str) -> slog::Logger {
+pub fn root() -> slog::Logger {
     let decorator = slog_term::PlainSyncDecorator::new(std::io::stdout());
     let drain = slog_term::FullFormat::new(decorator).build().fuse();
     let drain = RuntimeLevelFilter { drain }.fuse();
 
-    slog::Logger::root(drain, slog::o!("service" => service_name.to_string()))
+    slog::Logger::root(
+        drain,
+        slog::o!("service" => option_env!("SERVICE").unwrap_or("unknown-server").to_string()),
+    )
 }
 
 pub fn new_log_for_api(log: slog::Logger, method: &'static str, api: &str) -> slog::Logger {

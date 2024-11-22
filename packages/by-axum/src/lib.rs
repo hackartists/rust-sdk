@@ -1,16 +1,14 @@
 use axum::{routing::get, Router};
 
 pub use axum;
+pub use logger as log;
 
 #[cfg(feature = "lambda")]
 pub mod lambda_adapter;
-
 pub mod logger;
 
 pub fn new() -> Router {
-    let app = Router::new().route("/version", get(version));
-
-    app
+    Router::new().route("/version", get(version))
 }
 
 pub async fn serve(
@@ -18,7 +16,7 @@ pub async fn serve(
     app: Router,
 ) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(not(feature = "lambda"))]
-    let _ = axum::serve(_tcp_listener, app).await?;
+    axum::serve(_tcp_listener, app).await?;
 
     #[cfg(feature = "lambda")]
     {
@@ -34,7 +32,7 @@ async fn version() -> String {
     match option_env!("VERSION") {
         Some(version) => match option_env!("COMMIT") {
             Some(commit) => format!("{}-{}", version, commit),
-            None => format!("{}", version),
+            None => version.to_string(),
         },
         None => match option_env!("DATE") {
             Some(date) => date.to_string(),
