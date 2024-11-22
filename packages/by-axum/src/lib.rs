@@ -35,7 +35,7 @@ pub async fn serve(
         .layer(Extension(api));
 
     #[cfg(not(feature = "lambda"))]
-    let _ = axum::serve(_tcp_listener, app.into_make_service()).await?;
+    let _ = ::axum::serve(_tcp_listener, app.into_make_service()).await?;
 
     #[cfg(feature = "lambda")]
     {
