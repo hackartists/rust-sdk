@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = "0.7.9"
 by-axum.workspace = true
 tokio = { version = "1.41.1", features = ["full"] }
 
