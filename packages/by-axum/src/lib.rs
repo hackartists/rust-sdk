@@ -16,6 +16,7 @@ pub async fn serve(
     app: Router,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let app = app.layer(tower_http::cors::CorsLayer::permissive());
+
     #[cfg(not(feature = "lambda"))]
     axum::serve(_tcp_listener, app).await?;
 

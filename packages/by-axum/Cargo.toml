@@ -18,8 +18,8 @@ slog-term = "2.9.1"
 static_str_ops = "0.1.2"
 tokio = { version = "1.41.1", features = ["net"] }
 tower = { version = "0.5.1", optional = true }
-tower-http = { version = "0.6.2", features = ["cors", "compression-gzip", "compression-deflate", "trace"], optional = true }
+tower-http = { version = "0.6.2", features = ["cors", "compression-gzip", "compression-deflate", "trace"] }
 tower-service = "0.3.3"
 
 [features]
-lambda = ["dioxus-aws", "lambda_runtime", "lambda_http", "tower", "http", "tower-http"]
+lambda = ["dioxus-aws", "lambda_runtime", "lambda_http", "tower", "http"]
