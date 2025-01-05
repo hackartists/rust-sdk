@@ -17,6 +17,7 @@ slog = "2.7.0"
 slog-term = "2.9.1"
 static_str_ops = "0.1.2"
 tokio = { version = "1.41.1", features = ["net"] }
+tokio-cron-scheduler = "0.13.0"
 tower = { version = "0.5.1", optional = true }
 tower-http = { version = "0.6.2", features = ["cors", "compression-gzip", "compression-deflate", "trace"] }
 tower-service = "0.3.3"
