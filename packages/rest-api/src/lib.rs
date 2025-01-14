@@ -55,7 +55,7 @@ pub fn sign_request(req: RequestBuilder) -> RequestBuilder {
     }
 }
 
-pub async fn get<T, E, F>(url: &str) -> Result<T, E>
+pub async fn get<T, E>(url: &str) -> Result<T, E>
 where
     T: serde::de::DeserializeOwned,
     E: serde::de::DeserializeOwned + From<reqwest::Error>,
