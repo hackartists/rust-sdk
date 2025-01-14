@@ -3,9 +3,9 @@ name = "by-axum"
 version = "0.1.7"
 edition = "2021"
 description = "Library satisfying Biyard API convention"
-license = "MIT"
+license = "Apache-2.0"
 keywords = ["axum", "lambda", "api", "serverless"]
-repository = "https://github.com/biyard/biyard-api.git"
+repository = "https://github.com/biyard/rust-sdk/tree/main/packages/by-axum"
 
 [dependencies]
 axum = "0.7.9"

@@ -1,5 +1,5 @@
 [workspace]
-members = ["packages/by-axum","examples/basic-api"]
+members = ["packages/by-axum","examples/basic-api", "packages/rest-api"]
 resolver = "2"
 
 [workspace.dependencies]
