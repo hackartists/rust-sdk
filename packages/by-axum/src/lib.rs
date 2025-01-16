@@ -1,30 +1,34 @@
-use axum::{routing::get, Router};
+use axum::routing::get;
 
 pub use axum;
 pub use logger as log;
+use router::BiyardRouter;
 
 #[cfg(feature = "lambda")]
 pub mod lambda_adapter;
 pub mod logger;
+pub mod router;
 
-pub fn new() -> Router {
-    Router::new().route("/version", get(version))
+pub fn new() -> BiyardRouter {
+    BiyardRouter::new().route("/version", get(version))
 }
 
 pub async fn serve(
     _tcp_listener: tokio::net::TcpListener,
-    app: Router,
+    app: BiyardRouter,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let app = app.layer(tower_http::cors::CorsLayer::permissive());
 
     #[cfg(not(feature = "lambda"))]
-    axum::serve(_tcp_listener, app).await?;
+    axum::serve(_tcp_listener, app.inner).await?;
 
     #[cfg(feature = "lambda")]
     {
-        lambda_runtime::run(lambda_adapter::LambdaAdapter::from(app.into_service()))
-            .await
-            .unwrap();
+        lambda_runtime::run(lambda_adapter::LambdaAdapter::from(
+            app.inner.into_service(),
+        ))
+        .await
+        .unwrap();
     }
 
     Ok(())
