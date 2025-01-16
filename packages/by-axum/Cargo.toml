@@ -1,6 +1,6 @@
 [package]
 name = "by-axum"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Library satisfying Biyard API convention"
 license = "Apache-2.0"
@@ -23,7 +23,7 @@ tower-service = "0.3.3"
 aide.workspace = true
 axum.workspace = true
 schemars.workspace = true
-by-types = { workspace = true, version = "0.1.0", features = [ "server" ] }
+by-types = { workspace = true, features = [ "server" ] }
 serde_json = "1.0.135"
 
 [features]

@@ -1,6 +1,6 @@
 [package]
 name = "by-types"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Biyard data types"
 license = "Apache-2.0"
@@ -8,7 +8,7 @@ keywords = ["axum", "datatypes", "api" ]
 repository = "https://github.com/biyard/rust-sdk/tree/main/packages/by-types"
 
 [dependencies]
-serde = { version = "1.0.217", features = ["derive"] }
+serde = "1.0.217"
 aide = { workspace = true,  optional = true }
 axum = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }

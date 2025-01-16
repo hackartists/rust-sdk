@@ -1,7 +1,4 @@
-use std::{
-    fmt::{Debug, Display},
-    str::FromStr,
-};
+use std::fmt::{Debug, Display};
 
 use serde::{Deserialize, Serialize};
 
