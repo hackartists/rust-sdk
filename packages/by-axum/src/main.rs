@@ -1,13 +1,14 @@
 use std::error::Error;
 
-use by_axum::axum::{routing::get, Router};
-use by_axum::{ApiError, Result};
+use aide::axum::routing::get;
+use axum::Json;
+use by_axum::{axum::Router, error::ApiError};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
 #[tokio::main]
-async fn main() -> std::result::Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Box<dyn Error>> {
     let app = Router::new().route("/hello", get(hello_handler));
 
     let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -26,7 +27,7 @@ struct HelloResponse {
     message: String,
 }
 
-async fn hello_handler() -> Result<HelloResponse, HelloErrorResponse> {
+async fn hello_handler() -> Result<Json<HelloResponse>, ApiError<HelloErrorResponse>> {
     Err(ApiError::InternalServerError(HelloErrorResponse {
         error: "Hello, world!".to_string(),
     }))

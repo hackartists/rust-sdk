@@ -1,14 +1,18 @@
 use std::convert::Infallible;
 
-use axum::{
-    extract::Request,
-    response::IntoResponse,
-    routing::{MethodRouter, Route, Router, RouterAsService, RouterIntoService},
+use aide::{
+    axum::{
+        routing::{get, ApiMethodRouter},
+        ApiRouter, IntoApiResponse,
+    },
+    openapi::{Info, OpenApi},
 };
+use axum::{body::Body, extract::Request, response::IntoResponse, routing::Route, Extension, Json};
 use tower::{Layer, Service};
 
 pub struct BiyardRouter<S = ()> {
-    pub inner: Router<S>,
+    pub open_api: OpenApi,
+    pub inner: ApiRouter<S>,
 }
 
 impl<S> BiyardRouter<S>
@@ -17,24 +21,35 @@ where
 {
     pub fn new() -> Self {
         Self {
-            inner: Router::new(),
+            open_api: OpenApi {
+                info: Info {
+                    description: Some("an example API".to_string()),
+                    ..Info::default()
+                },
+                ..OpenApi::default()
+            },
+            inner: ApiRouter::new()
+                .api_route("/version", get(version))
+                .route("/api", get(serve_api)),
         }
     }
 
-    pub fn route(self, path: &str, method_router: MethodRouter<S>) -> Self {
+    pub fn route(self, path: &str, method_router: ApiMethodRouter<S>) -> Self {
         Self {
-            inner: self.inner.route(path, method_router),
+            inner: self.inner.api_route(path, method_router),
+            ..self
         }
     }
 
     pub fn route_service<T>(self, path: &str, service: T) -> Self
     where
-        T: Service<Request, Error = Infallible> + Clone + Send + 'static,
+        T: Service<Request<Body>, Error = Infallible> + Clone + Send + Sync + 'static,
         T::Response: IntoResponse,
         T::Future: Send + 'static,
     {
         Self {
             inner: self.inner.route_service(path, service),
+            ..self
         }
     }
 
@@ -44,65 +59,89 @@ where
     {
         Self {
             inner: self.inner.nest(path, router.into().inner),
+            ..self
         }
     }
 
     pub fn nest_service<T>(self, path: &str, service: T) -> Self
     where
-        T: Service<Request, Error = Infallible> + Clone + Send + 'static,
+        T: Service<Request<Body>, Error = Infallible> + Clone + Send + Sync + 'static,
         T::Response: IntoResponse,
         T::Future: Send + 'static,
     {
         Self {
             inner: self.inner.nest_service(path, service),
+            ..self
         }
     }
 
     pub fn merge<R>(self, other: R) -> Self
     where
-        R: Into<Router<S>>,
+        R: Into<ApiRouter<S>>,
     {
         Self {
             inner: self.inner.merge(other.into()),
+            ..self
         }
     }
 
     pub fn layer<L>(self, layer: L) -> Self
     where
-        L: Layer<Route> + Clone + Send + 'static,
-        L::Service: Service<Request> + Clone + Send + 'static,
-        <L::Service as Service<Request>>::Response: IntoResponse + 'static,
-        <L::Service as Service<Request>>::Error: Into<Infallible> + 'static,
-        <L::Service as Service<Request>>::Future: Send + 'static,
+        L: Layer<Route> + Clone + Send + Sync + 'static,
+        L::Service: Service<Request<Body>> + Clone + Send + Sync + 'static,
+        <L::Service as Service<Request<Body>>>::Response: IntoResponse + 'static,
+        <L::Service as Service<Request<Body>>>::Error: Into<Infallible> + 'static,
+        <L::Service as Service<Request<Body>>>::Future: Send + 'static,
     {
         Self {
             inner: self.inner.layer(layer),
+            ..self
         }
     }
 
     pub fn with_state(self, state: S) -> Self {
         Self {
             inner: self.inner.with_state(state),
+            ..self
         }
-    }
-
-    pub fn as_service<B>(&mut self) -> RouterAsService<'_, B, S> {
-        self.inner.as_service()
-    }
-
-    pub fn into_service<B>(self) -> RouterIntoService<B, S> {
-        self.inner.into_service()
     }
 }
 
-impl Into<Router> for BiyardRouter {
-    fn into(self) -> Router {
+impl Into<ApiRouter> for BiyardRouter {
+    fn into(self) -> ApiRouter {
         self.inner
     }
 }
 
-impl From<Router> for BiyardRouter {
-    fn from(inner: Router) -> Self {
-        Self { inner }
+// impl From<ApiRouter> for BiyardRouter {
+//     fn from(inner: ApiRouter) -> Self {
+//         Self {
+//             open_api: OpenApi {
+//                 info: Info {
+//                     description: Some("an example API".to_string()),
+//                     ..Info::default()
+//                 },
+//                 ..OpenApi::default()
+//             },
+//             inner,
+//         }
+//     }
+// }
+
+async fn serve_api(Extension(api): Extension<OpenApi>) -> impl IntoApiResponse {
+    Json(api)
+}
+
+async fn version() -> String {
+    match option_env!("VERSION") {
+        Some(version) => match option_env!("COMMIT") {
+            Some(commit) => format!("{}-{}", version, commit),
+            None => version.to_string(),
+        },
+        None => match option_env!("DATE") {
+            Some(date) => date.to_string(),
+            None => "unknown".to_string(),
+        },
     }
+    .to_string()
 }

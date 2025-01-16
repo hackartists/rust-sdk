@@ -1,6 +1,11 @@
 [workspace]
-members = ["packages/by-axum","examples/basic-api", "packages/rest-api"]
+members = ["packages/by-axum","examples/basic-api", "packages/rest-api", "packages/by-types"]
 resolver = "2"
 
 [workspace.dependencies]
 by-axum = { path = "packages/by-axum" }
+by-types = { path = "packages/by-types" }
+
+aide = { version = "0.14.0", features = ["axum", "axum-extra", "axum-extra-headers", "axum-extra-query", "axum-json", "swagger", "redoc", "scalar", "macros"] }
+axum = "0.8.1"
+schemars = { version = "0.8.10", features = ["uuid1"] }

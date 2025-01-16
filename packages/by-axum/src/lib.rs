@@ -1,6 +1,7 @@
-use axum::routing::get;
+pub mod axum;
+use std::sync::Arc;
 
-pub use axum;
+use ::axum::{Extension, Json};
 pub use logger as log;
 use router::BiyardRouter;
 
@@ -8,42 +9,36 @@ use router::BiyardRouter;
 pub mod lambda_adapter;
 pub mod logger;
 pub mod router;
+pub use aide;
+
+pub use by_types::ApiError;
+pub type Result<T, E> = std::result::Result<Json<T>, ApiError<E>>;
+pub use schemars;
 
 pub fn new() -> BiyardRouter {
-    BiyardRouter::new().route("/version", get(version))
+    BiyardRouter::new()
 }
 
 pub async fn serve(
     _tcp_listener: tokio::net::TcpListener,
     app: BiyardRouter,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let app = app.layer(tower_http::cors::CorsLayer::permissive());
+    let mut api = app.open_api;
+    let app = app
+        .inner
+        .finish_api(&mut api)
+        .layer(Extension(Arc::new(api)));
 
     #[cfg(not(feature = "lambda"))]
-    axum::serve(_tcp_listener, app.inner).await?;
+    axum::serve(_tcp_listener, app).await?;
 
     #[cfg(feature = "lambda")]
     {
-        lambda_runtime::run(lambda_adapter::LambdaAdapter::from(
-            app.inner.into_service(),
-        ))
-        .await
-        .unwrap();
+        lambda_runtime::run(lambda_adapter::LambdaAdapter::from(app.into_service()))
+            .await
+            .unwrap();
     }
 
     Ok(())
-}
-
-async fn version() -> String {
-    match option_env!("VERSION") {
-        Some(version) => match option_env!("COMMIT") {
-            Some(commit) => format!("{}-{}", version, commit),
-            None => version.to_string(),
-        },
-        None => match option_env!("DATE") {
-            Some(date) => date.to_string(),
-            None => "unknown".to_string(),
-        },
-    }
-    .to_string()
 }
