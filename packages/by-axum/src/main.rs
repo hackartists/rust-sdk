@@ -2,7 +2,7 @@ use std::error::Error;
 
 use aide::axum::routing::get;
 use axum::Json;
-use by_axum::{axum::Router, error::ApiError};
+use by_axum::{axum::Router, ApiError};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
