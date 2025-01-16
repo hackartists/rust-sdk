@@ -35,8 +35,20 @@ where
     }
 
     pub fn route(self, path: &str, method_router: ApiMethodRouter<S>) -> Self {
+        let path = path
+            .split("/")
+            .map(|s| {
+                if s.starts_with(":") {
+                    format!("{{{}}}", s.replace(":", ""))
+                } else {
+                    s.to_string()
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("/");
+
         Self {
-            inner: self.inner.api_route(path, method_router),
+            inner: self.inner.api_route(&path, method_router),
             ..self
         }
     }
@@ -99,10 +111,10 @@ where
         }
     }
 
-    pub fn with_state(self, state: S) -> Self {
-        Self {
+    pub fn with_state<S2>(self, state: S) -> BiyardRouter<S2> {
+        BiyardRouter {
             inner: self.inner.with_state(state),
-            ..self
+            open_api: self.open_api,
         }
     }
 }
@@ -112,21 +124,6 @@ impl Into<ApiRouter> for BiyardRouter {
         self.inner
     }
 }
-
-// impl From<ApiRouter> for BiyardRouter {
-//     fn from(inner: ApiRouter) -> Self {
-//         Self {
-//             open_api: OpenApi {
-//                 info: Info {
-//                     description: Some("an example API".to_string()),
-//                     ..Info::default()
-//                 },
-//                 ..OpenApi::default()
-//             },
-//             inner,
-//         }
-//     }
-// }
 
 async fn serve_api(Extension(api): Extension<OpenApi>) -> impl IntoApiResponse {
     Json(api)

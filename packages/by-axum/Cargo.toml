@@ -1,6 +1,6 @@
 [package]
 name = "by-axum"
-version = "0.2.1"
+version = "0.2.4"
 edition = "2021"
 description = "Library satisfying Biyard API convention"
 license = "Apache-2.0"
