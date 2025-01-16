@@ -5,3 +5,9 @@ publish: $(patsubst %,publish.%,$(PACKAGES))
 
 publish.%:
 	./publish.sh $*
+
+.PHONY: build
+build: $(patsubst %,build.%,$(PACKAGES))
+
+build.%:
+	cargo build -p $*
