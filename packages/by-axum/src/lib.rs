@@ -1,4 +1,5 @@
 pub mod axum;
+mod docs;
 use std::sync::Arc;
 
 use ::axum::{Extension, Json};

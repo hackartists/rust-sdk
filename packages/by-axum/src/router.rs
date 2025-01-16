@@ -3,23 +3,38 @@ use std::convert::Infallible;
 use aide::{
     axum::{
         routing::{get, ApiMethodRouter},
-        ApiRouter, IntoApiResponse,
+        ApiRouter,
     },
     openapi::{Info, OpenApi},
 };
-use axum::{body::Body, extract::Request, response::IntoResponse, routing::Route, Extension, Json};
+use axum::{body::Body, extract::Request, response::IntoResponse, routing::Route};
 use tower::{Layer, Service};
+
+use crate::docs::docs_routes;
 
 pub struct BiyardRouter<S = ()> {
     pub open_api: OpenApi,
     pub inner: ApiRouter<S>,
 }
 
+static mut INITIALIZED: bool = false;
+
 impl<S> BiyardRouter<S>
 where
     S: Clone + Send + Sync + 'static,
 {
     pub fn new() -> Self {
+        let inner = unsafe {
+            if INITIALIZED {
+                ApiRouter::new()
+            } else {
+                INITIALIZED = true;
+                ApiRouter::new()
+                    .api_route("/version", get(version))
+                    .nest_api_service("/docs", docs_routes())
+            }
+        };
+
         Self {
             open_api: OpenApi {
                 info: Info {
@@ -28,9 +43,7 @@ where
                 },
                 ..OpenApi::default()
             },
-            inner: ApiRouter::new()
-                .api_route("/version", get(version))
-                .route("/api", get(serve_api)),
+            inner,
         }
     }
 
@@ -123,10 +136,6 @@ impl Into<ApiRouter> for BiyardRouter {
     fn into(self) -> ApiRouter {
         self.inner
     }
-}
-
-async fn serve_api(Extension(api): Extension<OpenApi>) -> impl IntoApiResponse {
-    Json(api)
 }
 
 async fn version() -> String {
