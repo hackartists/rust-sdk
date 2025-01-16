@@ -2,6 +2,10 @@
 name = "by-macros"
 version = "0.1.0"
 edition = "2021"
+description = "Biyard Macros"
+license = "Apache-2.0"
+keywords = ["macros", "api"]
+repository = "https://github.com/biyard/rust-sdk/tree/main/packages/by-macros"
 
 [lib]
 proc-macro = true
