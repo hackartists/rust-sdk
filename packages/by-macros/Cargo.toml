@@ -1,6 +1,6 @@
 [package]
 name = "by-macros"
-version = "0.1.0"
+version = "0.2.2"
 edition = "2021"
 description = "Biyard Macros"
 license = "Apache-2.0"
@@ -16,3 +16,13 @@ quote = "1.0.38"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_urlencoded = "0.7.1"
 syn = { version = "2.0.96", features = ["full"] }
+
+[dev-dependencies]
+rest-api = { version = "0.1.1", path = "../rest-api" }
+by-axum.workspace = true
+reqwest = "0.12.12"
+by-types.workspace = true
+schemars.workspace = true
+
+[features]
+server = []

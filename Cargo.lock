@@ -346,10 +346,15 @@ dependencies = [
 
 [[package]]
 name = "by-macros"
-version = "0.1.0"
+version = "0.2.2"
 dependencies = [
+ "by-axum",
+ "by-types",
  "proc-macro2",
  "quote",
+ "reqwest",
+ "rest-api",
+ "schemars",
  "serde",
  "serde_urlencoded",
  "syn 2.0.96",
