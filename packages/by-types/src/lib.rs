@@ -68,14 +68,17 @@ where
     }
 }
 
-impl<T> From<T> for ApiError<T> {
-    fn from(error: T) -> Self {
-        ApiError::BadRequest(error)
-    }
-}
-
 impl From<std::io::Error> for ApiError<Box<dyn std::error::Error>> {
     fn from(error: std::io::Error) -> Self {
         ApiError::InternalServerError(Box::new(error))
+    }
+}
+
+impl<T> From<reqwest::Error> for ApiError<T>
+where
+    T: From<String>,
+{
+    fn from(error: reqwest::Error) -> Self {
+        ApiError::InternalServerError(error.to_string().into())
     }
 }

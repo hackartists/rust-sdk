@@ -1,24 +1,18 @@
 extern crate proc_macro;
 
+mod api_model;
+mod query_display;
+
+use api_model::api_model_impl;
 use proc_macro::TokenStream;
-use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
+use query_display::query_display_impl;
 
 #[proc_macro_derive(QueryDisplay)]
 pub fn query_display_derive(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
+    query_display_impl(input)
+}
 
-    let name = &input.ident;
-
-    let expanded = quote! {
-        impl std::fmt::Display for #name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                let query = serde_urlencoded::to_string(&self)
-                    .map_err(|_| std::fmt::Error)?;
-                write!(f, "{}", query)
-            }
-        }
-    };
-
-    TokenStream::from(expanded)
+#[proc_macro_attribute]
+pub fn api_model(attr: TokenStream, item: TokenStream) -> TokenStream {
+    api_model_impl(attr.into(), item.into()).into()
 }
