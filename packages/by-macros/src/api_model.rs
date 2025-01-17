@@ -1,15 +1,15 @@
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use quote::quote;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use syn::{parse_macro_input, Attribute, Data, DeriveInput, Field, Fields, Meta};
 
 #[derive(Debug)]
 enum ActionType {
     Summary,
     Queryable,
-    Action(String),
-    ActionById(String),
+    Action(Vec<String>),
+    ActionById(Vec<String>),
     Related(String),
     ReadActions(Vec<String>),
 }
@@ -26,7 +26,6 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
             let mut selected_action = ActionType::Summary;
             let mut selected_at = 0;
             let mut i = 0;
-            let mut open_read_actions = false;
 
             for nested in meta_list.tokens.clone() {
                 if let proc_macro2::TokenTree::Ident(iden) = nested {
@@ -40,17 +39,17 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                         }
                         "action" => {
                             selected_at = i;
-                            selected_action = ActionType::Action("".to_string());
+                            selected_action = ActionType::Action(vec![]);
                         }
                         "action_by_id" => {
                             selected_at = i;
-                            selected_action = ActionType::ActionById("".to_string());
+                            selected_action = ActionType::ActionById(vec![]);
                         }
                         "related" => {
                             selected_at = i;
                             selected_action = ActionType::Related("".to_string());
                         }
-                        "read_actions" => {
+                        "read_action" => {
                             selected_at = i;
                             selected_action = ActionType::ReadActions(vec![]);
                         }
@@ -58,13 +57,16 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                             if selected_at == (i - 2) {
                                 match &selected_action {
                                     ActionType::Action(_) => {
-                                        types.push(ActionType::Action(id.to_string()));
+                                        types.push(ActionType::Action(vec![id.to_string()]));
                                     }
                                     ActionType::ActionById(_) => {
-                                        types.push(ActionType::ActionById(id.to_string()));
+                                        types.push(ActionType::ActionById(vec![id.to_string()]));
                                     }
                                     ActionType::Related(_) => {
                                         types.push(ActionType::Related(id.to_string()));
+                                    }
+                                    ActionType::ReadActions(_) => {
+                                        types.push(ActionType::ReadActions(vec![id.to_string()]));
                                     }
                                     _ => {}
                                 }
@@ -72,6 +74,27 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                                 panic!("Unexpected attribute key: {}", id);
                             }
                         }
+                    }
+                } else if let proc_macro2::TokenTree::Group(group) = nested {
+                    let mut actions = vec![];
+                    for nested in group.stream() {
+                        if let proc_macro2::TokenTree::Ident(iden) = nested {
+                            let id = iden.to_string();
+                            actions.push(id);
+                        }
+                    }
+
+                    match &selected_action {
+                        ActionType::Action(_) => {
+                            types.push(ActionType::Action(actions));
+                        }
+                        ActionType::ActionById(_) => {
+                            types.push(ActionType::ActionById(actions));
+                        }
+                        ActionType::ReadActions(_) => {
+                            types.push(ActionType::ReadActions(actions));
+                        }
+                        _ => {}
                     }
                 }
 
@@ -119,6 +142,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut queryable_fields = Vec::new();
     let mut action_names = HashMap::<String, ActionField>::new();
     let mut action_by_id_names = HashMap::<String, ActionField>::new();
+    let mut read_action_names = HashMap::<String, ActionField>::new();
 
     if let Fields::Named(named_fields) = fields {
         for field in &named_fields.named {
@@ -134,56 +158,82 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                         ActionType::Queryable => {
                             queryable_fields.push(field.clone());
                         }
-                        ActionType::Action(action_name) => {
-                            actions.push(ActionType::Action(action_name));
+                        ActionType::Action(action_names) => {
+                            actions.push(ActionType::Action(action_names));
                         }
-                        ActionType::ActionById(action_name) => {
-                            actions.push(ActionType::ActionById(action_name));
+                        ActionType::ActionById(action_names) => {
+                            actions.push(ActionType::ActionById(action_names));
                         }
                         ActionType::Related(st) => {
                             related = Some(st);
+                        }
+                        ActionType::ReadActions(action_names) => {
+                            actions.push(ActionType::ReadActions(action_names));
                         }
                     }
                 }
 
                 for action in actions {
                     match (related.clone(), action) {
-                        (Some(st), ActionType::Action(action_name)) => {
-                            action_names
-                                .entry(action_name)
-                                .or_insert_with(|| ActionField::Related(st));
+                        (Some(st), ActionType::Action(actions)) => {
+                            for action_name in actions {
+                                action_names
+                                    .entry(action_name)
+                                    .or_insert_with(|| ActionField::Related(st.clone()));
+                            }
                         }
-                        (Some(st), ActionType::ActionById(action_name)) => {
-                            action_by_id_names
-                                .entry(action_name)
-                                .or_insert_with(|| ActionField::Related(st));
+                        (Some(st), ActionType::ActionById(actions)) => {
+                            for action_name in actions {
+                                action_by_id_names
+                                    .entry(action_name)
+                                    .or_insert_with(|| ActionField::Related(st.clone()));
+                            }
                         }
-                        (None, ActionType::Action(action_name)) => {
-                            match action_names
-                                .entry(action_name)
-                                .or_insert_with(|| ActionField::Fields(vec![]))
-                            {
-                                ActionField::Fields(v) => {
-                                    v.push(field.clone());
-                                }
+                        (None, ActionType::Action(actions)) => {
+                            for action_name in actions {
+                                match action_names
+                                    .entry(action_name)
+                                    .or_insert_with(|| ActionField::Fields(vec![]))
+                                {
+                                    ActionField::Fields(v) => {
+                                        v.push(field.clone());
+                                    }
 
-                                _ => {
-                                    panic!("Action should have fields")
-                                }
-                            };
+                                    _ => {
+                                        panic!("Action should have fields")
+                                    }
+                                };
+                            }
                         }
-                        (None, ActionType::ActionById(action_name)) => {
-                            match action_by_id_names
-                                .entry(action_name)
-                                .or_insert_with(|| ActionField::Fields(vec![]))
-                            {
-                                ActionField::Fields(v) => {
-                                    v.push(field.clone());
-                                }
-                                _ => {
-                                    panic!("ActionById should have fields")
-                                }
-                            };
+                        (None, ActionType::ActionById(actions)) => {
+                            for action_name in actions {
+                                match action_by_id_names
+                                    .entry(action_name)
+                                    .or_insert_with(|| ActionField::Fields(vec![]))
+                                {
+                                    ActionField::Fields(v) => {
+                                        v.push(field.clone());
+                                    }
+                                    _ => {
+                                        panic!("ActionById should have fields")
+                                    }
+                                };
+                            }
+                        }
+                        (None, ActionType::ReadActions(actions)) => {
+                            for action_name in actions {
+                                match read_action_names
+                                    .entry(action_name)
+                                    .or_insert_with(|| ActionField::Fields(vec![]))
+                                {
+                                    ActionField::Fields(v) => {
+                                        v.push(field.clone());
+                                    }
+                                    _ => {
+                                        panic!("ActionById should have fields")
+                                    }
+                                };
+                            }
                         }
                         _ => {}
                     }
@@ -193,7 +243,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let summary_struct = generate_summary_struct(&struct_name, &summary_fields);
-    let query_struct = generate_query_struct(&struct_name, &queryable_fields);
+    let query_struct = generate_query_struct(&struct_name, &queryable_fields, &read_action_names);
     let action_struct = generate_action_struct(&struct_name, &action_names, "Action");
     let action_by_id_struct =
         generate_action_struct(&struct_name, &action_by_id_names, "ByIdAction");
@@ -216,6 +266,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         #query_struct
         #client_impl
     };
+    println!("{}", output.to_string());
 
     output.into()
 }
@@ -298,22 +349,133 @@ fn generate_query_struct(
     struct_name: &syn::Ident,
 
     queryable_fields: &[syn::Field],
+    read_actions: &HashMap<String, ActionField>,
 ) -> proc_macro2::TokenStream {
-    let query_fields = queryable_fields.iter().map(|field| {
+    let mut hashed_fields = HashSet::new();
+    let mut query_fields = vec![];
+    let mut query_builder_functions = vec![];
+
+    for field in queryable_fields {
         let field_name = &field.ident;
+        hashed_fields.insert(field_name.clone());
         let field_type = &field.ty;
-        quote! { pub #field_name: Option<#field_type>, }
-    });
+        query_fields.push(quote! { pub #field_name: Option<#field_type>, });
+        let function_name = syn::Ident::new(
+            &format!("with_{}", field_name.as_ref().unwrap()),
+            struct_name.span(),
+        );
+
+        query_builder_functions.push(quote! {
+            pub fn #function_name(mut self, #field_name: #field_type) -> Self {
+                self.#field_name = Some(#field_name);
+                self
+            }
+        });
+    }
+    let mut extended_query_fields = vec![];
+    let mut read_action_types = vec![];
+
+    for (read_action, fields) in read_actions {
+        let mut params = vec![];
+        let mut replace_expressions = vec![];
+
+        match fields {
+            ActionField::Fields(v) => {
+                for field in v {
+                    let field_name = &field.ident;
+                    let field_type = &field.ty;
+
+                    replace_expressions.push(quote! {
+                        self.#field_name = Some(#field_name);
+                    });
+                    params.push((field_name.clone(), field_type.clone()));
+                    if hashed_fields.contains(field_name) {
+                        continue;
+                    }
+                    extended_query_fields.push(quote! {
+                        pub #field_name: Option<#field_type>,
+                    });
+                }
+            }
+            _ => {
+                panic!("Related field should not be in queryable fields");
+            }
+        }
+
+        let read_action_name =
+            syn::Ident::new(&read_action.to_case(Case::Pascal), struct_name.span());
+        read_action_types.push(quote! { #read_action_name, });
+
+        let function_name = syn::Ident::new(&read_action.to_case(Case::Snake), struct_name.span());
+        let function_params = params.iter().map(|(field_name, field_type)| {
+            quote! { #field_name: #field_type, }
+        });
+        let read_action_enum_name = syn::Ident::new(
+            &format!("{}ReadActionType", struct_name),
+            struct_name.span(),
+        );
+
+        query_builder_functions.push(quote! {
+            pub fn #function_name(mut self, #(#function_params)*) -> Self {
+                #(#replace_expressions)*
+                self.action = Some(#read_action_enum_name::#read_action_name);
+                self
+            }
+        });
+    }
+
+    let (read_action_enum, read_action_type_field) = if read_action_types.len() > 0 {
+        let read_action_enum_name = syn::Ident::new(
+            &format!("{}ReadActionType", struct_name),
+            struct_name.span(),
+        );
+        (
+            quote! {
+                #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+                #[serde(rename_all = "kebab-case")]
+                #[cfg_attr(feature = "server", derive(JsonSchema, aide::OperationIo))]
+                pub enum #read_action_enum_name {
+                    #(#read_action_types)*
+                }
+            },
+            quote! {
+                pub action: Option<#read_action_enum_name>,
+            },
+        )
+    } else {
+        (quote! {}, quote! {})
+    };
+
     let query_name = syn::Ident::new(&format!("{}Query", struct_name), struct_name.span());
 
     quote! {
-        #[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+        #[derive(Debug, Clone, Serialize, Deserialize, Default Eq, PartialEq, by_macros::QueryDisplay)]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         pub struct #query_name {
             pub size: usize,
             pub bookmark: Option<String>,
+            #read_action_type_field
             #(#query_fields)*
+            #(#extended_query_fields)*
         }
+
+        impl #query_name {
+            pub fn new(size: usize) -> Self {
+                Self {
+                    size,
+                    ..Self::default(),
+                }
+            }
+
+            pub fn with_bookmark(mut self, bookmark: String) -> Self {
+                self.bookmark = Some(bookmark);
+                self
+            }
+
+            #(#query_builder_functions)*
+        }
+
+        #read_action_enum
     }
 }
 

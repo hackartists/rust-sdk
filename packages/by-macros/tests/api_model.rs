@@ -15,9 +15,9 @@ pub struct Topic {
     pub title: String,
     #[api_model(summary, queryable, action = create, action_by_id = update)]
     pub description: String,
-    #[api_model(summary, queryable, action_by_id = update)]
+    #[api_model(summary, queryable, read_action = date_from, action_by_id = update)]
     pub status: i32,
-    #[api_model(summary)]
+    #[api_model(summary, read_action = [data_from])]
     pub created_at: i64,
     pub is_liked: bool,
 
@@ -46,16 +46,20 @@ pub struct CommentRequest {
 #[test]
 fn test_macro_expansion() {
     let q = TopicQuery {
+        action: Some(TopicReadActionType::DateFrom),
         size: 10,
         bookmark: None,
         description: None,
         status: Some(1),
+        created_at: None,
     };
 
     assert_eq!(q.status, Some(1));
     assert_eq!(q.size, 10);
     assert_eq!(q.bookmark, None);
     assert_eq!(q.description, None);
+
+    let q = TopicQuery::new(10).with_bookmark("test");
 
     let summary = TopicSummary::default();
     assert_eq!(summary.id, "".to_string());
