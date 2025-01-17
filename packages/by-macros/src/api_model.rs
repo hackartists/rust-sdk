@@ -12,9 +12,8 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let attr_args = attr.to_string();
-    let mut get_endpoint = String::new();
-    let mut list_endpoint = String::new();
     let mut iter_type = "CommonQueryResponse".to_string();
+    let mut base_endpoint = String::new();
 
     for arg in attr_args.split(',') {
         let parts: Vec<&str> = arg.split('=').collect();
@@ -22,8 +21,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             let key = parts[0].trim();
             let value = parts[1].trim().trim_matches('"');
             match key {
-                "get" => get_endpoint = value.to_string(),
-                "list" => list_endpoint = value.to_string(),
+                "base" => base_endpoint = value.to_string(),
                 "iter_type" => iter_type = value.to_string(),
                 _ => panic!("Unexpected attribute key: {}", key),
             }
@@ -50,7 +48,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let query_struct = generate_query_struct(&struct_name, &queryable_fields);
 
-    let client_impl = generate_client_impl(struct_name, &get_endpoint, &list_endpoint, &iter_type);
+    let client_impl = generate_client_impl(struct_name, &base_endpoint, &iter_type);
     let input = parse_macro_input!(input_cloned as syn::ItemStruct);
     let stripped_input = strip_struct_attributes(&input);
 
@@ -124,8 +122,7 @@ fn generate_query_struct(
 
 fn generate_client_impl(
     struct_name: &syn::Ident,
-    get_endpoint: &str,
-    list_endpoint: &str,
+    base_endpoint: &str,
     iter_type: &str,
 ) -> proc_macro2::TokenStream {
     let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
@@ -133,8 +130,7 @@ fn generate_client_impl(
     let summary_name = syn::Ident::new(&format!("{}Summary", struct_name), struct_name.span());
 
     // Convert endpoints to string literals
-    let get_endpoint_lit = syn::LitStr::new(get_endpoint, struct_name.span());
-    let list_endpoint_lit = syn::LitStr::new(list_endpoint, struct_name.span());
+    let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
 
     // Dynamically generate iter_type with Summary
     let iter_type_with_summary = format!("{}<{}>", iter_type, summary_name);
@@ -157,13 +153,13 @@ fn generate_client_impl(
                 &self,
                 params: #query_name,
             ) -> crate::Result<#iter_type_tokens> {
-                let endpoint = format!("{}{}", self.endpoint, #list_endpoint_lit);
+                let endpoint = format!("{}{}", self.endpoint, #base_endpoint_lit);
                 let query = format!("{}?{}", endpoint, params);
                 rest_api::get(&query).await
             }
 
             pub async fn get(&self, id: &str) -> crate::Result<#struct_name> {
-                let endpoint = format!("{}{}{}", self.endpoint, #get_endpoint_lit, id);
+                let endpoint = format!("{}{}/{}", self.endpoint, #base_endpoint_lit, id);
                 rest_api::get(&endpoint).await
             }
         }

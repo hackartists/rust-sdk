@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
 #[derive(Serialize, Deserialize)]
-#[api_model(get = "/topics/v1/:id", list = "/topics/v1", iter_type=Vec)]
+#[api_model(base = "/topics/v1", iter_type=Vec)]
 pub struct Topic {
     #[api_model(summary)]
     pub id: String,
