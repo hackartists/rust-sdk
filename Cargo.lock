@@ -346,10 +346,11 @@ dependencies = [
 
 [[package]]
 name = "by-macros"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "by-axum",
  "by-types",
+ "convert_case 0.7.1",
  "proc-macro2",
  "quote",
  "reqwest",
@@ -533,6 +534,15 @@ name = "convert_case"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "convert_case"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb402b8d4c85569410425650ce3eddc7d698ed96d39a73f941b08fb63082f1e7"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -754,7 +764,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abff76b546af9f10e8c601f219a5a172fe95622fab1e098b194daecff9c69ef6"
 dependencies = [
- "convert_case",
+ "convert_case 0.6.0",
  "dioxus-rsx",
  "proc-macro2",
  "quote",
@@ -893,7 +903,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e9f50f698bffea14525f0576f02faa5d926ad31252ba3717c340706bf50a311a"
 dependencies = [
- "convert_case",
+ "convert_case 0.6.0",
  "proc-macro2",
  "quote",
  "syn 2.0.96",
@@ -2749,7 +2759,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faaaf648c6967aef78177c0610478abb5a3455811f401f3c62d10ae9bd3901a1"
 dependencies = [
  "const_format",
- "convert_case",
+ "convert_case 0.6.0",
  "proc-macro2",
  "quote",
  "syn 2.0.96",
