@@ -11,6 +11,7 @@ enum ActionType {
     Action(String),
     ActionById(String),
     Related(String),
+    ReadActions(Vec<String>),
 }
 
 /// Parse the attribute string and return the action type
@@ -25,6 +26,7 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
             let mut selected_action = ActionType::Summary;
             let mut selected_at = 0;
             let mut i = 0;
+            let mut open_read_actions = false;
 
             for nested in meta_list.tokens.clone() {
                 if let proc_macro2::TokenTree::Ident(iden) = nested {
@@ -47,6 +49,10 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                         "related" => {
                             selected_at = i;
                             selected_action = ActionType::Related("".to_string());
+                        }
+                        "read_actions" => {
+                            selected_at = i;
+                            selected_action = ActionType::ReadActions(vec![]);
                         }
                         _ => {
                             if selected_at == (i - 2) {
@@ -258,6 +264,7 @@ fn generate_action_struct(
 
     quote! {
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+        #[serde(rename_all = "snake_case")]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         pub enum #action_name {
             #(#action_fields)*
