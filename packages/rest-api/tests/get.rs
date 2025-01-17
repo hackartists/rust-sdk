@@ -28,7 +28,7 @@ async fn test_get_with_query() -> Result<(), ApiError> {
     let query_params = vec![("id", "1")];
     let req = create_get_request_with_params(&url, &query_params);
     println!("{:?}", req.url().to_string());
-    let res = rest_api::get::<Vec<Response>, ApiError, _>(url, &query_params).await?;
+    let res = rest_api::get_with_query::<Vec<Response>, ApiError, _>(url, &query_params).await?;
     // println!("{:?}", res);
     assert_eq!(
         res[0].title,
