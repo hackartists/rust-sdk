@@ -147,6 +147,7 @@ fn generate_client_impl(
             }
         }
 
+        #[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq)]
         pub struct #client_name {
             pub endpoint: String,
         }
