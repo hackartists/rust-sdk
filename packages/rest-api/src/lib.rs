@@ -63,6 +63,35 @@ where
     let client = reqwest::Client::builder().build()?;
 
     let req = client.get(url);
+
+    let req = sign_request(req);
+    let res = req.send().await?;
+
+    if res.status().is_success() {
+        Ok(res.json().await?)
+    } else {
+        Err(res.json().await?)
+    }
+}
+
+/// Performs an HTTP GET request.
+///
+/// # Arguments
+///
+/// * `url` - The URL to send the request to
+/// * `query_params` - Query parameters for the URL. Pass `&None::<()>` to send request without query parameters
+///
+///
+pub async fn get_with_query<T, E, P>(url: &str, query_params: &P) -> Result<T, E>
+where
+    T: serde::de::DeserializeOwned,
+    E: serde::de::DeserializeOwned + From<reqwest::Error>,
+    P: serde::Serialize + ?Sized,
+{
+    let client = reqwest::Client::builder().build()?;
+
+    let req = client.get(url).query(query_params);
+
     let req = sign_request(req);
     let res = req.send().await?;
 
