@@ -190,7 +190,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let query_struct = generate_query_struct(&struct_name, &queryable_fields);
     let action_struct = generate_action_struct(&struct_name, &action_names, "Action");
     let action_by_id_struct =
-        generate_action_struct(&struct_name, &action_by_id_names, "ActionById");
+        generate_action_struct(&struct_name, &action_by_id_names, "ByIdAction");
 
     let client_impl = generate_client_impl(
         struct_name,
@@ -220,7 +220,7 @@ fn generate_action_struct(
     action_type: &str,
 ) -> proc_macro2::TokenStream {
     let action_name = syn::Ident::new(
-        &format!("{}{}Request", struct_name, action_type),
+        &format!("{}{}", struct_name, action_type),
         struct_name.span(),
     );
     let mut action_fields = vec![];
@@ -329,8 +329,7 @@ fn generate_client_impl(
     let iter_type_tokens: proc_macro2::TokenStream = iter_type_with_summary.parse().unwrap();
 
     let action = if enable_action {
-        let action_name =
-            syn::Ident::new(&format!("{}ActionRequest", struct_name), struct_name.span());
+        let action_name = syn::Ident::new(&format!("{}Action", struct_name), struct_name.span());
         quote! {
             pub async fn act(&self, params: #action_name) -> crate::Result<#iter_type_tokens> {
                 let endpoint = format!("{}{}/action", self.endpoint, #base_endpoint_lit);
@@ -342,10 +341,8 @@ fn generate_client_impl(
     };
 
     let action_by_id = if enable_action_by_id {
-        let action_name = syn::Ident::new(
-            &format!("{}ActionByIdRequest", struct_name),
-            struct_name.span(),
-        );
+        let action_name =
+            syn::Ident::new(&format!("{}ByIdAction", struct_name), struct_name.span());
         quote! {
             pub async fn act_by_id(&self, id: &str, params: #action_name) -> crate::Result<#iter_type_tokens> {
                 let endpoint = format!("{}{}/{}/action", self.endpoint, #base_endpoint_lit, id);
