@@ -4,11 +4,13 @@ use quote::quote;
 use std::collections::HashMap;
 use syn::{parse_macro_input, Attribute, Data, DeriveInput, Field, Fields, Meta};
 
+#[derive(Debug)]
 enum ActionType {
     Summary,
     Queryable,
     Action(String),
     ActionById(String),
+    Related(String),
 }
 
 /// Parse the attribute string and return the action type
@@ -42,6 +44,10 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                             selected_at = i;
                             selected_action = ActionType::ActionById("".to_string());
                         }
+                        "related" => {
+                            selected_at = i;
+                            selected_action = ActionType::Related("".to_string());
+                        }
                         _ => {
                             if selected_at == (i - 2) {
                                 match &selected_action {
@@ -50,6 +56,9 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                                     }
                                     ActionType::ActionById(_) => {
                                         types.push(ActionType::ActionById(id.to_string()));
+                                    }
+                                    ActionType::Related(_) => {
+                                        types.push(ActionType::Related(id.to_string()));
                                     }
                                     _ => {}
                                 }
@@ -66,6 +75,12 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
     }
 
     types
+}
+
+#[derive(Debug)]
+enum ActionField {
+    Fields(Vec<Field>),
+    Related(String),
 }
 
 pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -96,12 +111,15 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let mut summary_fields = Vec::new();
     let mut queryable_fields = Vec::new();
-    let mut action_names = HashMap::<String, Vec<Field>>::new();
-    let mut action_by_id_names = HashMap::<String, Vec<Field>>::new();
+    let mut action_names = HashMap::<String, ActionField>::new();
+    let mut action_by_id_names = HashMap::<String, ActionField>::new();
 
     if let Fields::Named(named_fields) = fields {
         for field in &named_fields.named {
             for attr in &field.attrs {
+                let mut actions = vec![];
+                let mut related = None::<String>;
+
                 for t in parse_action_attr(attr) {
                     match t {
                         ActionType::Summary => {
@@ -111,17 +129,57 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                             queryable_fields.push(field.clone());
                         }
                         ActionType::Action(action_name) => {
-                            action_names
-                                .entry(action_name)
-                                .or_insert_with(Vec::new)
-                                .push(field.clone());
+                            actions.push(ActionType::Action(action_name));
                         }
                         ActionType::ActionById(action_name) => {
+                            actions.push(ActionType::ActionById(action_name));
+                        }
+                        ActionType::Related(st) => {
+                            related = Some(st);
+                        }
+                    }
+                }
+
+                for action in actions {
+                    match (related.clone(), action) {
+                        (Some(st), ActionType::Action(action_name)) => {
+                            action_names
+                                .entry(action_name)
+                                .or_insert_with(|| ActionField::Related(st));
+                        }
+                        (Some(st), ActionType::ActionById(action_name)) => {
                             action_by_id_names
                                 .entry(action_name)
-                                .or_insert_with(Vec::new)
-                                .push(field.clone());
+                                .or_insert_with(|| ActionField::Related(st));
                         }
+                        (None, ActionType::Action(action_name)) => {
+                            match action_names
+                                .entry(action_name)
+                                .or_insert_with(|| ActionField::Fields(vec![]))
+                            {
+                                ActionField::Fields(v) => {
+                                    v.push(field.clone());
+                                }
+
+                                _ => {
+                                    panic!("Action should have fields")
+                                }
+                            };
+                        }
+                        (None, ActionType::ActionById(action_name)) => {
+                            match action_by_id_names
+                                .entry(action_name)
+                                .or_insert_with(|| ActionField::Fields(vec![]))
+                            {
+                                ActionField::Fields(v) => {
+                                    v.push(field.clone());
+                                }
+                                _ => {
+                                    panic!("ActionById should have fields")
+                                }
+                            };
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -134,7 +192,13 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let action_by_id_struct =
         generate_action_struct(&struct_name, &action_by_id_names, "ActionById");
 
-    let client_impl = generate_client_impl(struct_name, &base_endpoint, &iter_type);
+    let client_impl = generate_client_impl(
+        struct_name,
+        &base_endpoint,
+        &iter_type,
+        action_names.len() > 0,
+        action_by_id_names.len() > 0,
+    );
     let input = parse_macro_input!(input_cloned as syn::ItemStruct);
     let stripped_input = strip_struct_attributes(&input);
 
@@ -152,7 +216,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 fn generate_action_struct(
     struct_name: &syn::Ident,
-    actions: &HashMap<String, Vec<Field>>,
+    actions: &HashMap<String, ActionField>,
     action_type: &str,
 ) -> proc_macro2::TokenStream {
     let action_name = syn::Ident::new(
@@ -164,27 +228,32 @@ fn generate_action_struct(
 
     for (k, v) in actions.iter() {
         let act = syn::Ident::new(&k.to_case(Case::Pascal), struct_name.span());
-        let request_struct_name = syn::Ident::new(
-            &format!("{}{}Request", struct_name, act),
-            struct_name.span(),
-        );
-        let fields = v.iter().map(|field| {
-            let field_name = &field.ident;
-            let field_type = &field.ty;
-            quote! { pub #field_name: #field_type, }
-        });
-
+        let request_struct_name = match v {
+            ActionField::Related(st) => syn::Ident::new(&st, struct_name.span()),
+            _ => syn::Ident::new(
+                &format!("{}{}Request", struct_name, act),
+                struct_name.span(),
+            ),
+        };
         action_fields.push(quote! {
             #act(#request_struct_name),
         });
 
-        action_requests.push(quote! {
+        if let ActionField::Fields(v) = v {
+            let fields = v.iter().map(|field| {
+                let field_name = &field.ident;
+                let field_type = &field.ty;
+                quote! { pub #field_name: #field_type, }
+            });
+
+            action_requests.push(quote! {
             #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub struct #request_struct_name {
                 #(#fields)*
             }
         });
+        }
     }
 
     quote! {
@@ -245,6 +314,8 @@ fn generate_client_impl(
     struct_name: &syn::Ident,
     base_endpoint: &str,
     iter_type: &str,
+    enable_action: bool,
+    enable_action_by_id: bool,
 ) -> proc_macro2::TokenStream {
     let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
     let query_name = syn::Ident::new(&format!("{}Query", struct_name), struct_name.span());
@@ -256,6 +327,34 @@ fn generate_client_impl(
     // Dynamically generate iter_type with Summary
     let iter_type_with_summary = format!("{}<{}>", iter_type, summary_name);
     let iter_type_tokens: proc_macro2::TokenStream = iter_type_with_summary.parse().unwrap();
+
+    let action = if enable_action {
+        let action_name =
+            syn::Ident::new(&format!("{}ActionRequest", struct_name), struct_name.span());
+        quote! {
+            pub async fn act(&self, params: #action_name) -> crate::Result<#iter_type_tokens> {
+                let endpoint = format!("{}{}/action", self.endpoint, #base_endpoint_lit);
+                rest_api::post(&endpoint, params).await
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let action_by_id = if enable_action_by_id {
+        let action_name = syn::Ident::new(
+            &format!("{}ActionByIdRequest", struct_name),
+            struct_name.span(),
+        );
+        quote! {
+            pub async fn act_by_id(&self, id: &str, params: #action_name) -> crate::Result<#iter_type_tokens> {
+                let endpoint = format!("{}{}/{}/action", self.endpoint, #base_endpoint_lit, id);
+                rest_api::post(&endpoint, params).await
+            }
+        }
+    } else {
+        quote! {}
+    };
 
     quote! {
         impl #struct_name {
@@ -283,6 +382,9 @@ fn generate_client_impl(
                 let endpoint = format!("{}{}/{}", self.endpoint, #base_endpoint_lit, id);
                 rest_api::get(&endpoint).await
             }
+
+            #action
+            #action_by_id
         }
     }
 }
