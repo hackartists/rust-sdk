@@ -4,6 +4,39 @@ struct QueryParamsTest {
     value: String,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct Response {
+    pub title: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ApiError {
+    _message: String,
+}
+
+impl From<reqwest::Error> for ApiError {
+    fn from(err: reqwest::Error) -> Self {
+        ApiError {
+            _message: err.to_string(),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_get_with_query() -> Result<(), ApiError> {
+    let url = "https://jsonplaceholder.typicode.com/posts";
+    let query_params = vec![("id", "1")];
+    let req = create_get_request_with_params(&url, &query_params);
+    println!("{:?}", req.url().to_string());
+    let res = rest_api::get::<Vec<Response>, ApiError, _>(url, &query_params).await?;
+    // println!("{:?}", res);
+    assert_eq!(
+        res[0].title,
+        "sunt aut facere repellat provident occaecati excepturi optio reprehenderit"
+    );
+    Ok(())
+}
+
 fn create_get_request_with_params<P>(url: &str, query_params: &P) -> reqwest::Request
 where
     P: serde::Serialize + ?Sized,
