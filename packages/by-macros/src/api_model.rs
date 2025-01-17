@@ -321,17 +321,15 @@ fn generate_client_impl(
     let query_name = syn::Ident::new(&format!("{}Query", struct_name), struct_name.span());
     let summary_name = syn::Ident::new(&format!("{}Summary", struct_name), struct_name.span());
 
-    // Convert endpoints to string literals
     let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
 
-    // Dynamically generate iter_type with Summary
     let iter_type_with_summary = format!("{}<{}>", iter_type, summary_name);
     let iter_type_tokens: proc_macro2::TokenStream = iter_type_with_summary.parse().unwrap();
 
     let action = if enable_action {
         let action_name = syn::Ident::new(&format!("{}Action", struct_name), struct_name.span());
         quote! {
-            pub async fn act(&self, params: #action_name) -> crate::Result<#iter_type_tokens> {
+            pub async fn act(&self, params: #action_name) -> crate::Result<#struct_name> {
                 let endpoint = format!("{}{}/action", self.endpoint, #base_endpoint_lit);
                 rest_api::post(&endpoint, params).await
             }
@@ -344,7 +342,7 @@ fn generate_client_impl(
         let action_name =
             syn::Ident::new(&format!("{}ByIdAction", struct_name), struct_name.span());
         quote! {
-            pub async fn act_by_id(&self, id: &str, params: #action_name) -> crate::Result<#iter_type_tokens> {
+            pub async fn act_by_id(&self, id: &str, params: #action_name) -> crate::Result<#struct_name> {
                 let endpoint = format!("{}{}/{}/action", self.endpoint, #base_endpoint_lit, id);
                 rest_api::post(&endpoint, params).await
             }
