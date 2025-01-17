@@ -87,7 +87,7 @@ impl TopicClient {
     }
 
     pub async fn get(&self, id: &str) -> crate::Result<Topic> {
-        let endpoint = format!("{}{}{}", self.endpoint, "/topics/v1/:id", id);
+        let endpoint = format!("{}{}/{}", self.endpoint, "/topics/v1", id);
         rest_api::get(& endpoint).await
     }
 }
