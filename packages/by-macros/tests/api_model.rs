@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 
 type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 #[api_model(base = "/topics/v1", iter_type=Vec)]
 pub struct Topic {
     #[api_model(summary)]
@@ -47,8 +48,8 @@ pub struct CommentRequest {
 }
 
 #[test]
-fn test_macro_expansion() {
-    tracing_subscriber::fmt::init();
+fn test_macro_expansion_topic() {
+    let _ = tracing_subscriber::fmt::try_init();
 
     let _read_action = TopicReadAction {
         action: Some(TopicReadActionType::CheckEmail),
@@ -123,4 +124,37 @@ fn test_macro_expansion() {
     let _ = cli.act(comment_request);
     let _ = cli.act_by_id("1", update_request);
     let _ = cli.act_by_id("1", like_request);
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+#[api_model(base = "/users/v1", iter_type=Vec)]
+pub struct User {
+    pub created_at: u64,
+    pub updated_at: u64,
+
+    #[api_model(action = signup)]
+    pub nickname: String,
+    #[api_model(action = signup, read_action = [check_email, user_info])]
+    pub email: String,
+    #[api_model(action = signup)]
+    pub profile_url: String,
+}
+
+#[test]
+fn test_macro_expansion_user() {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let _ = User {
+        created_at: 0,
+        updated_at: 0,
+        nickname: "nickname".to_string(),
+        email: "email".to_string(),
+        profile_url: "profile_url".to_string(),
+    };
+
+    let _ = UserReadAction {
+        action: Some(UserReadActionType::CheckEmail),
+        email: Some("email".to_string()),
+    };
 }

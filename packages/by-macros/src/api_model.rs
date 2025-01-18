@@ -124,7 +124,7 @@ enum ActionField {
 }
 
 pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
-    tracing_subscriber::fmt::init();
+    let _ = tracing_subscriber::fmt::try_init();
 
     let input_cloned = item.clone();
     let input = parse_macro_input!(item as DeriveInput);
