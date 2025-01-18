@@ -57,7 +57,7 @@ pub struct CommentRequest {
 }
 ```
 
-### Expanded code
+#### Expanded code
 
 ``` rust
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -310,4 +310,154 @@ impl TopicClient {
         rest_api::post(&endpoint, req).await
     }
 }
+```
+
+### Define a model with parent ID
+- If a resource is based on a specific parent resource, you can specify a parent ID with `:`.
+  - Usually, the ID should be kebab-case by REST API convention.
+
+``` rust
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+#[api_model(base = "/topics/v1/:topic-id/comments", iter_type=Vec)]
+pub struct Comment {
+    pub id: String,
+    #[api_model(action = comment, related = String, read_action = search_by)]
+    pub content: String,
+    #[api_model(action_by_id = update, related = i64)]
+    pub updated_at: i64,
+}
+```
+
+#### Expanded code
+
+``` rust
+pub struct Comment {
+    pub id: String,
+    pub content: String,
+    pub updated_at: i64,
+}
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+pub enum CommentAction {
+    Comment(String),
+}
+impl CommentClient {
+    pub async fn act(&self, topic_id: &str, params: CommentAction) -> crate::Result<Comment> {
+        let path = format!("/topics/v1/{}/comments", topic_id,);
+        let endpoint = format!("{}{}", self.endpoint, path);
+        rest_api::post(&endpoint, params).await
+    }
+    pub async fn comment(&self, topic_id: &str, request: String) -> crate::Result<Comment> {
+        let path = format!("/topics/v1/{}/comments", topic_id,);
+        let endpoint = format!("{}{}", self.endpoint, path);
+        rest_api::post(&endpoint, request).await
+    }
+}
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+pub enum CommentByIdAction {
+    Update(i64),
+}
+impl CommentClient {
+    pub async fn act_by_id(
+        &self,
+        topic_id: &str,
+        id: &str,
+        params: CommentByIdAction,
+    ) -> crate::Result<Comment> {
+        let path = format!("/topics/v1/{}/comments", topic_id,);
+        let endpoint = format!("{}{}/{}", self.endpoint, path, id);
+        rest_api::post(&endpoint, params).await
+    }
+    pub async fn update(&self, topic_id: &str, id: &str, request: i64) -> crate::Result<Comment> {
+        let path = format!("/topics/v1/{}/comments", topic_id,);
+        let endpoint = format!("{}{}/{}", self.endpoint, path, id);
+        rest_api::post(&endpoint, request).await
+    }
+}
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+pub struct CommentSummary {}
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+pub struct CommentQuery {
+    pub size: usize,
+    pub bookmark: Option<String>,
+}
+impl CommentQuery {
+    pub fn new(size: usize) -> Self {
+        Self {
+            size,
+            ..Self::default()
+        }
+    }
+    pub fn with_bookmark(mut self, bookmark: String) -> Self {
+        self.bookmark = Some(bookmark);
+        self
+    }
+}
+impl CommentClient {}
+impl Comment {
+    pub fn get_client(endpoint: &str) -> CommentClient {
+        CommentClient {
+            endpoint: endpoint.to_string(),
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq)]
+pub struct CommentClient {
+    pub endpoint: String,
+}
+impl CommentClient {
+    pub async fn query(
+        &self,
+        topic_id: &str,
+        params: CommentQuery,
+    ) -> crate::Result<Vec<CommentSummary>> {
+        let path = format!("/topics/v1/{}/comments", topic_id,);
+        let endpoint = format!("{}{}", self.endpoint, path);
+        let query = format!("{}?{}", endpoint, params);
+        rest_api::get(&query).await
+    }
+    pub async fn get(&self, topic_id: &str, id: &str) -> crate::Result<Comment> {
+        let path = format!("/topics/v1/{}/comments", topic_id,);
+        let endpoint = format!("{}{}/{}", self.endpoint, path, id);
+        rest_api::get(&endpoint).await
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+pub struct CommentReadAction {
+    pub action: Option<CommentReadActionType>,
+    pub content: Option<String>,
+}
+impl CommentReadAction {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn search_by(mut self, content: String) -> Self {
+        self.content = Some(content);
+        self.action = Some(CommentReadActionType::SearchBy);
+        self
+    }
+}
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+pub enum CommentReadActionType {
+    SearchBy,
+}
+impl CommentClient {
+    pub async fn search_by(&self, topic_id: &str, content: String) -> crate::Result<Comment> {
+        let path = format!("/topics/v1/{}/comments", topic_id,);
+        let endpoint = format!("{}{}", self.endpoint, path);
+        let params = CommentReadAction::new().search_by(content);
+        let query = format!("{}?{}", endpoint, params);
+        rest_api::get(&query).await
+    }
+}
+
 ```
