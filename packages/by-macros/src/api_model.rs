@@ -113,6 +113,8 @@ enum ActionField {
 }
 
 pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
+    tracing_subscriber::fmt::init();
+
     let input_cloned = item.clone();
     let input = parse_macro_input!(item as DeriveInput);
     let struct_name = &input.ident;
@@ -266,7 +268,8 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         #query_struct
         #client_impl
     };
-    println!("{}", output.to_string());
+
+    tracing::debug!("Generated code: {}", output.to_string());
 
     output.into()
 }
@@ -392,6 +395,7 @@ fn generate_query_struct(
                     if hashed_fields.contains(field_name) {
                         continue;
                     }
+                    hashed_fields.insert(field_name.clone());
                     extended_query_fields.push(quote! {
                         pub #field_name: Option<#field_type>,
                     });
@@ -433,7 +437,7 @@ fn generate_query_struct(
             quote! {
                 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
                 #[serde(rename_all = "kebab-case")]
-                #[cfg_attr(feature = "server", derive(JsonSchema, aide::OperationIo))]
+                #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                 pub enum #read_action_enum_name {
                     #(#read_action_types)*
                 }
@@ -449,7 +453,7 @@ fn generate_query_struct(
     let query_name = syn::Ident::new(&format!("{}Query", struct_name), struct_name.span());
 
     quote! {
-        #[derive(Debug, Clone, Serialize, Deserialize, Default Eq, PartialEq, by_macros::QueryDisplay)]
+        #[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         pub struct #query_name {
             pub size: usize,
@@ -463,7 +467,7 @@ fn generate_query_struct(
             pub fn new(size: usize) -> Self {
                 Self {
                     size,
-                    ..Self::default(),
+                    ..Self::default()
                 }
             }
 
