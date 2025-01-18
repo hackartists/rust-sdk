@@ -138,6 +138,13 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut iter_type = "CommonQueryResponse".to_string();
     let mut base_endpoint = String::new();
 
+    let mut summary_fields = Vec::new();
+    let mut queryable_fields = Vec::new();
+    let mut action_names = HashMap::<String, ActionField>::new();
+    let mut action_by_id_names = HashMap::<String, ActionField>::new();
+    let mut query_action_names = HashMap::<String, ActionField>::new();
+    let mut read_action_names = HashMap::<String, ActionField>::new();
+
     for arg in attr_args.split(',') {
         let parts: Vec<&str> = arg.split('=').collect();
         if parts.len() == 2 {
@@ -146,17 +153,22 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             match key {
                 "base" => base_endpoint = value.to_string(),
                 "iter_type" => iter_type = value.to_string(),
+                "read_action" => {
+                    let value = value
+                        .trim_matches('[')
+                        .trim_matches(']')
+                        .split(",")
+                        .collect::<Vec<&str>>();
+                    for v in value {
+                        tracing::debug!("Read action: {}", v);
+                        let v = v.trim();
+                        read_action_names.insert(v.to_string(), ActionField::Fields(vec![]));
+                    }
+                }
                 _ => panic!("Unexpected attribute key: {}", key),
             }
         }
     }
-
-    let mut summary_fields = Vec::new();
-    let mut queryable_fields = Vec::new();
-    let mut action_names = HashMap::<String, ActionField>::new();
-    let mut action_by_id_names = HashMap::<String, ActionField>::new();
-    let mut query_action_names = HashMap::<String, ActionField>::new();
-    let mut read_action_names = HashMap::<String, ActionField>::new();
 
     if let Fields::Named(named_fields) = fields {
         for field in &named_fields.named {
