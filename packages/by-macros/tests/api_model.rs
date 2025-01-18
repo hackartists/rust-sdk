@@ -48,6 +48,8 @@ pub struct CommentRequest {
 
 #[test]
 fn test_macro_expansion() {
+    tracing_subscriber::fmt::init();
+
     let _read_action = TopicReadAction {
         action: Some(TopicReadActionType::CheckEmail),
         wallet_address: None,
