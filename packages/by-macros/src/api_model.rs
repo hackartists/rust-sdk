@@ -276,7 +276,13 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let summary_struct = generate_summary_struct(&struct_name, &summary_fields);
-    let query_struct = generate_query_struct(&struct_name, &queryable_fields, &query_action_names);
+    let query_struct = generate_query_struct(
+        &struct_name,
+        &base_endpoint,
+        &iter_type,
+        &queryable_fields,
+        &query_action_names,
+    );
     let read_action_struct = generate_read_struct(&struct_name, &base_endpoint, &read_action_names);
     let action_struct = generate_action_struct(&struct_name, &base_endpoint, &action_names);
     let action_by_id_struct =
@@ -646,13 +652,23 @@ fn generate_summary_struct(
 
 fn generate_query_struct(
     struct_name: &syn::Ident,
+    base_endpoint: &str,
+    iter_type: &str,
 
     queryable_fields: &[syn::Field],
     read_actions: &HashMap<String, ActionField>,
 ) -> proc_macro2::TokenStream {
+    let summary_name = syn::Ident::new(&format!("{}Summary", struct_name), struct_name.span());
+    let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
+    let query_name = syn::Ident::new(&format!("{}Query", struct_name), struct_name.span());
+    let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
+    let iter_type_with_summary = format!("{}<{}>", iter_type, summary_name);
+    let iter_type_tokens: proc_macro2::TokenStream = iter_type_with_summary.parse().unwrap();
+
     let mut hashed_fields = HashSet::new();
     let mut query_fields = vec![];
     let mut query_builder_functions = vec![];
+    let mut cli_read_action_functions = vec![];
 
     for field in queryable_fields {
         let field_name = &field.ident;
@@ -722,6 +738,33 @@ fn generate_query_struct(
                 self
             }
         });
+
+        let function_params = params
+            .iter()
+            .map(|(field_name, field_type)| quote! { #field_name: #field_type, });
+        let field_names = params
+            .iter()
+            .map(|(field_name, _)| quote! { #field_name: Some(#field_name), });
+
+        cli_read_action_functions.push(quote! {
+            pub async fn #function_name(
+                &self,
+                size: usize,
+                bookmark: Option<String>,
+                #(#function_params)*
+            ) -> crate::Result<#iter_type_tokens> {
+                let endpoint = format!("{}{}", self.endpoint, #base_endpoint_lit);
+                let params = #query_name {
+                    size,
+                    bookmark,
+                    action: Some(#read_action_enum_name::#read_action_name),
+                    #(#field_names)*
+                    ..#query_name::default()
+                };
+                let query = format!("{}?{}", endpoint, params);
+                rest_api::get(&query).await
+            }
+        })
     }
 
     let (read_action_enum, read_action_type_field) = if read_action_types.len() > 0 {
@@ -745,8 +788,6 @@ fn generate_query_struct(
     } else {
         (quote! {}, quote! {})
     };
-
-    let query_name = syn::Ident::new(&format!("{}Query", struct_name), struct_name.span());
 
     quote! {
         #[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
@@ -776,6 +817,10 @@ fn generate_query_struct(
         }
 
         #read_action_enum
+
+        impl #client_name {
+            #(#cli_read_action_functions)*
+        }
     }
 }
 
