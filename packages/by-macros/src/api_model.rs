@@ -277,7 +277,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let summary_struct = generate_summary_struct(&struct_name, &summary_fields);
     let query_struct = generate_query_struct(&struct_name, &queryable_fields, &query_action_names);
-    let read_action_struct = generate_read_struct(&struct_name, &read_action_names);
+    let read_action_struct = generate_read_struct(&struct_name, &base_endpoint, &read_action_names);
     let action_struct = generate_action_struct(&struct_name, &action_names, "Action");
     let action_by_id_struct =
         generate_action_struct(&struct_name, &action_by_id_names, "ByIdAction");
@@ -310,10 +310,18 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 fn generate_read_struct(
     struct_name: &syn::Ident,
+    base_endpoint: &str,
+
     read_actions: &HashMap<String, ActionField>,
 ) -> proc_macro2::TokenStream {
+    let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
+    let read_action_struct_name =
+        syn::Ident::new(&format!("{}ReadAction", struct_name), struct_name.span());
+    let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
+
     let mut hashed_fields = HashSet::new();
     let mut query_builder_functions = vec![];
+    let mut cli_read_action_functions = vec![];
 
     let mut query_fields = vec![];
     let mut read_action_types = vec![];
@@ -351,9 +359,10 @@ fn generate_read_struct(
         read_action_types.push(quote! { #read_action_name, });
 
         let function_name = syn::Ident::new(&read_action.to_case(Case::Snake), struct_name.span());
-        let function_params = params.iter().map(|(field_name, field_type)| {
-            quote! { #field_name: #field_type, }
-        });
+        let function_params = params
+            .iter()
+            .map(|(field_name, field_type)| quote! { #field_name: #field_type, });
+
         let read_action_enum_name = syn::Ident::new(
             &format!("{}ReadActionType", struct_name),
             struct_name.span(),
@@ -366,6 +375,23 @@ fn generate_read_struct(
                 self
             }
         });
+        let function_params = params
+            .iter()
+            .map(|(field_name, field_type)| quote! { #field_name: #field_type, });
+        let field_names = params.iter().map(|(field_name, _)| quote! { #field_name, });
+
+        cli_read_action_functions.push(quote! {
+            pub async fn #function_name(
+                &self,
+                #(#function_params)*
+            ) -> crate::Result<#struct_name> {
+                let endpoint = format!("{}{}", self.endpoint, #base_endpoint_lit);
+                let params = #read_action_struct_name::new()
+                    .#function_name(#(#field_names)*);
+                let query = format!("{}?{}", endpoint, params);
+                rest_api::get(&query).await
+            }
+        })
     }
 
     let (read_action_enum, read_action_type_field) = if read_action_types.len() > 0 {
@@ -390,9 +416,6 @@ fn generate_read_struct(
         (quote! {}, quote! {})
     };
 
-    let read_action_struct_name =
-        syn::Ident::new(&format!("{}ReadAction", struct_name), struct_name.span());
-
     quote! {
         #[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
@@ -410,6 +433,11 @@ fn generate_read_struct(
         }
 
         #read_action_enum
+
+
+        impl #client_name {
+            #(#cli_read_action_functions)*
+        }
     }
 }
 
@@ -642,7 +670,7 @@ fn generate_client_impl(
         let action_name = syn::Ident::new(&format!("{}Action", struct_name), struct_name.span());
         quote! {
             pub async fn act(&self, params: #action_name) -> crate::Result<#struct_name> {
-                let endpoint = format!("{}{}/action", self.endpoint, #base_endpoint_lit);
+                let endpoint = format!("{}{}", self.endpoint, #base_endpoint_lit);
                 rest_api::post(&endpoint, params).await
             }
         }
@@ -655,7 +683,7 @@ fn generate_client_impl(
             syn::Ident::new(&format!("{}ByIdAction", struct_name), struct_name.span());
         quote! {
             pub async fn act_by_id(&self, id: &str, params: #action_name) -> crate::Result<#struct_name> {
-                let endpoint = format!("{}{}/{}/action", self.endpoint, #base_endpoint_lit, id);
+                let endpoint = format!("{}{}/{}", self.endpoint, #base_endpoint_lit, id);
                 rest_api::post(&endpoint, params).await
             }
         }

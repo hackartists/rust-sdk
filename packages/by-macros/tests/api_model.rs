@@ -124,6 +124,8 @@ fn test_macro_expansion_topic() {
     let _ = cli.act(comment_request);
     let _ = cli.act_by_id("1", update_request);
     let _ = cli.act_by_id("1", like_request);
+    let _ = cli.user_info("wallet".to_string(), "email".to_string(), 1);
+    let _ = cli.check_email("email".to_string());
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
