@@ -12,6 +12,7 @@ enum ActionType {
     ActionById(Vec<String>),
     Related(String),
     QueryActions(Vec<String>),
+    ReadActions(Vec<String>),
 }
 
 /// Parse the attribute string and return the action type
@@ -53,6 +54,10 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                             selected_at = i;
                             selected_action = ActionType::QueryActions(vec![]);
                         }
+                        "read_action" => {
+                            selected_at = i;
+                            selected_action = ActionType::ReadActions(vec![]);
+                        }
                         _ => {
                             if selected_at == (i - 2) {
                                 match &selected_action {
@@ -67,6 +72,9 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                                     }
                                     ActionType::QueryActions(_) => {
                                         types.push(ActionType::QueryActions(vec![id.to_string()]));
+                                    }
+                                    ActionType::ReadActions(_) => {
+                                        types.push(ActionType::ReadActions(vec![id.to_string()]));
                                     }
                                     _ => {}
                                 }
@@ -94,7 +102,10 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                         ActionType::QueryActions(_) => {
                             types.push(ActionType::QueryActions(actions));
                         }
-                        _ => {}
+                        ActionType::ReadActions(_) => {
+                            types.push(ActionType::ReadActions(actions));
+                        }
+                        ActionType::Related(_) | ActionType::Summary | ActionType::Queryable => {}
                     }
                 }
 
@@ -144,6 +155,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut queryable_fields = Vec::new();
     let mut action_names = HashMap::<String, ActionField>::new();
     let mut action_by_id_names = HashMap::<String, ActionField>::new();
+    let mut query_action_names = HashMap::<String, ActionField>::new();
     let mut read_action_names = HashMap::<String, ActionField>::new();
 
     if let Fields::Named(named_fields) = fields {
@@ -171,6 +183,9 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                         }
                         ActionType::QueryActions(action_names) => {
                             actions.push(ActionType::QueryActions(action_names));
+                        }
+                        ActionType::ReadActions(action_names) => {
+                            actions.push(ActionType::ReadActions(action_names));
                         }
                     }
                 }
@@ -222,7 +237,22 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 };
                             }
                         }
-                        (None, ActionType::QueryActions(actions)) => {
+                        (_, ActionType::QueryActions(actions)) => {
+                            for action_name in actions {
+                                match query_action_names
+                                    .entry(action_name)
+                                    .or_insert_with(|| ActionField::Fields(vec![]))
+                                {
+                                    ActionField::Fields(v) => {
+                                        v.push(field.clone());
+                                    }
+                                    _ => {
+                                        panic!("ActionById should have fields")
+                                    }
+                                };
+                            }
+                        }
+                        (_, ActionType::ReadActions(actions)) => {
                             for action_name in actions {
                                 match read_action_names
                                     .entry(action_name)
@@ -237,6 +267,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 };
                             }
                         }
+
                         _ => {}
                     }
                 }
@@ -245,7 +276,8 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let summary_struct = generate_summary_struct(&struct_name, &summary_fields);
-    let query_struct = generate_query_struct(&struct_name, &queryable_fields, &read_action_names);
+    let query_struct = generate_query_struct(&struct_name, &queryable_fields, &query_action_names);
+    let read_action_struct = generate_read_struct(&struct_name, &read_action_names);
     let action_struct = generate_action_struct(&struct_name, &action_names, "Action");
     let action_by_id_struct =
         generate_action_struct(&struct_name, &action_by_id_names, "ByIdAction");
@@ -267,11 +299,118 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         #summary_struct
         #query_struct
         #client_impl
+
+        #read_action_struct
     };
 
     tracing::debug!("Generated code: {}", output.to_string());
 
     output.into()
+}
+
+fn generate_read_struct(
+    struct_name: &syn::Ident,
+    read_actions: &HashMap<String, ActionField>,
+) -> proc_macro2::TokenStream {
+    let mut hashed_fields = HashSet::new();
+    let mut query_builder_functions = vec![];
+
+    let mut query_fields = vec![];
+    let mut read_action_types = vec![];
+
+    for (read_action, fields) in read_actions {
+        let mut params = vec![];
+        let mut replace_expressions = vec![];
+
+        match fields {
+            ActionField::Fields(v) => {
+                for field in v {
+                    let field_name = &field.ident;
+                    let field_type = &field.ty;
+
+                    replace_expressions.push(quote! {
+                        self.#field_name = Some(#field_name);
+                    });
+                    params.push((field_name.clone(), field_type.clone()));
+                    if hashed_fields.contains(field_name) {
+                        continue;
+                    }
+                    hashed_fields.insert(field_name.clone());
+                    query_fields.push(quote! {
+                        pub #field_name: Option<#field_type>,
+                    });
+                }
+            }
+            _ => {
+                panic!("Related field should not be in queryable fields");
+            }
+        }
+
+        let read_action_name =
+            syn::Ident::new(&read_action.to_case(Case::Pascal), struct_name.span());
+        read_action_types.push(quote! { #read_action_name, });
+
+        let function_name = syn::Ident::new(&read_action.to_case(Case::Snake), struct_name.span());
+        let function_params = params.iter().map(|(field_name, field_type)| {
+            quote! { #field_name: #field_type, }
+        });
+        let read_action_enum_name = syn::Ident::new(
+            &format!("{}ReadActionType", struct_name),
+            struct_name.span(),
+        );
+
+        query_builder_functions.push(quote! {
+            pub fn #function_name(mut self, #(#function_params)*) -> Self {
+                #(#replace_expressions)*
+                self.action = Some(#read_action_enum_name::#read_action_name);
+                self
+            }
+        });
+    }
+
+    let (read_action_enum, read_action_type_field) = if read_action_types.len() > 0 {
+        let read_action_enum_name = syn::Ident::new(
+            &format!("{}ReadActionType", struct_name),
+            struct_name.span(),
+        );
+        (
+            quote! {
+                #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+                #[serde(rename_all = "kebab-case")]
+                #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+                pub enum #read_action_enum_name {
+                    #(#read_action_types)*
+                }
+            },
+            quote! {
+                pub action: Option<#read_action_enum_name>,
+            },
+        )
+    } else {
+        (quote! {}, quote! {})
+    };
+
+    let read_action_struct_name =
+        syn::Ident::new(&format!("{}ReadAction", struct_name), struct_name.span());
+
+    quote! {
+        #[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+        #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+        pub struct #read_action_struct_name {
+            #read_action_type_field
+            #(#query_fields)*
+        }
+
+        impl #read_action_struct_name {
+            pub fn new() -> Self {
+                Self::default()
+            }
+
+            #(#query_builder_functions)*
+        }
+
+        #read_action_enum
+    }
 }
 
 fn generate_action_struct(

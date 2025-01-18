@@ -11,11 +11,15 @@ type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 pub struct Topic {
     #[api_model(summary)]
     pub id: String,
+    #[api_model(read_action = user_info)]
+    pub wallet_address: String,
+    #[api_model(read_action = [check_email,user_info])]
+    pub email: String,
     #[api_model(summary, action = create)]
     pub title: String,
     #[api_model(summary, queryable, query_action = search_by, action = create, action_by_id = update)]
     pub description: String,
-    #[api_model(summary, queryable, action_by_id = update)]
+    #[api_model(summary, queryable, action_by_id = update, read_action = user_info)]
     pub status: i32,
     #[api_model(summary, query_action = [search_by, date_from])]
     pub created_at: i64,
@@ -44,6 +48,16 @@ pub struct CommentRequest {
 
 #[test]
 fn test_macro_expansion() {
+    let _read_action = TopicReadAction {
+        action: Some(TopicReadActionType::CheckEmail),
+        wallet_address: None,
+        email: Some("test".to_string()),
+        status: Some(1),
+    };
+
+    let _ = TopicReadAction::new().user_info("wallet".to_string(), "email".to_string(), 1);
+    let _ = TopicReadAction::new().check_email("email".to_string());
+
     let q = TopicQuery {
         action: Some(TopicQueryActionType::DateFrom),
         size: 10,
