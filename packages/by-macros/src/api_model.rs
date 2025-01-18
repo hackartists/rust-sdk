@@ -11,7 +11,7 @@ enum ActionType {
     Action(Vec<String>),
     ActionById(Vec<String>),
     Related(String),
-    ReadActions(Vec<String>),
+    QueryActions(Vec<String>),
 }
 
 /// Parse the attribute string and return the action type
@@ -49,9 +49,9 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                             selected_at = i;
                             selected_action = ActionType::Related("".to_string());
                         }
-                        "read_action" => {
+                        "query_action" => {
                             selected_at = i;
-                            selected_action = ActionType::ReadActions(vec![]);
+                            selected_action = ActionType::QueryActions(vec![]);
                         }
                         _ => {
                             if selected_at == (i - 2) {
@@ -65,8 +65,8 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                                     ActionType::Related(_) => {
                                         types.push(ActionType::Related(id.to_string()));
                                     }
-                                    ActionType::ReadActions(_) => {
-                                        types.push(ActionType::ReadActions(vec![id.to_string()]));
+                                    ActionType::QueryActions(_) => {
+                                        types.push(ActionType::QueryActions(vec![id.to_string()]));
                                     }
                                     _ => {}
                                 }
@@ -91,8 +91,8 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                         ActionType::ActionById(_) => {
                             types.push(ActionType::ActionById(actions));
                         }
-                        ActionType::ReadActions(_) => {
-                            types.push(ActionType::ReadActions(actions));
+                        ActionType::QueryActions(_) => {
+                            types.push(ActionType::QueryActions(actions));
                         }
                         _ => {}
                     }
@@ -169,8 +169,8 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                         ActionType::Related(st) => {
                             related = Some(st);
                         }
-                        ActionType::ReadActions(action_names) => {
-                            actions.push(ActionType::ReadActions(action_names));
+                        ActionType::QueryActions(action_names) => {
+                            actions.push(ActionType::QueryActions(action_names));
                         }
                     }
                 }
@@ -222,7 +222,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 };
                             }
                         }
-                        (None, ActionType::ReadActions(actions)) => {
+                        (None, ActionType::QueryActions(actions)) => {
                             for action_name in actions {
                                 match read_action_names
                                     .entry(action_name)
@@ -415,7 +415,7 @@ fn generate_query_struct(
             quote! { #field_name: #field_type, }
         });
         let read_action_enum_name = syn::Ident::new(
-            &format!("{}ReadActionType", struct_name),
+            &format!("{}QueryActionType", struct_name),
             struct_name.span(),
         );
 
@@ -430,7 +430,7 @@ fn generate_query_struct(
 
     let (read_action_enum, read_action_type_field) = if read_action_types.len() > 0 {
         let read_action_enum_name = syn::Ident::new(
-            &format!("{}ReadActionType", struct_name),
+            &format!("{}QueryActionType", struct_name),
             struct_name.span(),
         );
         (

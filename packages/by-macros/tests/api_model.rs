@@ -13,11 +13,11 @@ pub struct Topic {
     pub id: String,
     #[api_model(summary, action = create)]
     pub title: String,
-    #[api_model(summary, queryable, read_action = search_by, action = create, action_by_id = update)]
+    #[api_model(summary, queryable, query_action = search_by, action = create, action_by_id = update)]
     pub description: String,
     #[api_model(summary, queryable, action_by_id = update)]
     pub status: i32,
-    #[api_model(summary, read_action = [search_by, date_from])]
+    #[api_model(summary, query_action = [search_by, date_from])]
     pub created_at: i64,
     pub is_liked: bool,
 
@@ -45,7 +45,7 @@ pub struct CommentRequest {
 #[test]
 fn test_macro_expansion() {
     let q = TopicQuery {
-        action: Some(TopicReadActionType::DateFrom),
+        action: Some(TopicQueryActionType::DateFrom),
         size: 10,
         bookmark: None,
         description: None,
