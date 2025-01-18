@@ -37,13 +37,6 @@ pub struct Topic {
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-pub struct Comment {
-    pub id: String,
-    pub content: String,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 pub struct CommentRequest {
     pub comment_id: String,
     pub is_liked: bool,
@@ -117,6 +110,7 @@ fn test_macro_expansion_topic() {
     let comment_request = TopicAction::Comment(Comment {
         id: "1".to_string(),
         content: "content".to_string(),
+        updated_at: 0,
     });
 
     let cli = Topic::get_client("");
@@ -175,4 +169,29 @@ fn test_macro_expansion_user() {
     let cli = User::get_client("");
     let _ = cli.user_info();
     let _ = cli.check_email("email".to_string());
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+#[api_model(base = "/topics/v1/:topic-id/comments", iter_type=Vec)]
+pub struct Comment {
+    pub id: String,
+    #[api_model(action = comment, related = String, read_action = search_by)]
+    pub content: String,
+    #[api_model(action_by_id = update, related = i64)]
+    pub updated_at: i64,
+}
+
+#[test]
+fn test_macro_expansion_comment() {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let cli = Comment::get_client("");
+    let _ = cli.get("topic-id", "comment-id");
+    let _ = cli.query("topic-id", CommentQuery::new(10));
+    let _ = cli.act("topic-id", CommentAction::Comment("content".to_string()));
+    let _ = cli.comment("topic-id", "content".to_string());
+    let _ = cli.search_by("topic-id", "content".to_string());
+    let _ = cli.update("topic-id", "comment-id", 100);
+    let _ = cli.act_by_id("topic-id", "comment-id", CommentByIdAction::Update(100));
 }

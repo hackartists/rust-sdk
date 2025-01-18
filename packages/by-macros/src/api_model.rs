@@ -144,6 +144,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut action_by_id_names = HashMap::<String, ActionField>::new();
     let mut query_action_names = HashMap::<String, ActionField>::new();
     let mut read_action_names = HashMap::<String, ActionField>::new();
+    let mut parent_ids = Vec::new();
 
     for arg in attr_args.split(',') {
         let parts: Vec<&str> = arg.split('=').collect();
@@ -151,7 +152,22 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             let key = parts[0].trim();
             let value = parts[1].trim().trim_matches('"');
             match key {
-                "base" => base_endpoint = value.to_string(),
+                "base" => {
+                    base_endpoint = value
+                        .split('/')
+                        .map(|v| {
+                            if v.starts_with(':') {
+                                parent_ids.push(
+                                    v.trim_start_matches(':').to_string().to_case(Case::Snake),
+                                );
+                                "{}"
+                            } else {
+                                v
+                            }
+                        })
+                        .collect::<Vec<&str>>()
+                        .join("/");
+                }
                 "iter_type" => iter_type = value.to_string(),
                 "read_action" => {
                     let value = value
@@ -291,16 +307,27 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let query_struct = generate_query_struct(
         &struct_name,
         &base_endpoint,
+        &parent_ids,
         &iter_type,
         &queryable_fields,
         &query_action_names,
     );
-    let read_action_struct = generate_read_struct(&struct_name, &base_endpoint, &read_action_names);
-    let action_struct = generate_action_struct(&struct_name, &base_endpoint, &action_names);
-    let action_by_id_struct =
-        generate_action_by_id_struct(&struct_name, &base_endpoint, &action_by_id_names);
+    let read_action_struct = generate_read_struct(
+        &struct_name,
+        &base_endpoint,
+        &parent_ids,
+        &read_action_names,
+    );
+    let action_struct =
+        generate_action_struct(&struct_name, &base_endpoint, &parent_ids, &action_names);
+    let action_by_id_struct = generate_action_by_id_struct(
+        &struct_name,
+        &base_endpoint,
+        &parent_ids,
+        &action_by_id_names,
+    );
 
-    let client_impl = generate_client_impl(struct_name, &base_endpoint, &iter_type);
+    let client_impl = generate_client_impl(struct_name, &base_endpoint, &parent_ids, &iter_type);
     let input = parse_macro_input!(input_cloned as syn::ItemStruct);
     let stripped_input = strip_struct_attributes(&input);
 
@@ -323,6 +350,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 fn generate_read_struct(
     struct_name: &syn::Ident,
     base_endpoint: &str,
+    parent_ids: &[String],
 
     read_actions: &HashMap<String, ActionField>,
 ) -> proc_macro2::TokenStream {
@@ -330,6 +358,14 @@ fn generate_read_struct(
     let read_action_struct_name =
         syn::Ident::new(&format!("{}ReadAction", struct_name), struct_name.span());
     let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
+    let parent_params = parent_ids.iter().map(|id| {
+        let id = syn::Ident::new(id, struct_name.span());
+        quote! { #id: &str, }
+    });
+    let parent_names = parent_ids.iter().map(|id| {
+        let id = syn::Ident::new(id, struct_name.span());
+        quote! { #id, }
+    });
 
     let mut hashed_fields = HashSet::new();
     let mut query_builder_functions = vec![];
@@ -392,12 +428,17 @@ fn generate_read_struct(
             .map(|(field_name, field_type)| quote! { #field_name: #field_type, });
         let field_names = params.iter().map(|(field_name, _)| quote! { #field_name, });
 
+        let parent_params = parent_params.clone();
+        let parent_names = parent_names.clone();
+
         cli_read_action_functions.push(quote! {
             pub async fn #function_name(
                 &self,
+                #(#parent_params)*
                 #(#function_params)*
             ) -> crate::Result<#struct_name> {
-                let endpoint = format!("{}{}", self.endpoint, #base_endpoint_lit);
+                let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                let endpoint = format!("{}{}", self.endpoint, path);
                 let params = #read_action_struct_name::new()
                     .#function_name(#(#field_names)*);
                 let query = format!("{}?{}", endpoint, params);
@@ -456,6 +497,7 @@ fn generate_read_struct(
 fn generate_action_by_id_struct(
     struct_name: &syn::Ident,
     base_endpoint: &str,
+    parent_ids: &[String],
     actions: &HashMap<String, ActionField>,
 ) -> proc_macro2::TokenStream {
     if actions.is_empty() {
@@ -468,6 +510,14 @@ fn generate_action_by_id_struct(
     );
     let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
     let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
+    let parent_params = parent_ids.iter().map(|id| {
+        let id = syn::Ident::new(id, struct_name.span());
+        quote! { #id: &str, }
+    });
+    let parent_names = parent_ids.iter().map(|id| {
+        let id = syn::Ident::new(id, struct_name.span());
+        quote! { #id, }
+    });
 
     let mut action_fields = vec![];
     let mut action_requests = vec![];
@@ -513,13 +563,31 @@ fn generate_action_by_id_struct(
                 }
             });
 
+            let parent_params = parent_params.clone();
+            let parent_names = parent_names.clone();
+
             cli_actions.push(quote! {
-                pub async fn #cli_act(&self, id: &str, #(#params)*) -> crate::Result<#struct_name> {
-                    let endpoint = format!("{}{}/{}", self.endpoint, #base_endpoint_lit, id);
+                pub async fn #cli_act(&self, #(#parent_params)* id: &str, #(#params)*) -> crate::Result<#struct_name> {
+                    let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                    let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                     let req = #action_name::#act(#request_struct_name {
                         #(#field_names)*
                     });
                     rest_api::post(&endpoint, req).await
+                }
+
+            })
+        } else if let ActionField::Related(st) = v {
+            let parent_params = parent_params.clone();
+            let parent_names = parent_names.clone();
+            let req_type = syn::Ident::new(&st, struct_name.span());
+
+            cli_actions.push(quote! {
+                pub async fn #cli_act(&self, #(#parent_params)* id: &str, request: #req_type) -> crate::Result<#struct_name> {
+                    let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                    let endpoint = format!("{}{}/{}", self.endpoint, path, id);
+
+                    rest_api::post(&endpoint, request).await
                 }
 
             })
@@ -537,8 +605,9 @@ fn generate_action_by_id_struct(
         #(#action_requests)*
 
         impl #client_name {
-            pub async fn act_by_id(&self, id: &str, params: #action_name) -> crate::Result<#struct_name> {
-                let endpoint = format!("{}{}/{}", self.endpoint, #base_endpoint_lit, id);
+            pub async fn act_by_id(&self, #(#parent_params)* id: &str, params: #action_name) -> crate::Result<#struct_name> {
+                let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                 rest_api::post(&endpoint, params).await
             }
 
@@ -550,6 +619,7 @@ fn generate_action_by_id_struct(
 fn generate_action_struct(
     struct_name: &syn::Ident,
     base_endpoint: &str,
+    parent_ids: &[String],
     actions: &HashMap<String, ActionField>,
 ) -> proc_macro2::TokenStream {
     if actions.is_empty() {
@@ -563,6 +633,14 @@ fn generate_action_struct(
     );
     let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
     let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
+    let parent_params = parent_ids.iter().map(|id| {
+        let id = syn::Ident::new(id, struct_name.span());
+        quote! { #id: &str, }
+    });
+    let parent_names = parent_ids.iter().map(|id| {
+        let id = syn::Ident::new(id, struct_name.span());
+        quote! { #id, }
+    });
 
     let mut action_fields = vec![];
     let mut action_requests = vec![];
@@ -607,14 +685,32 @@ fn generate_action_struct(
                     #(#fields)*
                 }
             });
+            let parent_params = parent_params.clone();
+            let parent_names = parent_names.clone();
 
             cli_actions.push(quote! {
-                pub async fn #cli_act(&self, #(#params)*) -> crate::Result<#struct_name> {
-                    let endpoint = format!("{}{}", self.endpoint, #base_endpoint_lit);
+                pub async fn #cli_act(&self, #(#parent_params)* #(#params)*) -> crate::Result<#struct_name> {
+                    let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                    let endpoint = format!("{}{}", self.endpoint, path);
+
                     let req = #action_name::#act(#request_struct_name {
                         #(#field_names)*
                     });
                     rest_api::post(&endpoint, req).await
+                }
+
+            })
+        } else if let ActionField::Related(st) = v {
+            let parent_params = parent_params.clone();
+            let parent_names = parent_names.clone();
+            let req_type = syn::Ident::new(&st, struct_name.span());
+
+            cli_actions.push(quote! {
+                pub async fn #cli_act(&self, #(#parent_params)* request: #req_type) -> crate::Result<#struct_name> {
+                    let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                    let endpoint = format!("{}{}", self.endpoint, path);
+
+                    rest_api::post(&endpoint, request).await
                 }
 
             })
@@ -632,8 +728,9 @@ fn generate_action_struct(
         #(#action_requests)*
 
         impl #client_name {
-            pub async fn act(&self, params: #action_name) -> crate::Result<#struct_name> {
-                let endpoint = format!("{}{}", self.endpoint, #base_endpoint_lit);
+            pub async fn act(&self, #(#parent_params)* params: #action_name) -> crate::Result<#struct_name> {
+                let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                let endpoint = format!("{}{}", self.endpoint, path);
                 rest_api::post(&endpoint, params).await
             }
 
@@ -665,6 +762,7 @@ fn generate_summary_struct(
 fn generate_query_struct(
     struct_name: &syn::Ident,
     base_endpoint: &str,
+    parent_ids: &[String],
     iter_type: &str,
 
     queryable_fields: &[syn::Field],
@@ -757,15 +855,24 @@ fn generate_query_struct(
         let field_names = params
             .iter()
             .map(|(field_name, _)| quote! { #field_name: Some(#field_name), });
-
+        let parent_params = parent_ids.iter().map(|id| {
+            let id = syn::Ident::new(id, struct_name.span());
+            quote! { #id: &str, }
+        });
+        let parent_names = parent_ids.iter().map(|id| {
+            let id = syn::Ident::new(id, struct_name.span());
+            quote! { #id, }
+        });
         cli_read_action_functions.push(quote! {
             pub async fn #function_name(
                 &self,
                 size: usize,
                 bookmark: Option<String>,
+                #(#parent_params)*
                 #(#function_params)*
             ) -> crate::Result<#iter_type_tokens> {
-                let endpoint = format!("{}{}", self.endpoint, #base_endpoint_lit);
+                let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                let endpoint = format!("{}{}", self.endpoint, path);
                 let params = #query_name {
                     size,
                     bookmark,
@@ -839,6 +946,7 @@ fn generate_query_struct(
 fn generate_client_impl(
     struct_name: &syn::Ident,
     base_endpoint: &str,
+    parent_ids: &[String],
     iter_type: &str,
 ) -> proc_macro2::TokenStream {
     let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
@@ -849,6 +957,16 @@ fn generate_client_impl(
 
     let iter_type_with_summary = format!("{}<{}>", iter_type, summary_name);
     let iter_type_tokens: proc_macro2::TokenStream = iter_type_with_summary.parse().unwrap();
+    let parent_params = parent_ids.iter().map(|id| {
+        let id = syn::Ident::new(id, struct_name.span());
+        quote! { #id: &str, }
+    });
+    let parent_names = parent_ids.iter().map(|id| {
+        let id = syn::Ident::new(id, struct_name.span());
+        quote! { #id, }
+    });
+    let parent_names_for_get = parent_names.clone();
+    let parent_params_for_get = parent_params.clone();
 
     quote! {
         impl #struct_name {
@@ -865,15 +983,18 @@ fn generate_client_impl(
         impl #client_name {
             pub async fn query(
                 &self,
+                #(#parent_params)*
                 params: #query_name,
             ) -> crate::Result<#iter_type_tokens> {
-                let endpoint = format!("{}{}", self.endpoint, #base_endpoint_lit);
+                let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                let endpoint = format!("{}{}", self.endpoint, path);
                 let query = format!("{}?{}", endpoint, params);
                 rest_api::get(&query).await
             }
 
-            pub async fn get(&self, id: &str) -> crate::Result<#struct_name> {
-                let endpoint = format!("{}{}/{}", self.endpoint, #base_endpoint_lit, id);
+            pub async fn get(&self, #(#parent_params_for_get)* id: &str) -> crate::Result<#struct_name> {
+                let path = format!(#base_endpoint_lit, #(#parent_names_for_get)*);
+                let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                 rest_api::get(&endpoint).await
             }
         }
