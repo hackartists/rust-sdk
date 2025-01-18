@@ -17,7 +17,7 @@ type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-#[api_model(base = "/topics/v1", iter_type=Vec)]
+#[api_model(base = "/topics/v1", iter_type=Vec, read_action = no_param_action)]
 pub struct Topic {
     #[api_model(summary)]
     pub id: String,
@@ -197,6 +197,11 @@ impl TopicReadAction {
         self.action = Some(TopicReadActionType::CheckEmail);
         self
     }
+
+    pub fn no_param_action(mut self) -> Self {
+        self.action = Some(TopicReadActionType::NoParamAction);
+        self
+    }
 }
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -206,6 +211,14 @@ pub enum TopicReadActionType {
     CheckEmail,
 }
 impl TopicClient {
+    pub async fn no_param_action(
+        &self,
+    ) -> crate::Result<Topic> {
+        let endpoint = format!("{}{}", self.endpoint, "/topics/v1");
+        let params = TopicReadAction::new().no_param_action();
+        let query = format!("{}?{}", endpoint, params);
+        rest_api::get(&query).await
+    }
     pub async fn user_info(
         &self,
         wallet_address: String,

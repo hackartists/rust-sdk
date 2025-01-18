@@ -142,14 +142,14 @@ fn test_macro_expansion_topic() {
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-#[api_model(base = "/users/v1", iter_type=Vec)]
+#[api_model(base = "/users/v1", iter_type=Vec, read_action = user_info)]
 pub struct User {
     pub created_at: u64,
     pub updated_at: u64,
 
     #[api_model(action = signup)]
     pub nickname: String,
-    #[api_model(action = signup, read_action = [check_email, user_info])]
+    #[api_model(action = signup, read_action = [check_email])]
     pub email: String,
     #[api_model(action = signup)]
     pub profile_url: String,
@@ -171,4 +171,8 @@ fn test_macro_expansion_user() {
         action: Some(UserReadActionType::CheckEmail),
         email: Some("email".to_string()),
     };
+
+    let cli = User::get_client("");
+    let _ = cli.user_info();
+    let _ = cli.check_email("email".to_string());
 }
