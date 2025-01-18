@@ -15,18 +15,23 @@ use serde::{Deserialize, Serialize};
 
 type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 #[api_model(base = "/topics/v1", iter_type=Vec)]
 pub struct Topic {
     #[api_model(summary)]
     pub id: String,
+    #[api_model(read_action = user_info)]
+    pub wallet_address: String,
+    #[api_model(read_action = [check_email,user_info])]
+    pub email: String,
     #[api_model(summary, action = create)]
     pub title: String,
-    #[api_model(summary, queryable, read_action = search_by, action = create, action_by_id = update)]
+    #[api_model(summary, queryable, query_action = search_by, action = create, action_by_id = update)]
     pub description: String,
-    #[api_model(summary, queryable, action_by_id = update)]
+    #[api_model(summary, queryable, action_by_id = update, read_action = user_info)]
     pub status: i32,
-    #[api_model(summary, read_action = [search_by, date_from])]
+    #[api_model(summary, query_action = [search_by, date_from])]
     pub created_at: i64,
     pub is_liked: bool,
 
@@ -55,12 +60,27 @@ pub struct CommentRequest {
 ### Expanded code
 
 ``` rust
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+pub struct Topic {
+    pub id: String,
+    pub wallet_address: String,
+    pub email: String,
+    pub title: String,
+    pub description: String,
+    pub status: i32,
+    pub created_at: i64,
+    pub is_liked: bool,
+    pub updated_at: i64,
+    pub comments: Vec<Comment>,
+    pub tags: Vec<String>,
+}
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 pub enum TopicAction {
-    Create(TopicCreateRequest),
     Comment(Comment),
+    Create(TopicCreateRequest),
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
@@ -68,12 +88,13 @@ pub struct TopicCreateRequest {
     pub title: String,
     pub description: String,
 }
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 pub enum TopicByIdAction {
-    Like(CommentRequest),
     Update(TopicUpdateRequest),
+    Like(CommentRequest),
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
@@ -96,7 +117,7 @@ pub struct TopicSummary {
 pub struct TopicQuery {
     pub size: usize,
     pub bookmark: Option<String>,
-    pub action: Option<TopicReadActionType>,
+    pub action: Option<TopicQueryActionType>,
     pub description: Option<String>,
     pub status: Option<i32>,
     pub created_at: Option<i64>,
@@ -123,22 +144,23 @@ impl TopicQuery {
     pub fn search_by(mut self, description: String, created_at: i64) -> Self {
         self.description = Some(description);
         self.created_at = Some(created_at);
-        self.action = Some(TopicReadActionType::SearchBy);
+        self.action = Some(TopicQueryActionType::SearchBy);
         self
     }
     pub fn date_from(mut self, created_at: i64) -> Self {
         self.created_at = Some(created_at);
-        self.action = Some(TopicReadActionType::DateFrom);
+        self.action = Some(TopicQueryActionType::DateFrom);
         self
     }
 }
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-pub enum TopicReadActionType {
+pub enum TopicQueryActionType {
     SearchBy,
     DateFrom,
 }
+
 impl Topic {
     pub fn get_client(endpoint: &str) -> TopicClient {
         TopicClient {
@@ -150,7 +172,57 @@ impl Topic {
 pub struct TopicClient {
     pub endpoint: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+pub struct TopicReadAction {
+    pub action: Option<TopicReadActionType>,
+    pub wallet_address: Option<String>,
+    pub email: Option<String>,
+    pub status: Option<i32>,
+}
+impl TopicReadAction {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn user_info(mut self, wallet_address: String, email: String, status: i32) -> Self {
+        self.wallet_address = Some(wallet_address);
+        self.email = Some(email);
+        self.status = Some(status);
+        self.action = Some(TopicReadActionType::UserInfo);
+        self
+    }
+    pub fn check_email(mut self, email: String) -> Self {
+        self.email = Some(email);
+        self.action = Some(TopicReadActionType::CheckEmail);
+        self
+    }
+}
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+pub enum TopicReadActionType {
+    UserInfo,
+    CheckEmail,
+}
 impl TopicClient {
+    pub async fn user_info(
+        &self,
+        wallet_address: String,
+        email: String,
+        status: i32,
+    ) -> crate::Result<Topic> {
+        let endpoint = format!("{}{}", self.endpoint, "/topics/v1");
+        let params = TopicReadAction::new().user_info(wallet_address, email, status);
+        let query = format!("{}?{}", endpoint, params);
+        rest_api::get(&query).await
+    }
+    pub async fn check_email(&self, email: String) -> crate::Result<Topic> {
+        let endpoint = format!("{}{}", self.endpoint, "/topics/v1");
+        let params = TopicReadAction::new().check_email(email);
+        let query = format!("{}?{}", endpoint, params);
+        rest_api::get(&query).await
+    }
     pub async fn query(&self, params: TopicQuery) -> crate::Result<Vec<TopicSummary>> {
         let endpoint = format!("{}{}", self.endpoint, "/topics/v1");
         let query = format!("{}?{}", endpoint, params);
@@ -160,13 +232,69 @@ impl TopicClient {
         let endpoint = format!("{}{}/{}", self.endpoint, "/topics/v1", id);
         rest_api::get(&endpoint).await
     }
+    pub async fn search_by(
+        &self,
+        size: usize,
+        bookmark: Option<String>,
+        description: String,
+        created_at: i64,
+    ) -> crate::Result<Vec<TopicSummary>> {
+        let endpoint = format!("{}{}", self.endpoint, "/topics/v1");
+        let params = TopicQuery {
+            size,
+            bookmark,
+            action: Some(TopicQueryActionType::SearchBy),
+            description: Some(description),
+            created_at: Some(created_at),
+            ..TopicQuery::default()
+        };
+        let query = format!("{}?{}", endpoint, params);
+        rest_api::get(&query).await
+    }
+    pub async fn date_from(
+        &self,
+        size: usize,
+        bookmark: Option<String>,
+        created_at: i64,
+    ) -> crate::Result<Vec<TopicSummary>> {
+        let endpoint = format!("{}{}", self.endpoint, "/topics/v1");
+        let params = TopicQuery {
+            size,
+            bookmark,
+            action: Some(TopicQueryActionType::DateFrom),
+            created_at: Some(created_at),
+            ..TopicQuery::default()
+        };
+        let query = format!("{}?{}", endpoint, params);
+        rest_api::get(&query).await
+    }
     pub async fn act(&self, params: TopicAction) -> crate::Result<Topic> {
-        let endpoint = format!("{}{}/action", self.endpoint, "/topics/v1");
+        let endpoint = format!("{}{}", self.endpoint, "/topics/v1");
         rest_api::post(&endpoint, params).await
     }
+    pub async fn create(&self, title: String, description: String) -> crate::Result<Topic> {
+        let endpoint = format!("{}{}", self.endpoint, "/topics/v1");
+        let req = TopicAction::Create(TopicCreateRequest { title, description });
+        rest_api::post(&endpoint, req).await
+    }
     pub async fn act_by_id(&self, id: &str, params: TopicByIdAction) -> crate::Result<Topic> {
-        let endpoint = format!("{}{}/{}/action", self.endpoint, "/topics/v1", id);
+        let endpoint = format!("{}{}/{}", self.endpoint, "/topics/v1", id);
         rest_api::post(&endpoint, params).await
+    }
+    pub async fn update(
+        &self,
+        id: &str,
+        description: String,
+        status: i32,
+        tags: Vec<String>,
+    ) -> crate::Result<Topic> {
+        let endpoint = format!("{}{}/{}", self.endpoint, "/topics/v1", id);
+        let req = TopicByIdAction::Update(TopicUpdateRequest {
+            description,
+            status,
+            tags,
+        });
+        rest_api::post(&endpoint, req).await
     }
 }
 ```
