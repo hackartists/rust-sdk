@@ -13,11 +13,11 @@ pub struct Topic {
     pub id: String,
     #[api_model(summary, action = create)]
     pub title: String,
-    #[api_model(summary, queryable, action = create, action_by_id = update)]
+    #[api_model(summary, queryable, read_action = search_by, action = create, action_by_id = update)]
     pub description: String,
     #[api_model(summary, queryable, action_by_id = update)]
     pub status: i32,
-    #[api_model(summary)]
+    #[api_model(summary, read_action = [search_by, date_from])]
     pub created_at: i64,
     pub is_liked: bool,
 
@@ -31,7 +31,6 @@ pub struct Topic {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[api_model(base = "/topics/v1/:id/comments", iter_type=Vec)]
 pub struct Comment {
     pub id: String,
     pub content: String,
@@ -46,16 +45,26 @@ pub struct CommentRequest {
 #[test]
 fn test_macro_expansion() {
     let q = TopicQuery {
+        action: Some(TopicReadActionType::DateFrom),
         size: 10,
         bookmark: None,
         description: None,
         status: Some(1),
+        created_at: None,
     };
 
     assert_eq!(q.status, Some(1));
     assert_eq!(q.size, 10);
     assert_eq!(q.bookmark, None);
     assert_eq!(q.description, None);
+
+    let _q = TopicQuery::new(10)
+        .with_bookmark("test".to_string())
+        .search_by("test".to_string(), 0);
+
+    let q = TopicQuery::new(10)
+        .with_bookmark("test".to_string())
+        .date_from(1);
 
     let summary = TopicSummary::default();
     assert_eq!(summary.id, "".to_string());
