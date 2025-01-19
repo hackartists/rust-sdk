@@ -2,11 +2,10 @@
 use by_axum::aide;
 
 use by_macros::api_model;
-use serde::{Deserialize, Serialize};
 
 type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 #[api_model(base = "/topics/v1", iter_type=Vec)]
 pub struct Topic {
@@ -35,7 +34,7 @@ pub struct Topic {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 pub struct CommentRequest {
     pub comment_id: String,
@@ -171,7 +170,7 @@ fn test_macro_expansion_user() {
     let _ = cli.check_email("email".to_string());
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 #[api_model(base = "/topics/v1/:topic-id/comments", iter_type=Vec)]
 pub struct Comment {

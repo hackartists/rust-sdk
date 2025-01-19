@@ -454,7 +454,7 @@ fn generate_read_struct(
         );
         (
             quote! {
-                #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+                #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
                 #[serde(rename_all = "kebab-case")]
                 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                 pub enum #read_action_enum_name {
@@ -470,7 +470,7 @@ fn generate_read_struct(
     };
 
     quote! {
-        #[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         pub struct #read_action_struct_name {
             #read_action_type_field
@@ -893,7 +893,7 @@ fn generate_query_struct(
         );
         (
             quote! {
-                #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+                #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
                 #[serde(rename_all = "kebab-case")]
                 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                 pub enum #read_action_enum_name {
@@ -909,7 +909,7 @@ fn generate_query_struct(
     };
 
     quote! {
-        #[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         pub struct #query_name {
             pub size: usize,
@@ -975,7 +975,7 @@ fn generate_client_impl(
             }
         }
 
-        #[derive(Debug, Clone, Serialize, Deserialize, Default, Eq, PartialEq)]
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
         pub struct #client_name {
             pub endpoint: String,
         }
