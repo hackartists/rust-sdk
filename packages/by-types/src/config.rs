@@ -2,7 +2,7 @@
 pub struct AwsConfig {
     pub region: &'static str,
     pub access_key_id: &'static str,
-    pub secret_key: &'static str,
+    pub secret_access_key: &'static str,
 }
 
 impl Default for AwsConfig {
@@ -11,7 +11,7 @@ impl Default for AwsConfig {
             region: option_env!("AWS_REGION").expect("You must set AWS_REGION"),
             access_key_id: option_env!("AWS_ACCESS_KEY_ID")
                 .expect("You must set AWS_ACCESS_KEY_ID"),
-            secret_key: option_env!("AWS_SECRET_ACCESS_KEY")
+            secret_access_key: option_env!("AWS_SECRET_ACCESS_KEY")
                 .expect("AWS_SECRET_ACCESS_KEY is required"),
         }
     }
@@ -21,6 +21,7 @@ impl Default for AwsConfig {
 pub enum DatabaseConfig {
     DynamoDb { table_name: &'static str },
     Postgres { url: &'static str },
+    Sqlite { url: &'static str },
 }
 
 impl Default for DatabaseConfig {
@@ -36,6 +37,10 @@ impl Default for DatabaseConfig {
             "rds" | "postgres" => DatabaseConfig::Postgres {
                 url: option_env!("DATABASE_URL").expect("You must set DATABASE_URL"),
             },
+            "sqlite" => DatabaseConfig::Sqlite {
+                url: option_env!("DATABASE_URL").expect("You must set DATABASE_URL"),
+            },
+            _ => panic!("DATABASE_TYPE must be dynamodb or postgres"),
         }
     }
 }
