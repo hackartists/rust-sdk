@@ -19,9 +19,16 @@ impl Default for AwsConfig {
 
 #[derive(Debug)]
 pub enum DatabaseConfig {
-    DynamoDb { table_name: &'static str },
-    Postgres { url: &'static str },
-    Sqlite { url: &'static str },
+    DynamoDb {
+        aws: AwsConfig,
+        table_name: &'static str,
+    },
+    Postgres {
+        url: &'static str,
+    },
+    Sqlite {
+        url: &'static str,
+    },
 }
 
 impl Default for DatabaseConfig {
@@ -32,6 +39,7 @@ impl Default for DatabaseConfig {
             .as_str()
         {
             "dynamo" | "dynamodb" => DatabaseConfig::DynamoDb {
+                aws: AwsConfig::default(),
                 table_name: option_env!("TABLE_NAME").expect("You must set TABLE_NAME"),
             },
             "rds" | "postgres" => DatabaseConfig::Postgres {
