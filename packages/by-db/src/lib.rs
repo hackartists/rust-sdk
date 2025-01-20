@@ -20,18 +20,15 @@ pub async fn init(log: &slog::Logger, conf: &DatabaseConfig) -> Result<(), Datab
             );
         }
         DatabaseConfig::Postgres { url } => {
-            let pool: Pool<Postgres> = PgPoolOptions::new()
-                .max_connections(5)
-                .connect(url)
-                .await
-                .map_err(Into::into)?;
+            let pool: Pool<Postgres> = PgPoolOptions::new().max_connections(5).connect(url).await?;
         }
         DatabaseConfig::Sqlite { url } => {
             let pool: Pool<Sqlite> = SqlitePoolOptions::new()
                 .max_connections(5)
                 .connect(url)
-                .await
-                .map_err(Into::into)?;
+                .await?;
         }
     }
+
+    Ok(())
 }
