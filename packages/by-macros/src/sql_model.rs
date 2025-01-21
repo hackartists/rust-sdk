@@ -164,19 +164,25 @@ fn create_table_tokens(table_name: &str, case: Case, fields: &Fields) -> proc_ma
         match field_type {
             syn::Type::Path(ref type_path) => {
                 let type_ident = type_path.path.segments.last().unwrap().ident.to_string();
-                let type_str = match type_ident.as_str() {
-                    "u64" | "i64" => "BIGINT NOT NULL".to_string(),
-                    "String" => "TEXT NOT NULL".to_string(),
-                    "bool" => "BOOLEAN NOT NULL".to_string(),
-                    "i32" => "INTEGER NOT NULL".to_string(),
-                    "f64" => "DOUBLE PRECISION NOT NULL".to_string(),
-                    "Option<u64>" | "Option<i64>" => "BIGINT".to_string(),
-                    "Option<String>" => "TEXT".to_string(),
-                    "Option<bool>" => "BOOLEAN".to_string(),
-                    "Option<i32>" => "INTEGER".to_string(),
-                    "Option<f64>" => "DOUBLE PRECISION".to_string(),
+                let type_str = if let Some(SqlAttribute::SqlType(type_str)) =
+                    attrs.get(&SqlAttributeKey::SqlType)
+                {
+                    type_str.to_string()
+                } else {
+                    match type_ident.as_str() {
+                        "u64" | "i64" => "BIGINT NOT NULL".to_string(),
+                        "String" => "TEXT NOT NULL".to_string(),
+                        "bool" => "BOOLEAN NOT NULL".to_string(),
+                        "i32" => "INTEGER NOT NULL".to_string(),
+                        "f64" => "DOUBLE PRECISION NOT NULL".to_string(),
+                        "Option<u64>" | "Option<i64>" => "BIGINT".to_string(),
+                        "Option<String>" => "TEXT".to_string(),
+                        "Option<bool>" => "BOOLEAN".to_string(),
+                        "Option<i32>" => "INTEGER".to_string(),
+                        "Option<f64>" => "DOUBLE PRECISION".to_string(),
 
-                    _ => "".to_string(),
+                        _ => "".to_string(),
+                    }
                 };
 
                 if !type_str.is_empty() {
