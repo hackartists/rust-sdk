@@ -78,8 +78,6 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
                                     }
                                     _ => {}
                                 }
-                            } else {
-                                panic!("Unexpected attribute key: {}", id);
                             }
                         }
                     }
@@ -125,6 +123,13 @@ enum ActionField {
 
 pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let _ = tracing_subscriber::fmt::try_init();
+    #[cfg(feature = "server")]
+    let db_structs: proc_macro2::TokenStream =
+        super::sql_model_impl(attr.clone(), item.clone()).into();
+    #[cfg(not(feature = "server"))]
+    let db_structs: proc_macro2::TokenStream = quote! {};
+
+    tracing::debug!("generated db code: {}", db_structs.to_string());
 
     let input_cloned = item.clone();
     let input = parse_macro_input!(item as DeriveInput);
@@ -181,7 +186,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                         read_action_names.insert(v.to_string(), ActionField::Fields(vec![]));
                     }
                 }
-                _ => panic!("Unexpected attribute key: {}", key),
+                _ => {}
             }
         }
     }
