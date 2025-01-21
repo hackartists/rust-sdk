@@ -7,9 +7,9 @@ type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-#[api_model(base = "/topics/v1", iter_type=Vec)]
+#[api_model(base = "/topics/v1", iter_type=Vec, table = topics, rename = upcase)]
 pub struct Topic {
-    #[api_model(summary)]
+    #[api_model(summary, primary_key)]
     pub id: String,
     #[api_model(read_action = user_info)]
     pub wallet_address: String,
