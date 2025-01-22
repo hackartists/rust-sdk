@@ -37,24 +37,25 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let output = quote! {
         impl #name {
-            pub fn get_repository<'a>(pool: &'a sqlx::Pool<sqlx::Postgres>) -> #repo_name<'a> {
+            pub fn get_repository(pool: sqlx::Pool<sqlx::Postgres>) -> #repo_name {
                 #repo_name::new(pool)
             }
         }
 
-        pub struct #repo_name<'a> {
-            pool: &'a sqlx::Pool<sqlx::Postgres>,
+        #[derive(Debug, Clone)]
+        pub struct #repo_name {
+            pool: sqlx::Pool<sqlx::Postgres>,
         }
 
-        impl<'a> #repo_name<'a> {
-            pub fn new(pool: &'a sqlx::Pool<sqlx::Postgres>) -> Self {
+        impl #repo_name {
+            pub fn new(pool: sqlx::Pool<sqlx::Postgres>) -> Self {
                 Self { pool }
             }
 
             #create_table_function
             pub async fn drop_table(&self) -> std::result::Result<(), sqlx::Error> {
                 sqlx::query(#drop_table_query)
-                    .execute(self.pool)
+                    .execute(&self.pool)
                     .await?;
 
                 Ok(())
@@ -610,7 +611,7 @@ fn create_table_tokens(table_name: &str, case: Case, fields: &Fields) -> proc_ma
         pub async fn create_table(&self) -> std::result::Result<(), sqlx::Error> {
             for query in #create_query_ouput.replace("\n", "").split(";") {
                 sqlx::query(query)
-                    .execute(self.pool)
+                    .execute(&self.pool)
                     .await?;
             }
 
