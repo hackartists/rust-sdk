@@ -25,6 +25,7 @@ pub enum DatabaseConfig {
     },
     Postgres {
         url: &'static str,
+        pool_size: u32,
     },
     Sqlite {
         url: &'static str,
@@ -44,6 +45,10 @@ impl Default for DatabaseConfig {
             },
             "rds" | "postgres" => DatabaseConfig::Postgres {
                 url: option_env!("DATABASE_URL").expect("You must set DATABASE_URL"),
+                pool_size: option_env!("POOL_SIZE")
+                    .unwrap_or("5".into())
+                    .parse()
+                    .expect("POOL_SIZE must be a number"),
             },
             "sqlite" => DatabaseConfig::Sqlite {
                 url: option_env!("DATABASE_URL").expect("You must set DATABASE_URL"),
