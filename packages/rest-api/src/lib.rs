@@ -1,3 +1,4 @@
+#![allow(static_mut_refs)]
 use std::{error::Error, sync::RwLock};
 
 use reqwest::RequestBuilder;
@@ -11,8 +12,29 @@ pub trait Signer {
     fn signer(&self) -> String;
 }
 
+pub trait RequestHooker {
+    fn before_request(&self, req: RequestBuilder) -> RequestBuilder;
+}
+
 static mut SIGNER: Option<RwLock<Box<dyn Signer>>> = None;
 static mut MESSAGE: Option<String> = None;
+static mut HOOKS: RwLock<Vec<Box<dyn RequestHooker>>> = RwLock::new(Vec::new());
+
+pub fn add_hook<T: RequestHooker + 'static>(hook: T) {
+    unsafe {
+        HOOKS.write().unwrap().push(Box::new(hook));
+    }
+}
+
+pub fn run_hooks(req: RequestBuilder) -> RequestBuilder {
+    unsafe {
+        HOOKS
+            .read()
+            .unwrap()
+            .iter()
+            .fold(req, |req, hook| hook.before_request(req))
+    }
+}
 
 pub fn set_signer(signer: Box<dyn Signer>) {
     unsafe {
@@ -33,7 +55,6 @@ pub fn set_message(msg: String) {
 }
 
 pub fn sign_request(req: RequestBuilder) -> RequestBuilder {
-    #[allow(static_mut_refs)]
     if let (Some(signer), Some(msg)) = unsafe { (&SIGNER, &MESSAGE) } {
         let signer = signer.read().unwrap();
         let address = signer.signer();
@@ -63,6 +84,7 @@ where
     let client = reqwest::Client::builder().build()?;
 
     let req = client.get(url);
+    let req = run_hooks(req);
 
     let req = sign_request(req);
     let res = req.send().await?;
@@ -91,6 +113,7 @@ where
     let client = reqwest::Client::builder().build()?;
 
     let req = client.get(url).query(query_params);
+    let req = run_hooks(req);
 
     let req = sign_request(req);
     let res = req.send().await?;
@@ -111,6 +134,7 @@ where
     let client = reqwest::Client::builder().build()?;
 
     let req = client.post(url).json(&body);
+    let req = run_hooks(req);
 
     let req = sign_request(req);
 
