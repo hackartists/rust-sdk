@@ -337,6 +337,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let stripped_input = strip_struct_attributes(&input);
 
     let output = quote! {
+        #db_structs
         #stripped_input
         #action_struct
         #action_by_id_struct

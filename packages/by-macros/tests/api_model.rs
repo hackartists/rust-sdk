@@ -30,14 +30,10 @@ pub struct Topic {
     pub updated_at: i64,
     #[api_model(action_by_id = like, related = CommentRequest)]
     #[api_model(action = comment, related = Comment)]
-    #[api_model(one_to_many = comments, foreign_key = topic_id, foreign_key_type = TEXT)]
+    #[api_model(one_to_many = comments, foreign_key = topic_id)]
     pub comments: Vec<Comment>,
 
-    // foreign_key and key_type are id and TEXT by default
-    pub category: Category,
-
     #[api_model(action_by_id = update)]
-    #[api_model(many_to_many = topic_tags, foreign_table_name = tags, foreign_key = id, foreign_key_type = TEXT)]
     pub tags: Vec<String>,
 }
 
@@ -73,8 +69,6 @@ pub struct CommentRequest {
 
 #[test]
 fn test_macro_expansion_topic() {
-    let _ = tracing_subscriber::fmt::try_init();
-
     let _read_action = TopicReadAction {
         action: Some(TopicReadActionType::CheckEmail),
         wallet_address: None,
@@ -166,9 +160,13 @@ fn test_macro_expansion_topic() {
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-#[api_model(base = "/users/v1", iter_type=Vec, read_action = user_info)]
+#[api_model(base = "/users/v1", iter_type=Vec, read_action = user_info, table = users)]
 pub struct User {
+    #[api_model(primary_key)]
+    pub id: String,
+    #[api_model(type = TIMESTAMP)]
     pub created_at: u64,
+    #[api_model(type = TIMESTAMP)]
     pub updated_at: u64,
 
     #[api_model(action = signup)]
@@ -181,9 +179,8 @@ pub struct User {
 
 #[test]
 fn test_macro_expansion_user() {
-    let _ = tracing_subscriber::fmt::try_init();
-
     let _ = User {
+        id: "id".to_string(),
         created_at: 0,
         updated_at: 0,
         nickname: "nickname".to_string(),
@@ -203,8 +200,6 @@ fn test_macro_expansion_user() {
 
 #[test]
 fn test_macro_expansion_comment() {
-    let _ = tracing_subscriber::fmt::try_init();
-
     let cli = Comment::get_client("");
     let _ = cli.get("topic-id", "comment-id");
     let _ = cli.query("topic-id", CommentQuery::new(10));
@@ -217,6 +212,25 @@ fn test_macro_expansion_comment() {
 
 #[cfg(feature = "server")]
 #[tokio::test]
-async fn test_server() {
+async fn test_db_create() {
+    use sqlx::{postgres::PgPoolOptions, Postgres};
+
     let _ = tracing_subscriber::fmt::try_init();
+    let pool: sqlx::Pool<Postgres> = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(
+            option_env!("DATABASE_URL")
+                .unwrap_or("postgres://postgres:password@localhost:5432/test"),
+        )
+        .await
+        .unwrap();
+
+    let repo = User::get_repository(&pool);
+    repo.create_table().await.unwrap();
+
+    let repo = Topic::get_repository(&pool);
+    repo.create_table().await.unwrap();
+
+    let repo = Comment::get_repository(&pool);
+    repo.create_table().await.unwrap();
 }

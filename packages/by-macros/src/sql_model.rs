@@ -52,7 +52,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             #create_table_function
-            pub async fn drop_table(&self) -> Result<(), sqlx::Error> {
+            pub async fn drop_table(&self) -> std::result::Result<(), sqlx::Error> {
                 sqlx::query(#drop_table_query)
                     .execute(self.pool)
                     .await?;
@@ -91,7 +91,11 @@ enum SqlAttribute {
         foreign_key: String,
         foreign_key_type: String,
     },
-    OneToMany,
+    OneToMany {
+        #[allow(dead_code)]
+        table_name: String,
+        foreign_key: String,
+    },
 }
 
 #[derive(Debug)]
@@ -220,6 +224,10 @@ impl SqlAttributes {
                 table_name,
                 foreign_key.to_case(case),
             ))
+        } else if let Some(SqlAttribute::OneToMany { .. }) =
+            self.attrs.get(&SqlAttributeKey::OneToMany)
+        {
+            None
         } else {
             self.to_field_type(var_type)
                 .map(|field_type| format!("{} {}", name, field_type))
@@ -273,6 +281,8 @@ impl SqlAttributes {
         let mut query = "".to_string();
         tracing::debug!("attrs {:?}", self.attrs);
 
+        let this_primary_key_type = this_primary_key_type.replace("PRIMARY KEY", "");
+
         if let Some(SqlAttribute::ManyToMany {
             table_name,
             foreign_table_name,
@@ -286,18 +296,7 @@ impl SqlAttributes {
                 format!("{}_{}", foreign_table_name, foreign_primary_key).to_case(case);
 
             query.push_str(&format!(
-                r#"CREATE TABLE IF NOT EXISTS {} (
-                        {} {} NOT NULL,
-                        {} {} NOT NULL,
-                        {}
-                        PRIMARY KEY ({}, {}),
-                        FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE,
-                        FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE
-                    );
-
-                    CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({});
-                    CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({});
-                "#,
+                "CREATE TABLE IF NOT EXISTS {} ({} {} NOT NULL, {} {} NOT NULL, {} PRIMARY KEY ({}, {}), FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE, FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({}); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({});",
                 // Table name for many to many relation
                 table_name,
                 // key for this table
@@ -436,7 +435,10 @@ fn parse_field_attr(field: &Field) -> SqlAttributes {
                                 OpenedOffset::OneToMany => {
                                     field_attrs.insert(
                                         SqlAttributeKey::OneToMany,
-                                        SqlAttribute::OneToMany,
+                                        SqlAttribute::OneToMany {
+                                            table_name: id,
+                                            foreign_key: "id".to_string(),
+                                        },
                                     );
                                     relation = Some(SqlAttributeKey::OneToMany);
                                     tracing::debug!("one_to_many: {name}");
@@ -468,6 +470,19 @@ fn parse_field_attr(field: &Field) -> SqlAttributes {
                                             },
                                         );
                                     }
+                                    Some(SqlAttributeKey::OneToMany) => {
+                                        field_attrs.get_mut(&SqlAttributeKey::OneToMany).map(
+                                            |attr| {
+                                                if let SqlAttribute::OneToMany {
+                                                    ref mut foreign_key,
+                                                    ..
+                                                } = attr
+                                                {
+                                                    *foreign_key = id
+                                                }
+                                            },
+                                        );
+                                    }
                                     _ => {
                                         tracing::error!("foreign_key must be defined after many_to_many, one_to_many: {name}");
                                     }
@@ -487,7 +502,7 @@ fn parse_field_attr(field: &Field) -> SqlAttributes {
                                         );
                                     }
                                     _ => {
-                                        tracing::error!("foreign_table_name must be defined after many_to_many, one_to_many, many_to_one: {name}");
+                                        tracing::error!("foreign_table_name must be defined after many_to_many: {name}");
                                     }
                                 },
                                 OpenedOffset::ForeignKeyType => match relation {
@@ -518,7 +533,7 @@ fn parse_field_attr(field: &Field) -> SqlAttributes {
                                         );
                                     }
                                     _ => {
-                                        tracing::error!("foreign_key_type must be defined after many_to_many, one_to_many, many_to_one");
+                                        tracing::error!("foreign_key_type must be defined after many_to_many, many_to_one: {name}");
                                     }
                                 },
                                 OpenedOffset::None => {}
@@ -592,10 +607,12 @@ fn create_table_tokens(table_name: &str, case: Case, fields: &Fields) -> proc_ma
     );
 
     quote! {
-        pub async fn create_table(&self) -> Result<(), sqlx::Error> {
-            sqlx::query(#create_query_ouput)
-            .execute(self.pool)
-            .await?;
+        pub async fn create_table(&self) -> std::result::Result<(), sqlx::Error> {
+            for query in #create_query_ouput.replace("\n", "").split(";") {
+                sqlx::query(query)
+                    .execute(self.pool)
+                    .await?;
+            }
 
             Ok(())
         }
