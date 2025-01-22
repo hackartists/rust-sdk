@@ -3,13 +3,13 @@ extern crate proc_macro;
 mod api_model;
 mod enum_prop;
 mod query_display;
+#[cfg(feature = "server")]
 mod sql_model;
 
 use api_model::api_model_impl;
 use enum_prop::enum_prop_impl;
 use proc_macro::TokenStream;
 use query_display::query_display_impl;
-use sql_model::sql_model_impl;
 
 #[proc_macro_derive(QueryDisplay)]
 pub fn query_display_derive(input: TokenStream) -> TokenStream {

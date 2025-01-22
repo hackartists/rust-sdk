@@ -7,7 +7,7 @@ type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-#[api_model(base = "/topics/v1", iter_type=Vec, table = topics, rename = upcase)]
+#[api_model(base = "/topics/v1", iter_type=Vec, table = topics)] // rename is supported but usually use default(snake_case)
 pub struct Topic {
     #[api_model(summary, primary_key)]
     pub id: String,
@@ -21,17 +21,47 @@ pub struct Topic {
     pub description: String,
     #[api_model(summary, queryable, action_by_id = update, read_action = user_info)]
     pub status: i32,
-    #[api_model(summary, query_action = [search_by, date_from])]
+    #[api_model(summary, query_action = [search_by, date_from], type = TIMESTAMP)]
     pub created_at: i64,
+    #[api_model(many_to_many = topic_user_likes, foreign_table_name = users, foreign_key = id, foreign_key_type = TEXT)]
     pub is_liked: bool,
 
+    #[api_model(type = TIMESTAMP)]
     pub updated_at: i64,
     #[api_model(action_by_id = like, related = CommentRequest)]
     #[api_model(action = comment, related = Comment)]
+    #[api_model(one_to_many = comments, foreign_key = topic_id, foreign_key_type = TEXT)]
     pub comments: Vec<Comment>,
 
+    // foreign_key and key_type are id and TEXT by default
+    pub category: Category,
+
     #[api_model(action_by_id = update)]
+    #[api_model(many_to_many = topic_tags, foreign_table_name = tags, foreign_key = id, foreign_key_type = TEXT)]
     pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+#[api_model(base = "/topics/v1/:topic-id/comments", iter_type=Vec)]
+pub struct Comment {
+    pub id: String,
+    #[api_model(action = comment, related = String, read_action = search_by)]
+    pub content: String,
+    #[api_model(action_by_id = update, related = i64)]
+    pub updated_at: i64,
+
+    #[api_model(many_to_one = topics, foreign_key = id, foreign_key_type = TEXT)]
+    pub topic_id: String,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+#[api_model(base = "/topics/v1/categories", iter_type=Vec, table = categories)]
+pub struct Category {
+    pub id: String,
+    pub topic_id: String,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -110,6 +140,7 @@ fn test_macro_expansion_topic() {
         id: "1".to_string(),
         content: "content".to_string(),
         updated_at: 0,
+        topic_id: "1".to_string(),
     });
 
     let cli = Topic::get_client("");
@@ -170,17 +201,6 @@ fn test_macro_expansion_user() {
     let _ = cli.check_email("email".to_string());
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-#[api_model(base = "/topics/v1/:topic-id/comments", iter_type=Vec)]
-pub struct Comment {
-    pub id: String,
-    #[api_model(action = comment, related = String, read_action = search_by)]
-    pub content: String,
-    #[api_model(action_by_id = update, related = i64)]
-    pub updated_at: i64,
-}
-
 #[test]
 fn test_macro_expansion_comment() {
     let _ = tracing_subscriber::fmt::try_init();
@@ -193,4 +213,10 @@ fn test_macro_expansion_comment() {
     let _ = cli.search_by("topic-id", "content".to_string());
     let _ = cli.update("topic-id", "comment-id", 100);
     let _ = cli.act_by_id("topic-id", "comment-id", CommentByIdAction::Update(100));
+}
+
+#[cfg(feature = "server")]
+#[tokio::test]
+async fn test_server() {
+    let _ = tracing_subscriber::fmt::try_init();
 }
