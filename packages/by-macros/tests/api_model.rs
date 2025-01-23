@@ -179,7 +179,7 @@ pub struct User {
 
     #[api_model(action = signup)]
     pub nickname: String,
-    #[api_model(unique)]
+    #[api_model(unique, read_action=check_principal)]
     pub principal: String,
     #[api_model(action = signup, read_action = check_email, unique)]
     pub email: String,
@@ -189,7 +189,6 @@ pub struct User {
 
 #[cfg(feature = "server")]
 mod server_tests {
-    use core::time;
     use std::time::SystemTime;
 
     use super::*;
@@ -209,6 +208,7 @@ mod server_tests {
         let _ = UserReadAction {
             action: Some(UserReadActionType::CheckEmail),
             email: Some("email".to_string()),
+            principal: Some("principal".to_string()),
         };
 
         let cli = User::get_client("");
@@ -218,7 +218,11 @@ mod server_tests {
 
     #[tokio::test]
     async fn test_db_create() {
-        use sqlx::{postgres::PgPoolOptions, Postgres};
+        use sqlx::{
+            postgres::{PgPoolOptions, PgRow},
+            Postgres, Row,
+        };
+        let _ = tracing_subscriber::fmt::try_init();
 
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -228,7 +232,6 @@ mod server_tests {
         let email = format!("test-{}@test.com", now);
         let principal = format!("{}-principal", now);
 
-        let _ = tracing_subscriber::fmt::try_init();
         let pool: sqlx::Pool<Postgres> = PgPoolOptions::new()
             .max_connections(5)
             .connect(
@@ -263,5 +266,44 @@ mod server_tests {
                 println!("{}", e);
             }
         };
+    }
+
+    #[tokio::test]
+    async fn test_db_manual() {
+        use sqlx::{
+            postgres::{PgPoolOptions, PgRow},
+            Postgres, Row,
+        };
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let pool: sqlx::Pool<Postgres> = PgPoolOptions::new()
+            .max_connections(5)
+            .connect(
+                option_env!("DATABASE_URL")
+                    .unwrap_or("postgres://postgres:password@localhost:5432/test"),
+            )
+            .await
+            .unwrap();
+
+        match sqlx::query(&format!("SELECT * FROM {} LIMIT $1 OFFSET $2", "users"))
+            .bind(10)
+            .bind(0)
+            .map(|row: PgRow| User {
+                id: row.get::<i64, _>("id").to_string(),
+                created_at: row.get::<i64, _>("created_at") as u64,
+                updated_at: row.get(2),
+                principal: row.get(3),
+                nickname: row.get(4),
+                email: row.get(5),
+                profile_url: row.get(6),
+            })
+            .fetch_all(&pool)
+            .await
+        {
+            Ok(v) => tracing::info!("{:?}", v),
+            Err(e) => {
+                assert!(false, "Failed to fetch {e}");
+            }
+        }
     }
 }

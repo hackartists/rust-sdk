@@ -1,5 +1,6 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused)]
 
+use crate::api_model::*;
 use convert_case::{Case, Casing};
 use indexmap::IndexMap;
 use proc_macro::TokenStream;
@@ -7,31 +8,231 @@ use quote::quote;
 use std::convert::From;
 use syn::{DataStruct, Field};
 
+#[cfg(feature = "server")]
 use crate::sql_model::{AutoOperation, SqlAttribute, SqlAttributeKey, SqlModel, SqlModelKey};
 
-pub struct ApiModel {
-    pub name: String,
+pub struct ApiModel<'a> {
+    #[cfg(feature = "server")]
     pub table_name: String,
+    #[cfg(feature = "server")]
     pub rename: Case,
+    #[cfg(feature = "server")]
     pub fields: IndexMap<String, ApiField>,
+
+    pub name: String,
+    pub name_id: &'a syn::Ident,
+
+    pub iter_type: String,
+    pub base: String,
+    pub parent_ids: Vec<String>,
+    pub summary_fields: Vec<Field>,
+    pub queryable_fields: Vec<Field>,
+    pub action_names: IndexMap<String, ActionField>,
+    pub action_by_id_names: IndexMap<String, ActionField>,
+    pub query_action_names: IndexMap<String, ActionField>,
+    pub read_action_names: IndexMap<String, ActionField>,
 }
 
-impl ApiModel {
-    pub fn insert_function(&self) -> proc_macro2::TokenStream {
-        let mut insert_fields = vec![];
-        let mut insert_values = vec![];
+impl std::fmt::Debug for ApiModel<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if cfg!(feature = "server") {
+            f.debug_struct("ApiModel")
+                .field("table_name", &self.table_name)
+                .field("rename", &self.rename)
+                .field("name", &self.name)
+                .field("iter_type", &self.iter_type)
+                .field("base", &self.base)
+                .field("parent_ids", &self.parent_ids)
+                .field("summary_fields", &self.summary_fields)
+                .field("queryable_fields", &self.queryable_fields)
+                .finish()
+        } else {
+            f.debug_struct("ApiModel")
+                .field("name", &self.name)
+                .field("iter_type", &self.iter_type)
+                .field("base", &self.base)
+                .field("parent_ids", &self.parent_ids)
+                .field("summary_fields", &self.summary_fields)
+                .field("queryable_fields", &self.queryable_fields)
+                .finish()
+        }
+    }
+}
 
-        let mut i = 1;
+impl ApiModel<'_> {
+    pub fn struct_name(&self) -> syn::Ident {
+        syn::Ident::new(&self.name, proc_macro2::Span::call_site())
+    }
 
-        let mut returning = vec![];
-        let mut return_bounds = vec![];
-        let mut args = vec![];
-        let mut binds = vec![];
+    pub fn read_action_struct_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}ReadAction", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    pub fn query_action_struct_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}Query", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    pub fn action_struct_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}Action", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    pub fn action_by_id_struct_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}ActionById", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    pub fn summary_struct_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}Summary", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    pub fn queryable_struct_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}Query", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    pub fn repository_struct_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}Repository", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    pub fn client_struct_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}Client", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    pub fn param_struct_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}Param", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    pub fn get_response_struct_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}GetResponse", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    pub fn iter_type_name(&self) -> proc_macro2::TokenStream {
+        if self.should_have_summary() {
+            format!("{}<{}Summary>", self.iter_type, self.name)
+        } else {
+            format!("{}<{}>", self.iter_type, self.name)
+        }
+        .parse()
+        .unwrap()
+    }
+
+    pub fn param_struct(&self) -> proc_macro2::TokenStream {
+        let name = self.param_struct_name();
+        let query = self.queryable_struct_name();
+        let read = self.read_action_struct_name();
+        let mut enums = vec![];
+
+        enums.push(quote! {
+            Query(#query),
+        });
+
+        if self.should_have_read_action() {
+            enums.push(quote! {
+                Read(#read),
+            });
+        }
+
+        let output = quote! {
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq, by_macros::QueryDisplay)]
+            #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+            #[serde(tag = "param-type")]
+            #[serde(rename_all = "kebab-case")]
+            pub enum #name {
+                #(#enums)*
+            }
+        };
+
+        output.into()
+    }
+
+    pub fn should_have_queryable(&self) -> bool {
+        !self.queryable_fields.is_empty() & !self.query_action_names.is_empty()
+    }
+
+    pub fn should_have_summary(&self) -> bool {
+        !self.summary_fields.is_empty()
+    }
+
+    pub fn should_have_action(&self) -> bool {
+        !self.action_names.is_empty()
+    }
+
+    pub fn should_have_action_by_id(&self) -> bool {
+        !self.action_by_id_names.is_empty()
+    }
+
+    pub fn should_have_read_action(&self) -> bool {
+        !self.read_action_names.is_empty()
+    }
+
+    pub fn get_response_struct(&self) -> proc_macro2::TokenStream {
+        let name = self.name_id;
+        let mut enums = vec![];
+        let iter_type = self.iter_type_name();
+
+        enums.push(quote! {
+            Query(#iter_type),
+        });
+
+        if self.should_have_read_action() {
+            enums.push(quote! {
+                Read(#name),
+            });
+        }
+
+        let response = self.get_response_struct_name();
+
+        let output = quote! {
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+            #[serde(tag = "param_type")]
+            #[serde(rename_all = "snake_case")]
+            #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+            pub enum #response {
+                #(#enums)*
+            }
+        };
+
+        output.into()
+    }
+}
+
+#[cfg(feature = "server")]
+impl ApiModel<'_> {
+    pub fn call_map(&self) -> proc_macro2::TokenStream {
+        let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let mut type_bridges = vec![];
+        let mut return_bounds = vec![];
 
         for (field_name, field) in self.fields.iter() {
             let sql_field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
-            returning.push(field_name.clone());
             let n = field.field_name_token();
             let rust_type = &field.rust_type;
 
@@ -61,6 +262,32 @@ impl ApiModel {
                     });
                 }
             }
+        }
+
+        let output = quote! {
+            .map(|row: sqlx::postgres::PgRow| {
+                #(#type_bridges)*
+                #name {
+                    #(#return_bounds),*
+                }
+            })
+        };
+
+        output.into()
+    }
+    pub fn insert_function(&self) -> proc_macro2::TokenStream {
+        let mut insert_fields = vec![];
+        let mut insert_values = vec![];
+
+        let mut i = 1;
+
+        let mut returning = vec![];
+        let mut args = vec![];
+        let mut binds = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            returning.push(field_name.clone());
+            let n = field.field_name_token();
 
             if field.omitted {
                 continue;
@@ -88,6 +315,7 @@ impl ApiModel {
             proc_macro2::Span::call_site(),
         );
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
+        let call_map = self.call_map();
 
         let output = quote! {
             pub async fn insert(&self, #(#args),*) -> Result<#name> {
@@ -95,36 +323,124 @@ impl ApiModel {
 
                 let row = sqlx::query(#q)
                     #(#binds)*
-                    .fetch_one(&self.pool)
+                #call_map
+                .fetch_one(&self.pool)
                     .await?;
 
-                #(#type_bridges)*
-                Ok(#name {
-                    #(#return_bounds),*
-                })
+                Ok(row)
             }
         };
         tracing::debug!("insert function output: {}", output);
 
         output.into()
     }
+
+    pub fn select_functions(&self) -> proc_macro2::TokenStream {
+        let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
+        let read_action = self.read_action_struct_name();
+
+        let q = syn::LitStr::new(
+            &format!("SELECT * FROM {} LIMIT 1", self.table_name),
+            proc_macro2::Span::call_site(),
+        );
+
+        let output = quote! {
+        //         pub async fn select_by_id(&self, id: i64) -> Result<#name> {
+        //             let row = sqlx::query_as!(#name, "SELECT * FROM {} WHERE id = $1", id)
+        //                 .fetch_one(&self.pool)
+        //                 .await?;
+
+        //             Ok(row)
+        //         }
+
+                pub async fn find_one(&self, param: #read_action) -> Result<#name> {
+                    let rows = sqlx::query("SELECT * FROM $1 LIMIT 1 OFFSET $3", size, (page - 1) * size)
+                        .fetch_all(&self.pool)
+                        .await?;
+                    let rows = sqlx::query_as!(#name, "SELECT * FROM {}", self.table_name)
+                        .fetch_all(&self.pool)
+                        .await?;
+
+                    Ok(rows)
+                }
+            };
+
+        output.into()
+    }
 }
 
-impl ApiModel {
-    pub fn new(name: String, data: &DataStruct, attr: TokenStream) -> Self {
+impl<'a> ApiModel<'a> {
+    pub fn new(name_id: &'a syn::Ident, data: &DataStruct, attr: TokenStream) -> Self {
+        #[cfg(feature = "server")]
         let mut api_fields = IndexMap::new();
+        let name = name_id.to_string();
 
+        let mut base = String::new();
+        let mut parent_ids = Vec::new();
+        let mut iter_type = "CommonQueryResponse".to_string();
+        let mut read_action_names = IndexMap::<String, ActionField>::new();
+
+        for arg in attr.to_string().split(',') {
+            let parts: Vec<&str> = arg.split('=').collect();
+            if parts.len() == 2 {
+                let key = parts[0].trim();
+                let value = parts[1].trim().trim_matches('"');
+                match key {
+                    "base" => {
+                        base = value
+                            .split('/')
+                            .map(|v| {
+                                if v.starts_with(':') {
+                                    parent_ids.push(
+                                        v.trim_start_matches(':').to_string().to_case(Case::Snake),
+                                    );
+                                    "{}"
+                                } else {
+                                    v
+                                }
+                            })
+                            .collect::<Vec<&str>>()
+                            .join("/");
+                    }
+                    "iter_type" => iter_type = value.to_string(),
+                    "read_action" => {
+                        let value = value
+                            .trim_matches('[')
+                            .trim_matches(']')
+                            .split(",")
+                            .collect::<Vec<&str>>();
+                        for v in value {
+                            tracing::debug!("Read action: {}", v);
+                            let v = v.trim();
+                            read_action_names.insert(v.to_string(), ActionField::Fields(vec![]));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        #[cfg(feature = "server")]
         let attrs = super::sql_model::parse_sql_model(attr);
+        #[cfg(feature = "server")]
         let table_name = match attrs.get(&SqlModelKey::Table) {
             Some(SqlModel::Table(name)) => name.to_string(),
             _ => name.to_case(Case::Snake),
         };
 
+        #[cfg(feature = "server")]
         let rename = match attrs.get(&SqlModelKey::Rename) {
             Some(SqlModel::Rename(rename)) => rename.clone(),
             _ => Case::Snake,
         };
 
+        let mut summary_fields = Vec::new();
+        let mut queryable_fields = Vec::new();
+        let mut action_names = IndexMap::<String, ActionField>::new();
+        let mut action_by_id_names = IndexMap::<String, ActionField>::new();
+        let mut query_action_names = IndexMap::<String, ActionField>::new();
+
+        #[cfg(feature = "server")]
         for f in data.fields.iter() {
             let field_name = f.clone().ident.unwrap().to_string().to_case(rename);
             let f = ApiField::from(f);
@@ -132,15 +448,148 @@ impl ApiModel {
             api_fields.insert(field_name, f);
         }
 
+        if let syn::Fields::Named(named_fields) = &data.fields {
+            for field in &named_fields.named {
+                for attr in &field.attrs {
+                    let mut actions = vec![];
+                    let mut related = None::<String>;
+
+                    for t in parse_action_attr(attr) {
+                        match t {
+                            ActionType::Summary => {
+                                summary_fields.push(field.clone());
+                            }
+                            ActionType::Queryable => {
+                                queryable_fields.push(field.clone());
+                            }
+                            ActionType::Action(action_names) => {
+                                actions.push(ActionType::Action(action_names));
+                            }
+                            ActionType::ActionById(action_names) => {
+                                actions.push(ActionType::ActionById(action_names));
+                            }
+                            ActionType::Related(st) => {
+                                related = Some(st);
+                            }
+                            ActionType::QueryActions(action_names) => {
+                                actions.push(ActionType::QueryActions(action_names));
+                            }
+                            ActionType::ReadActions(action_names) => {
+                                actions.push(ActionType::ReadActions(action_names));
+                            }
+                        }
+                    }
+
+                    for action in actions {
+                        match (related.clone(), action) {
+                            (Some(st), ActionType::Action(actions)) => {
+                                for action_name in actions {
+                                    action_names
+                                        .entry(action_name)
+                                        .or_insert_with(|| ActionField::Related(st.clone()));
+                                }
+                            }
+                            (Some(st), ActionType::ActionById(actions)) => {
+                                for action_name in actions {
+                                    action_by_id_names
+                                        .entry(action_name)
+                                        .or_insert_with(|| ActionField::Related(st.clone()));
+                                }
+                            }
+                            (None, ActionType::Action(actions)) => {
+                                for action_name in actions {
+                                    match action_names
+                                        .entry(action_name)
+                                        .or_insert_with(|| ActionField::Fields(vec![]))
+                                    {
+                                        ActionField::Fields(v) => {
+                                            v.push(field.clone());
+                                        }
+
+                                        _ => {
+                                            panic!("Action should have fields")
+                                        }
+                                    };
+                                }
+                            }
+                            (None, ActionType::ActionById(actions)) => {
+                                for action_name in actions {
+                                    match action_by_id_names
+                                        .entry(action_name)
+                                        .or_insert_with(|| ActionField::Fields(vec![]))
+                                    {
+                                        ActionField::Fields(v) => {
+                                            v.push(field.clone());
+                                        }
+                                        _ => {
+                                            panic!("ActionById should have fields")
+                                        }
+                                    };
+                                }
+                            }
+                            (_, ActionType::QueryActions(actions)) => {
+                                for action_name in actions {
+                                    match query_action_names
+                                        .entry(action_name)
+                                        .or_insert_with(|| ActionField::Fields(vec![]))
+                                    {
+                                        ActionField::Fields(v) => {
+                                            v.push(field.clone());
+                                        }
+                                        _ => {
+                                            panic!("ActionById should have fields")
+                                        }
+                                    };
+                                }
+                            }
+                            (_, ActionType::ReadActions(actions)) => {
+                                for action_name in actions {
+                                    match read_action_names
+                                        .entry(action_name)
+                                        .or_insert_with(|| ActionField::Fields(vec![]))
+                                    {
+                                        ActionField::Fields(v) => {
+                                            v.push(field.clone());
+                                        }
+                                        _ => {
+                                            panic!("ActionById should have fields")
+                                        }
+                                    };
+                                }
+                            }
+
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
         Self {
+            #[cfg(feature = "server")]
             fields: api_fields,
-            name,
+            #[cfg(feature = "server")]
             table_name,
+            #[cfg(feature = "server")]
             rename,
+
+            name,
+            name_id,
+            iter_type,
+            base,
+            read_action_names,
+            parent_ids,
+
+            summary_fields,
+            queryable_fields,
+            action_names,
+            action_by_id_names,
+            query_action_names,
         }
     }
 }
 
+#[cfg(feature = "server")]
 pub enum Relation {
     ManyToMany {
         table_name: String,
@@ -160,6 +609,7 @@ pub enum Relation {
     },
 }
 
+#[cfg(feature = "server")]
 pub struct ApiField {
     pub name: String, // this is a native field name in rust
     pub primary_key: bool,
@@ -170,8 +620,17 @@ pub struct ApiField {
     pub nullable: bool,
     pub omitted: bool,
     pub rust_type: String,
+
+    pub summary: bool,
+    pub queryable: bool,
+    pub action_names: Vec<String>,
+    pub action_by_id_names: Vec<String>,
+    pub query_action_names: Vec<String>,
+    pub read_action_names: Vec<String>,
+    pub related: Option<String>,
 }
 
+#[cfg(feature = "server")]
 impl ApiField {
     pub fn arg_token(&self) -> proc_macro2::TokenStream {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
@@ -195,6 +654,7 @@ impl ApiField {
     }
 }
 
+#[cfg(feature = "server")]
 impl From<&Field> for ApiField {
     fn from(field: &Field) -> Self {
         let name = field.clone().ident.unwrap().to_string();
@@ -204,6 +664,42 @@ impl From<&Field> for ApiField {
             }
             _ => "".to_string(),
         };
+
+        let mut summary = false;
+        let mut queryable = false;
+        let mut action_names = Vec::new();
+        let mut action_by_id_names = Vec::new();
+        let mut query_action_names = Vec::new();
+        let mut read_action_names = Vec::new();
+        let mut related = None;
+
+        for attr in &field.attrs {
+            for t in crate::api_model::parse_action_attr(attr) {
+                match t {
+                    ActionType::Summary => {
+                        summary = true;
+                    }
+                    ActionType::Queryable => {
+                        queryable = true;
+                    }
+                    ActionType::Action(an) => {
+                        action_names = an;
+                    }
+                    ActionType::ActionById(action_names) => {
+                        action_by_id_names = action_names;
+                    }
+                    ActionType::Related(st) => {
+                        related = Some(st);
+                    }
+                    ActionType::QueryActions(action_names) => {
+                        query_action_names = action_names;
+                    }
+                    ActionType::ReadActions(action_names) => {
+                        read_action_names = action_names;
+                    }
+                }
+            }
+        }
 
         let f = super::sql_model::parse_field_attr(field);
         let primary_key = f.attrs.contains_key(&SqlAttributeKey::PrimaryKey);
@@ -279,10 +775,18 @@ impl From<&Field> for ApiField {
             nullable,
             omitted,
             rust_type,
+            summary,
+            queryable,
+            action_names,
+            action_by_id_names,
+            query_action_names,
+            read_action_names,
+            related,
         }
     }
 }
 
+#[cfg(feature = "server")]
 fn to_type(var_type: &syn::Type) -> Option<(String, bool)> {
     let mut nullable = false;
 
