@@ -1,6 +1,8 @@
 extern crate proc_macro;
 
 mod api_model;
+#[cfg(feature = "server")]
+mod api_model_struct;
 mod enum_prop;
 mod query_display;
 #[cfg(feature = "server")]

@@ -4,14 +4,20 @@ use quote::quote;
 use std::collections::HashMap;
 use syn::{parse_macro_input, Data, DeriveInput, Field, Fields, Meta};
 
+use crate::api_model_struct::ApiModel;
+
 pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
     let repo_name = syn::Ident::new(&format!("{name}Repository"), name.span());
-    let fields = match &input.data {
-        Data::Struct(data) => &data.fields,
+    let data = match &input.data {
+        Data::Struct(data) => data,
         _ => panic!("api_mode can only be applied to structs"),
     };
+
+    let model = ApiModel::new(name.to_string(), data, attr.clone());
+
+    let fields = &data.fields;
 
     let attrs = parse_sql_model(attr);
     let table_name = if let Some(SqlModel::Table(ref table_name)) = attrs.get(&SqlModelKey::Table) {
@@ -34,6 +40,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         &format!("DROP TABLE IF EXISTS {};", table_name),
         proc_macro2::Span::call_site(),
     );
+    let insert = model.insert_function();
 
     let output = quote! {
         impl #name {
@@ -53,6 +60,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             #create_table_function
+            #insert
             pub async fn drop_table(&self) -> std::result::Result<(), sqlx::Error> {
                 sqlx::query(#drop_table_query)
                     .execute(&self.pool)
@@ -69,7 +77,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
-enum SqlAttributeKey {
+pub enum SqlAttributeKey {
     PrimaryKey,
     SqlType,
     ManyToMany,
@@ -79,14 +87,14 @@ enum SqlAttributeKey {
     Auto,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-enum AutoOperation {
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum AutoOperation {
     Insert,
     Update,
 }
 
 #[derive(Debug)]
-enum SqlAttribute {
+pub enum SqlAttribute {
     PrimaryKey,
     SqlType(String),
     ManyToMany {
@@ -123,7 +131,7 @@ enum OpenedOffset {
 }
 
 #[derive(Debug)]
-struct SqlAttributes {
+pub struct SqlAttributes {
     pub attrs: HashMap<SqlAttributeKey, SqlAttribute>,
 }
 
@@ -186,13 +194,13 @@ impl SqlAttributes {
                 {
                     type_str.to_string()
                 } else if self.attrs.contains_key(&SqlAttributeKey::PrimaryKey) {
-                    "integer".to_string()
+                    "BIGINT".to_string()
                 } else {
                     match type_ident.as_str() {
                         "u64" | "i64" => "BIGINT NOT NULL".to_string(),
                         "String" => "TEXT NOT NULL".to_string(),
                         "bool" => "BOOLEAN NOT NULL".to_string(),
-                        "i32" => "INTEGER NOT NULL".to_string(),
+                        "u32" | "i32" => "INTEGER NOT NULL".to_string(),
                         "f64" => "DOUBLE PRECISION NOT NULL".to_string(),
                         "Option<u64>" | "Option<i64>" => "BIGINT".to_string(),
                         "Option<String>" => "TEXT".to_string(),
@@ -216,27 +224,6 @@ impl SqlAttributes {
 
                 let type_str = if self.attrs.contains_key(&SqlAttributeKey::Unique) {
                     format!("{} UNIQUE", type_str)
-                } else {
-                    type_str
-                };
-
-                let type_str = if let Some(SqlAttribute::Auto(auto_types)) =
-                    self.attrs.get(&SqlAttributeKey::Auto)
-                {
-                    if type_str != "TIMESTAMP" {
-                        panic!("Auto can only be used with TIMESTAMP; defined `type = TIMESTAMP` in the field attribute");
-                    }
-
-                    let mut type_str = type_str;
-                    for auto_type in auto_types {
-                        type_str = match auto_type {
-                            AutoOperation::Insert => {
-                                format!("{} DEFAULT CURRENT_TIMESTAMP", type_str)
-                            }
-                            _ => type_str,
-                        };
-                    }
-                    type_str
                 } else {
                     type_str
                 };
@@ -407,13 +394,13 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1
         FROM pg_trigger
-        WHERE tgname = 'trigger_{}_set_updated_at'
+        WHERE tgname = 'trigger_{}_set_timestamps'
         AND tgrelid = '{}'::regclass
     ) THEN
-        CREATE TRIGGER trigger_{}_set_updated_at
-        BEFORE UPDATE ON {}
+        CREATE TRIGGER trigger_{}_set_timestamps
+        BEFORE INSERT OR UPDATE ON {}
         FOR EACH ROW
-        EXECUTE FUNCTION set_updated_at();
+        EXECUTE FUNCTION set_timestamps();
     END IF;
 END $$"#,
                     this_table_name, this_table_name, this_table_name, this_table_name,
@@ -424,7 +411,7 @@ END $$"#,
     }
 }
 
-fn parse_field_attr(field: &Field) -> SqlAttributes {
+pub fn parse_field_attr(field: &Field) -> SqlAttributes {
     let mut field_attrs = HashMap::new();
     let name = field
         .ident
@@ -752,17 +739,17 @@ fn create_table_tokens(table_name: &str, case: Case, fields: &Fields) -> proc_ma
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
-enum SqlModelKey {
+pub enum SqlModelKey {
     Table,
     Rename,
 }
 
-enum SqlModel {
+pub enum SqlModel {
     Table(String),
     Rename(Case),
 }
 
-fn parse_sql_model(attr: TokenStream) -> HashMap<SqlModelKey, SqlModel> {
+pub fn parse_sql_model(attr: TokenStream) -> HashMap<SqlModelKey, SqlModel> {
     let attr_args = attr.to_string();
     let mut models = HashMap::new();
 

@@ -1,20 +1,9 @@
 use std::fmt::{Debug, Display};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-#[cfg(feature = "server")]
-#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema, aide::OperationIo)]
-#[serde(tag = "status_code", rename_all = "snake_case")]
-pub enum ApiError<T> {
-    BadRequest(T),
-    Unauthorized(T),
-    Forbidden(T),
-    NotFound(T),
-    InternalServerError(T),
-}
-
-#[cfg(not(feature = "server"))]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 #[serde(tag = "status_code", rename_all = "snake_case")]
 pub enum ApiError<T> {
     BadRequest(T),
@@ -79,6 +68,15 @@ where
     T: From<String>,
 {
     fn from(error: reqwest::Error) -> Self {
+        ApiError::InternalServerError(error.to_string().into())
+    }
+}
+
+impl<T> From<sqlx::Error> for ApiError<T>
+where
+    T: From<String>,
+{
+    fn from(error: sqlx::Error) -> Self {
         ApiError::InternalServerError(error.to_string().into())
     }
 }

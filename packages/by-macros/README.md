@@ -5,10 +5,15 @@
 - Below function will be used by auto updated TIMESTAMP like `updated_at`
 
 ``` sql
-  CREATE OR REPLACE FUNCTION set_updated_at()
+  CREATE OR REPLACE FUNCTION set_timestamps()
     RETURNS TRIGGER AS $$
     BEGIN
-      NEW.updated_at = CURRENT_TIMESTAMP;
+      IF TG_OP = 'INSERT' THEN
+        NEW.created_at := EXTRACT(EPOCH FROM now()) * 1000;
+        NEW.updated_at := NEW.created_at;
+      ELSIF TG_OP = 'UPDATE' THEN
+        NEW.updated_at := EXTRACT(EPOCH FROM now()) * 1000;
+      END IF;
       RETURN NEW;
     END;
   $$ LANGUAGE plpgsql;
@@ -17,7 +22,7 @@
 - You can check if the function was created as below
 
 ``` sql
-  SELECT proname FROM pg_proc WHERE proname = 'set_updated_at';
+  SELECT proname FROM pg_proc WHERE proname = 'set_timestamps';
 ```
 
 
