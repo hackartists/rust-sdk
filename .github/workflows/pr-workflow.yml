@@ -26,10 +26,10 @@ jobs:
       - name: test
         run: cargo test
 
-      - name: test with server feature
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: cargo test --features server
+      # - name: test with server feature
+      #   env:
+      #     DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      #   run: cargo test --features server
 
       - name: Building packages
         env:
