@@ -75,6 +75,14 @@ enum SqlAttributeKey {
     ManyToMany,
     ManyToOne,
     OneToMany,
+    Unique,
+    Auto,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum AutoOperation {
+    Insert,
+    Update,
 }
 
 #[derive(Debug)]
@@ -97,6 +105,8 @@ enum SqlAttribute {
         table_name: String,
         foreign_key: String,
     },
+    Unique,
+    Auto(Vec<AutoOperation>),
 }
 
 #[derive(Debug)]
@@ -109,6 +119,7 @@ enum OpenedOffset {
     ForeignTableName,
     ForeignKey,
     ForeignKeyType,
+    Auto,
 }
 
 #[derive(Debug)]
@@ -174,6 +185,8 @@ impl SqlAttributes {
                     self.attrs.get(&SqlAttributeKey::SqlType)
                 {
                     type_str.to_string()
+                } else if self.attrs.contains_key(&SqlAttributeKey::PrimaryKey) {
+                    "integer".to_string()
                 } else {
                     match type_ident.as_str() {
                         "u64" | "i64" => "BIGINT NOT NULL".to_string(),
@@ -192,7 +205,38 @@ impl SqlAttributes {
                 };
 
                 let type_str = if self.attrs.contains_key(&SqlAttributeKey::PrimaryKey) {
-                    format!("{} PRIMARY KEY", type_str)
+                    if self.attrs.contains_key(&SqlAttributeKey::SqlType) {
+                        format!("{} PRIMARY KEY", type_str)
+                    } else {
+                        format!("{} PRIMARY KEY  GENERATED ALWAYS AS IDENTITY", type_str)
+                    }
+                } else {
+                    type_str
+                };
+
+                let type_str = if self.attrs.contains_key(&SqlAttributeKey::Unique) {
+                    format!("{} UNIQUE", type_str)
+                } else {
+                    type_str
+                };
+
+                let type_str = if let Some(SqlAttribute::Auto(auto_types)) =
+                    self.attrs.get(&SqlAttributeKey::Auto)
+                {
+                    if type_str != "TIMESTAMP" {
+                        panic!("Auto can only be used with TIMESTAMP; defined `type = TIMESTAMP` in the field attribute");
+                    }
+
+                    let mut type_str = type_str;
+                    for auto_type in auto_types {
+                        type_str = match auto_type {
+                            AutoOperation::Insert => {
+                                format!("{} DEFAULT CURRENT_TIMESTAMP", type_str)
+                            }
+                            _ => type_str,
+                        };
+                    }
+                    type_str
                 } else {
                     type_str
                 };
@@ -277,9 +321,9 @@ impl SqlAttributes {
         var_name: &str,
         var_type: &syn::Type,
         case: Case,
-    ) -> String {
+    ) -> Vec<String> {
         tracing::debug!("additional query for {var_name}");
-        let mut query = "".to_string();
+        let mut query = vec![];
         tracing::debug!("attrs {:?}", self.attrs);
 
         let this_primary_key_type = this_primary_key_type.replace("PRIMARY KEY", "");
@@ -296,7 +340,7 @@ impl SqlAttributes {
             let foreign_pk =
                 format!("{}_{}", foreign_table_name, foreign_primary_key).to_case(case);
 
-            query.push_str(&format!(
+            query.push(format!(
                 "CREATE TABLE IF NOT EXISTS {} ({} {} NOT NULL, {} {} NOT NULL, {} PRIMARY KEY ({}, {}), FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE, FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({}); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({});",
                 // Table name for many to many relation
                 table_name,
@@ -343,7 +387,7 @@ impl SqlAttributes {
         }) = self.attrs.get(&SqlAttributeKey::ManyToOne)
         {
             tracing::debug!("additional query for many to one relation: {var_name}");
-            query.push_str(&format!(
+            query.push(format!(
                 "CREATE INDEX idx_{}_{} ON {}({});",
                 // index name
                 foreign_table,
@@ -352,6 +396,29 @@ impl SqlAttributes {
                 foreign_table,
                 foreign_key.to_case(case),
             ));
+        }
+
+        if let Some(SqlAttribute::Auto(v)) = self.attrs.get(&SqlAttributeKey::Auto) {
+            tracing::debug!("additional query for auto: {var_name}");
+            if v.contains(&AutoOperation::Update) {
+                query.push(format!(
+                    r#"DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_trigger
+        WHERE tgname = 'trigger_{}_set_updated_at'
+        AND tgrelid = '{}'::regclass
+    ) THEN
+        CREATE TRIGGER trigger_{}_set_updated_at
+        BEFORE UPDATE ON {}
+        FOR EACH ROW
+        EXECUTE FUNCTION set_updated_at();
+    END IF;
+END $$"#,
+                    this_table_name, this_table_name, this_table_name, this_table_name,
+                ));
+            }
         }
         query
     }
@@ -380,6 +447,9 @@ fn parse_field_attr(field: &Field) -> SqlAttributes {
                                 field_attrs
                                     .insert(SqlAttributeKey::PrimaryKey, SqlAttribute::PrimaryKey);
                             }
+                            "unique" => {
+                                field_attrs.insert(SqlAttributeKey::Unique, SqlAttribute::Unique);
+                            }
                             "type" => {
                                 opened = OpenedOffset::Type;
                             }
@@ -400,6 +470,9 @@ fn parse_field_attr(field: &Field) -> SqlAttributes {
                             }
                             "foreign_key_type" => {
                                 opened = OpenedOffset::ForeignKeyType;
+                            }
+                            "auto" => {
+                                opened = OpenedOffset::Auto;
                             }
                             _ => match opened {
                                 OpenedOffset::Type => {
@@ -537,10 +610,61 @@ fn parse_field_attr(field: &Field) -> SqlAttributes {
                                         tracing::error!("foreign_key_type must be defined after many_to_many, many_to_one: {name}");
                                     }
                                 },
+                                OpenedOffset::Auto => {
+                                    let auto = match id.as_str() {
+                                        "insert" => AutoOperation::Insert,
+                                        "update" => AutoOperation::Update,
+                                        _ => {
+                                            tracing::error!("invalid auto operation: {id}");
+                                            continue;
+                                        }
+                                    };
+
+                                    field_attrs
+                                        .entry(SqlAttributeKey::Auto)
+                                        .or_insert_with(|| SqlAttribute::Auto(vec![]));
+
+                                    if let Some(SqlAttribute::Auto(ref mut operations)) =
+                                        field_attrs.get_mut(&SqlAttributeKey::Auto)
+                                    {
+                                        operations.push(auto);
+                                    }
+                                }
                                 OpenedOffset::None => {}
                             },
                         }
-                    } else if let proc_macro2::TokenTree::Group(_group) = nested {
+                    } else if let proc_macro2::TokenTree::Group(group) = nested {
+                        match opened {
+                            OpenedOffset::Auto => {
+                                for nested in group.stream() {
+                                    if let proc_macro2::TokenTree::Ident(iden) = nested {
+                                        let id = iden.to_string();
+
+                                        field_attrs
+                                            .entry(SqlAttributeKey::Auto)
+                                            .or_insert_with(|| SqlAttribute::Auto(vec![]));
+
+                                        if let Some(SqlAttribute::Auto(ref mut operations)) =
+                                            field_attrs.get_mut(&SqlAttributeKey::Auto)
+                                        {
+                                            operations.push(match id.as_str() {
+                                                "insert" => AutoOperation::Insert,
+                                                "update" => AutoOperation::Update,
+                                                _ => {
+                                                    tracing::error!("invalid auto operation: {id}");
+                                                    continue;
+                                                }
+                                            });
+                                        }
+                                    }
+                                }
+
+                                opened = OpenedOffset::None;
+                            }
+                            _ => {
+                                panic!("unexpected group({}); group operation is only supported for auto", name);
+                            }
+                        }
                     } else if let proc_macro2::TokenTree::Punct(punct) = nested {
                         if punct.to_string().as_str() == "," {
                             opened = OpenedOffset::None;
@@ -587,7 +711,7 @@ fn create_table_tokens(table_name: &str, case: Case, fields: &Fields) -> proc_ma
             None => {}
         }
 
-        additional_queries.push(attrs.get_additional_query(
+        additional_queries.extend(attrs.get_additional_query(
             table_name,
             &primary_key_name,
             &primary_key_type,
@@ -597,22 +721,30 @@ fn create_table_tokens(table_name: &str, case: Case, fields: &Fields) -> proc_ma
         ));
     }
 
-    let create_query_ouput = syn::LitStr::new(
+    // let additional_queries = additional_queries.join("####");
+    // let queries = syn::LitStr::new(&additional_queries, proc_macro2::Span::call_site());
+    let queries: Vec<syn::LitStr> = additional_queries
+        .iter()
+        .map(|item| syn::LitStr::new(item, proc_macro2::Span::call_site()))
+        .collect();
+
+    let create_query_output = syn::LitStr::new(
         &format!(
-            "CREATE TABLE IF NOT EXISTS {} ({}); {}",
+            "CREATE TABLE IF NOT EXISTS {} ({});",
             table_name,
             create_query_fields.join(","),
-            additional_queries.join("\n")
         ),
         proc_macro2::Span::call_site(),
     );
 
     quote! {
         pub async fn create_table(&self) -> std::result::Result<(), sqlx::Error> {
-            for query in #create_query_ouput.replace("\n", "").split(";") {
-                sqlx::query(query)
-                    .execute(&self.pool)
-                    .await?;
+            tracing::info!("Execute queries: {}", #create_query_output);
+            sqlx::query(#create_query_output).execute(&self.pool).await?;
+
+            for query in [#(#queries),*] {
+                tracing::info!("Execute queries: {}", query);
+                sqlx::query(query).execute(&self.pool).await?;
             }
 
             Ok(())

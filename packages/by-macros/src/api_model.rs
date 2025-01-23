@@ -338,7 +338,11 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let output = quote! {
         #db_structs
+
+        #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
+        #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo, sqlx::FromRow))]
         #stripped_input
+
         #action_struct
         #action_by_id_struct
         #summary_struct
@@ -758,7 +762,7 @@ fn generate_summary_struct(
 
     quote! {
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
-        #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+        #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo, sqlx::FromRow))]
         pub struct #summary_name {
             #(#fields)*
         }

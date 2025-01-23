@@ -1,5 +1,26 @@
 # Biyard Macros
 
+## Postgres Setup
+### Add `set_updated_at` function
+- Below function will be used by auto updated TIMESTAMP like `updated_at`
+
+``` sql
+  CREATE OR REPLACE FUNCTION set_updated_at()
+    RETURNS TRIGGER AS $$
+    BEGIN
+      NEW.updated_at = CURRENT_TIMESTAMP;
+      RETURN NEW;
+    END;
+  $$ LANGUAGE plpgsql;
+```
+
+- You can check if the function was created as below
+
+``` sql
+  SELECT proname FROM pg_proc WHERE proname = 'set_updated_at';
+```
+
+
 ## API Model
 ### Usage
 - `crate::Result` must be declared.
