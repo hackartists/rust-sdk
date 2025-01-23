@@ -5,7 +5,7 @@ use convert_case::{Case, Casing};
 use indexmap::IndexMap;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::convert::From;
+use std::{collections::HashSet, convert::From};
 use syn::{DataStruct, Field};
 
 #[cfg(feature = "server")]
@@ -60,6 +60,71 @@ impl std::fmt::Debug for ApiModel<'_> {
 }
 
 impl ApiModel<'_> {
+    pub fn query_fields(&self) -> Vec<syn::Ident> {
+        let mut hashed_fields = HashSet::new();
+        let mut fields = vec![];
+
+        for (_, f) in &self.query_action_names {
+            match f {
+                ActionField::Fields(v) => {
+                    for field in v {
+                        let field_name = &field.ident;
+
+                        if hashed_fields.contains(field_name) {
+                            continue;
+                        }
+                        hashed_fields.insert(field_name.clone());
+                        fields.push(field_name.clone().unwrap());
+                    }
+                }
+                _ => {
+                    panic!("Related field should not be in queryable fields");
+                }
+            }
+        }
+
+        for f in self.queryable_fields.iter() {
+            let field_name = &f.ident;
+
+            if hashed_fields.contains(field_name) {
+                continue;
+            }
+            hashed_fields.insert(field_name.clone());
+            fields.push(field_name.clone().unwrap());
+        }
+
+        tracing::debug!("Query fields: {:?}", fields);
+
+        fields
+    }
+
+    pub fn read_action_fields(&self) -> Vec<syn::Ident> {
+        let mut hashed_fields = HashSet::new();
+        let mut fields = vec![];
+
+        for (_, f) in &self.read_action_names {
+            match f {
+                ActionField::Fields(v) => {
+                    for field in v {
+                        let field_name = &field.ident;
+
+                        if hashed_fields.contains(field_name) {
+                            continue;
+                        }
+                        hashed_fields.insert(field_name.clone());
+                        fields.push(field_name.clone().unwrap());
+                    }
+                }
+                _ => {
+                    panic!("Related field should not be in queryable fields");
+                }
+            }
+        }
+
+        tracing::debug!("Read action fields: {:?}", fields);
+
+        fields
+    }
     pub fn struct_name(&self) -> syn::Ident {
         syn::Ident::new(&self.name, proc_macro2::Span::call_site())
     }
@@ -136,9 +201,9 @@ impl ApiModel<'_> {
 
     pub fn iter_type_name(&self) -> proc_macro2::TokenStream {
         if self.should_have_summary() {
-            format!("{}<{}Summary>", self.iter_type, self.name)
+            format!("Vec<{}Summary>", self.name)
         } else {
-            format!("{}<{}>", self.iter_type, self.name)
+            format!("Vec<{}>", self.name)
         }
         .parse()
         .unwrap()
@@ -226,6 +291,274 @@ impl ApiModel<'_> {
 
 #[cfg(feature = "server")]
 impl ApiModel<'_> {
+    pub fn find_function(&self) -> proc_macro2::TokenStream {
+        let name = self.iter_type_name();
+        let query_struct = self.query_action_struct_name();
+        let fields = self.query_fields();
+
+        let q = syn::LitStr::new(
+            &format!("SELECT * FROM {}", self.table_name),
+            proc_macro2::Span::call_site(),
+        );
+        let qc = syn::LitStr::new(
+            &format!("SELECT COUNT(*) FROM {}", self.table_name),
+            proc_macro2::Span::call_site(),
+        );
+
+        let tail_q = syn::LitStr::new(
+            &format!("LIMIT ${} OFFSET ${}", 1, 2),
+            proc_macro2::Span::call_site(),
+        );
+
+        let mut binds = vec![];
+        let mut where_clause = vec![];
+        let fmt_str = syn::LitStr::new(
+            &format!("{}Repository::find_one", self.name),
+            proc_macro2::Span::call_site(),
+        );
+
+        for f in fields.iter() {
+            let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
+
+            binds.push(quote! {
+                if let Some(#f) = &param.#f {
+                    tracing::debug!("{} binding {} = {}", #fmt_str, #fname, #f);
+                    q = q.bind(#f);
+                }
+            });
+
+            where_clause.push(quote! {
+                if let Some(#f) = &param.#f {
+                    i += 1;
+                    where_clause.push(format!("{} = ${}", #fname, i));
+                }
+            });
+        }
+
+        let call_map = self.call_map_iter_type();
+        let declare_where_clause = if fields.len() > 0 {
+            quote! {
+                let mut i = 2;
+                let mut where_clause = vec![];
+            }
+        } else {
+            quote! {}
+        };
+        let compose_query = if fields.len() > 0 {
+            quote! {
+                let where_clause = where_clause.join(" AND ");
+                let query = format!("{} WHERE {} {}", #q, where_clause, #tail_q);
+                let count_query = format!("{} WHERE {}", #qc, where_clause);
+                let query = format!("WITH data AS ({}) SELECT ({}) AS total_count, data.* FROM data;", query, count_query);
+                tracing::debug!("{} query {}", #fmt_str, query);
+                let mut q = sqlx::query(&query).bind(param.size as i32).bind(param.page());
+            }
+        } else {
+            quote! {
+                let query = format!("WITH data AS ({} {}) SELECT ({}) AS total_count, data.* FROM data;", #q, #tail_q, #qc);
+                tracing::debug!("{} query {}", #fmt_str, query);
+                let q = sqlx::query(&query).bind(param.size as i32).bind(param.page());
+            }
+        };
+
+        let output = quote! {
+            pub async fn find(&self, param: &#query_struct) -> Result<(#name, i64)> {
+                use sqlx::Row;
+
+                #declare_where_clause
+                #(#where_clause)*
+
+                #compose_query
+
+                #(#binds)*
+                let mut total = 0;
+                let rows = q
+                    #call_map
+                .fetch_all(&self.pool).await?;
+
+                Ok((rows, total))
+            }
+        };
+
+        output.into()
+    }
+
+    pub fn find_one_function(&self) -> proc_macro2::TokenStream {
+        let name = self.name_id;
+        let read_action = self.read_action_struct_name();
+        let fields = self.read_action_fields();
+
+        let q = syn::LitStr::new(
+            &format!("SELECT * FROM {}", self.table_name),
+            proc_macro2::Span::call_site(),
+        );
+
+        let mut binds = vec![];
+        let mut where_clause = vec![];
+        let fmt_str = syn::LitStr::new(
+            &format!("{}Repository::find_one", self.name),
+            proc_macro2::Span::call_site(),
+        );
+
+        for f in fields.iter() {
+            let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
+
+            binds.push(quote! {
+                if let Some(#f) = &param.#f {
+                    tracing::debug!("{} binding {} = {}", #fmt_str, #fname, #f);
+                    q = q.bind(#f);
+                }
+            });
+
+            where_clause.push(quote! {
+                if let Some(#f) = &param.#f {
+                    i += 1;
+                    where_clause.push(format!("{} = ${}", #fname, i));
+                }
+            });
+        }
+
+        let call_map = self.call_map();
+
+        let output = quote! {
+            pub async fn find_one(&self, param: &#read_action) -> Result<#name> {
+                use sqlx::Row;
+                let mut i = 0;
+                let mut where_clause = vec![];
+                #(#where_clause)*
+
+                let where_clause = where_clause.join(" AND ");
+                let query = format!("{} WHERE {}", #q, where_clause);
+                tracing::debug!("{} query {}", #fmt_str, query);
+
+                let mut q = sqlx::query(&query);
+
+                #(#binds)*
+                let row = q
+                    #call_map
+                .fetch_one(&self.pool).await?;
+
+                Ok(row)
+            }
+        };
+
+        output.into()
+    }
+
+    pub fn call_map_iter_type(&self) -> proc_macro2::TokenStream {
+        if self.should_have_summary() {
+            self.call_map_summary()
+        } else {
+            self.call_map_iter()
+        }
+    }
+
+    pub fn call_map_summary(&self) -> proc_macro2::TokenStream {
+        let name = self.summary_struct_name();
+        let mut type_bridges = vec![];
+        let mut return_bounds = vec![];
+
+        for field in self.summary_fields.iter() {
+            let field = ApiField::from(field);
+            let field_name = field.name.clone();
+
+            let sql_field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
+            let n = field.field_name_token();
+            let rust_type = &field.rust_type;
+
+            if field.primary_key {
+                type_bridges.push(quote! {
+                    let #n: i64 = row.get(#sql_field_name);
+                });
+                return_bounds.push(quote! {
+                    #n: format!("{}",  #n)
+                });
+            } else {
+                if rust_type == "u64" || rust_type == "u32" {
+                    let bridge_type = syn::Ident::new(
+                        &rust_type.replace("u", "i"),
+                        proc_macro2::Span::call_site(),
+                    );
+                    let real_type = syn::Ident::new(rust_type, proc_macro2::Span::call_site());
+                    type_bridges.push(quote! {
+                        let #n: #bridge_type = row.get(#sql_field_name);
+                    });
+                    return_bounds.push(quote! {
+                        #n: #n as #real_type
+                    });
+                } else {
+                    return_bounds.push(quote! {
+                        #n: row.get(#sql_field_name)
+                    });
+                }
+            }
+        }
+
+        let output = quote! {
+            .map(|row: sqlx::postgres::PgRow| {
+                total = row.get("total_count");
+                #(#type_bridges)*
+                #name {
+                    #(#return_bounds),*
+                }
+            })
+        };
+
+        output.into()
+    }
+
+    pub fn call_map_iter(&self) -> proc_macro2::TokenStream {
+        let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
+        let mut type_bridges = vec![];
+        let mut return_bounds = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            let sql_field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
+            let n = field.field_name_token();
+            let rust_type = &field.rust_type;
+
+            if field.primary_key {
+                type_bridges.push(quote! {
+                    let #n: i64 = row.get(#sql_field_name);
+                });
+                return_bounds.push(quote! {
+                    #n: format!("{}",  #n)
+                });
+            } else {
+                if rust_type == "u64" || rust_type == "u32" {
+                    let bridge_type = syn::Ident::new(
+                        &rust_type.replace("u", "i"),
+                        proc_macro2::Span::call_site(),
+                    );
+                    let real_type = syn::Ident::new(rust_type, proc_macro2::Span::call_site());
+                    type_bridges.push(quote! {
+                        let #n: #bridge_type = row.get(#sql_field_name);
+                    });
+                    return_bounds.push(quote! {
+                        #n: #n as #real_type
+                    });
+                } else {
+                    return_bounds.push(quote! {
+                        #n: row.get(#sql_field_name)
+                    });
+                }
+            }
+        }
+
+        let output = quote! {
+            .map(|row: sqlx::postgres::PgRow| {
+                total = row.get("total_count");
+
+                #(#type_bridges)*
+                #name {
+                    #(#return_bounds),*
+                }
+            })
+        };
+
+        output.into()
+    }
+
     pub fn call_map(&self) -> proc_macro2::TokenStream {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let mut type_bridges = vec![];
@@ -275,6 +608,7 @@ impl ApiModel<'_> {
 
         output.into()
     }
+
     pub fn insert_function(&self) -> proc_macro2::TokenStream {
         let mut insert_fields = vec![];
         let mut insert_values = vec![];
@@ -377,7 +711,7 @@ impl<'a> ApiModel<'a> {
 
         let mut base = String::new();
         let mut parent_ids = Vec::new();
-        let mut iter_type = "CommonQueryResponse".to_string();
+        let mut iter_type = "Vec".to_string();
         let mut read_action_names = IndexMap::<String, ActionField>::new();
 
         for arg in attr.to_string().split(',') {

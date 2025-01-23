@@ -218,10 +218,7 @@ mod server_tests {
 
     #[tokio::test]
     async fn test_db_create() {
-        use sqlx::{
-            postgres::{PgPoolOptions, PgRow},
-            Postgres, Row,
-        };
+        use sqlx::{postgres::PgPoolOptions, Postgres};
         let _ = tracing_subscriber::fmt::try_init();
 
         let now = SystemTime::now()
@@ -266,44 +263,74 @@ mod server_tests {
                 println!("{}", e);
             }
         };
-    }
 
-    #[tokio::test]
-    async fn test_db_manual() {
-        use sqlx::{
-            postgres::{PgPoolOptions, PgRow},
-            Postgres, Row,
-        };
-        let _ = tracing_subscriber::fmt::try_init();
-
-        let pool: sqlx::Pool<Postgres> = PgPoolOptions::new()
-            .max_connections(5)
-            .connect(
-                option_env!("DATABASE_URL")
-                    .unwrap_or("postgres://postgres:password@localhost:5432/test"),
-            )
-            .await
-            .unwrap();
-
-        match sqlx::query(&format!("SELECT * FROM {} LIMIT $1 OFFSET $2", "users"))
-            .bind(10)
-            .bind(0)
-            .map(|row: PgRow| User {
-                id: row.get::<i64, _>("id").to_string(),
-                created_at: row.get::<i64, _>("created_at") as u64,
-                updated_at: row.get(2),
-                principal: row.get(3),
-                nickname: row.get(4),
-                email: row.get(5),
-                profile_url: row.get(6),
-            })
-            .fetch_all(&pool)
+        let user = match repo
+            .find_one(&UserReadAction::new().check_email(email.clone()))
             .await
         {
-            Ok(v) => tracing::info!("{:?}", v),
+            Ok(v) => v,
             Err(e) => {
                 assert!(false, "Failed to fetch {e}");
+                return;
             }
+        };
+
+        assert_eq!(user.principal, principal);
+        assert_eq!(user.email, email);
+
+        let (users_1, total) = match repo.find(&UserQuery::new(5).with_page(1)).await {
+            Ok(v) => v,
+            Err(e) => {
+                assert!(false, "Failed to fetch {e}");
+                return;
+            }
+        };
+        assert_eq!(users_1.len(), 5);
+        assert_eq!(total > 0, true);
+
+        let (users_2, total2) = match repo.find(&UserQuery::new(5).with_page(1)).await {
+            Ok(v) => v,
+            Err(e) => {
+                assert!(false, "Failed to fetch {e}");
+                return;
+            }
+        };
+        assert_eq!(users_2.len(), 5);
+        assert_eq!(total2, total);
+
+        for i in 0..users_1.len() {
+            assert_eq!(users_1[i].principal, users_2[i].principal);
+            assert_eq!(users_1[i].email, users_2[i].email);
+        }
+
+        let (users_3, total3) = match repo.find(&UserQuery::new(5).with_page(2)).await {
+            Ok(v) => v,
+            Err(e) => {
+                assert!(false, "Failed to fetch {e}");
+                return;
+            }
+        };
+        assert_eq!(total3, total);
+
+        for i in 0..users_1.len() {
+            assert_ne!(users_1[i].principal, users_3[i].principal);
+            assert_ne!(users_1[i].email, users_3[i].email);
+        }
+
+        let (users_4, total4) = match repo.find(&UserQuery::new(2).with_page(2)).await {
+            Ok(v) => v,
+            Err(e) => {
+                assert!(false, "Failed to fetch {e}");
+                return;
+            }
+        };
+
+        assert_eq!(total4, total);
+        assert_eq!(users_4.len(), 2);
+
+        for i in 0..users_4.len() {
+            assert_eq!(users_3[i].principal, users_4[i].principal);
+            assert_eq!(users_3[i].email, users_4[i].email);
         }
     }
 }

@@ -41,6 +41,8 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         proc_macro2::Span::call_site(),
     );
     let insert = model.insert_function();
+    let find_one = model.find_one_function();
+    let find = model.find_function();
 
     let output = quote! {
         impl #name {
@@ -61,6 +63,9 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             #create_table_function
             #insert
+            #find_one
+            #find
+
             pub async fn drop_table(&self) -> std::result::Result<(), sqlx::Error> {
                 sqlx::query(#drop_table_query)
                     .execute(&self.pool)
@@ -713,22 +718,20 @@ fn create_table_tokens(table_name: &str, case: Case, fields: &Fields) -> proc_ma
         .map(|item| syn::LitStr::new(item, proc_macro2::Span::call_site()))
         .collect();
 
-    let create_query_output = syn::LitStr::new(
-        &format!(
-            "CREATE TABLE IF NOT EXISTS {} ({});",
-            table_name,
-            create_query_fields.join(","),
-        ),
-        proc_macro2::Span::call_site(),
+    let q = format!(
+        "CREATE TABLE IF NOT EXISTS {} ({});",
+        table_name,
+        create_query_fields.join(","),
     );
+    let create_query_output = syn::LitStr::new(&q, proc_macro2::Span::call_site());
+    tracing::debug!("create table query: {}", q);
 
     quote! {
         pub async fn create_table(&self) -> std::result::Result<(), sqlx::Error> {
-            tracing::info!("Execute queries: {}", #create_query_output);
             sqlx::query(#create_query_output).execute(&self.pool).await?;
 
             for query in [#(#queries),*] {
-                tracing::info!("Execute queries: {}", query);
+                tracing::debug!("Execute queries: {}", query);
                 sqlx::query(query).execute(&self.pool).await?;
             }
 

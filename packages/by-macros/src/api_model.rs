@@ -804,6 +804,19 @@ fn generate_query_struct(
                 self
             }
 
+            pub fn with_page(mut self, page: usize) -> Self {
+                self.bookmark = Some(page.to_string());
+                self
+            }
+
+            pub fn page(&self) -> i32 {
+                self.bookmark
+                    .as_ref()
+                    .unwrap_or(&"1".to_string())
+                    .parse()
+                    .unwrap_or(1)
+            }
+
             #(#query_builder_functions)*
         }
 
