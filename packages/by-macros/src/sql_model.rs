@@ -661,9 +661,7 @@ fn parse_field_attr(field: &Field) -> SqlAttributes {
 
                                 opened = OpenedOffset::None;
                             }
-                            _ => {
-                                panic!("unexpected group({}); group operation is only supported for auto", name);
-                            }
+                            _ => {}
                         }
                     } else if let proc_macro2::TokenTree::Punct(punct) = nested {
                         if punct.to_string().as_str() == "," {

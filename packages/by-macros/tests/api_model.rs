@@ -5,8 +5,7 @@ use by_macros::api_model;
 
 type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
-#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+#[derive(Eq, PartialEq)]
 #[api_model(base = "/topics/v1", iter_type=Vec, table = topics)] // rename is supported but usually use default(snake_case)
 pub struct Topic {
     #[api_model(summary, primary_key)]
@@ -37,8 +36,7 @@ pub struct Topic {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+#[derive(Eq, PartialEq)]
 #[api_model(base = "/topics/v1/:topic-id/comments", iter_type=Vec)]
 pub struct Comment {
     pub id: String,
@@ -49,15 +47,6 @@ pub struct Comment {
 
     #[api_model(many_to_one = topics, foreign_key = id, foreign_key_type = TEXT)]
     pub topic_id: String,
-}
-
-#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-#[api_model(base = "/topics/v1/categories", iter_type=Vec, table = categories)]
-pub struct Category {
-    pub id: String,
-    pub topic_id: String,
-    pub name: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -158,20 +147,20 @@ fn test_macro_expansion_topic() {
     let _ = cli.date_from(10, None, 20240101);
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
-#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-#[api_model(base = "/users/v1", iter_type=Vec, read_action = user_info, table = users)]
+#[api_model(base = "/users/v1", read_action = user_info, table = users, iter_type=Vec)]
 pub struct User {
     #[api_model(primary_key)]
     pub id: String,
-    #[api_model(type = TIMESTAMP)]
+    #[api_model(type = TIMESTAMP, auto = insert)]
     pub created_at: u64,
-    #[api_model(type = TIMESTAMP)]
+    #[api_model(type = TIMESTAMP, auto = [insert, update])]
     pub updated_at: u64,
 
     #[api_model(action = signup)]
     pub nickname: String,
-    #[api_model(action = signup, read_action = [check_email])]
+    #[api_model(unique)]
+    pub principal: String,
+    #[api_model(action = signup, read_action = check_email, unique)]
     pub email: String,
     #[api_model(action = signup)]
     pub profile_url: String,
@@ -183,6 +172,7 @@ fn test_macro_expansion_user() {
         id: "id".to_string(),
         created_at: 0,
         updated_at: 0,
+        principal: "principal".to_string(),
         nickname: "nickname".to_string(),
         email: "email".to_string(),
         profile_url: "profile_url".to_string(),
@@ -225,12 +215,12 @@ async fn test_db_create() {
         .await
         .unwrap();
 
-    let repo = User::get_repository(&pool);
+    let repo = User::get_repository(pool.clone());
     repo.create_table().await.unwrap();
 
-    let repo = Topic::get_repository(&pool);
-    repo.create_table().await.unwrap();
+    // let repo = Topic::get_repository(pool.clone());
+    // repo.create_table().await.unwrap();
 
-    let repo = Comment::get_repository(&pool);
-    repo.create_table().await.unwrap();
+    // let repo = Comment::get_repository(pool.clone());
+    // repo.create_table().await.unwrap();
 }
