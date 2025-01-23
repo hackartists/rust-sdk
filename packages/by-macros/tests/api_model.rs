@@ -1,3 +1,4 @@
+#![allow(unused)]
 #[cfg(feature = "server")]
 use by_axum::aide;
 
@@ -168,30 +169,29 @@ mod normal {
 }
 
 #[cfg(feature = "server")]
-#[api_model(base = "/users/v1", read_action = user_info, table = users, iter_type=Vec)]
-pub struct User {
-    #[api_model(primary_key)]
-    pub id: String,
-    #[api_model(auto = insert)]
-    pub created_at: u64,
-    #[api_model(auto = [insert, update])]
-    pub updated_at: i64,
-
-    #[api_model(action = signup)]
-    pub nickname: String,
-    #[api_model(unique, read_action=check_principal)]
-    pub principal: String,
-    #[api_model(action = signup, read_action = check_email, unique)]
-    pub email: String,
-    #[api_model(action = signup)]
-    pub profile_url: String,
-}
-
-#[cfg(feature = "server")]
 mod server_tests {
     use std::time::SystemTime;
 
     use super::*;
+
+    #[api_model(base = "/users/v1", read_action = user_info, table = users, iter_type=Vec)]
+    pub struct User {
+        #[api_model(primary_key)]
+        pub id: String,
+        #[api_model(auto = insert)]
+        pub created_at: u64,
+        #[api_model(auto = [insert, update])]
+        pub updated_at: i64,
+
+        #[api_model(action = signup)]
+        pub nickname: String,
+        #[api_model(unique, read_action=check_principal)]
+        pub principal: String,
+        #[api_model(action = signup, read_action = check_email, unique)]
+        pub email: String,
+        #[api_model(action = signup)]
+        pub profile_url: String,
+    }
 
     #[test]
     fn test_macro_expansion_user() {

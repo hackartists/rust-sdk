@@ -35,27 +35,28 @@ pub struct ApiModel<'a> {
 
 impl std::fmt::Debug for ApiModel<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if cfg!(feature = "server") {
-            f.debug_struct("ApiModel")
-                .field("table_name", &self.table_name)
-                .field("rename", &self.rename)
-                .field("name", &self.name)
-                .field("iter_type", &self.iter_type)
-                .field("base", &self.base)
-                .field("parent_ids", &self.parent_ids)
-                .field("summary_fields", &self.summary_fields)
-                .field("queryable_fields", &self.queryable_fields)
-                .finish()
-        } else {
-            f.debug_struct("ApiModel")
-                .field("name", &self.name)
-                .field("iter_type", &self.iter_type)
-                .field("base", &self.base)
-                .field("parent_ids", &self.parent_ids)
-                .field("summary_fields", &self.summary_fields)
-                .field("queryable_fields", &self.queryable_fields)
-                .finish()
-        }
+        #[cfg(feature = "server")]
+        return f
+            .debug_struct("ApiModel")
+            .field("table_name", &self.table_name)
+            .field("rename", &self.rename)
+            .field("name", &self.name)
+            .field("iter_type", &self.iter_type)
+            .field("base", &self.base)
+            .field("parent_ids", &self.parent_ids)
+            .field("summary_fields", &self.summary_fields)
+            .field("queryable_fields", &self.queryable_fields)
+            .finish();
+
+        #[cfg(not(feature = "server"))]
+        f.debug_struct("ApiModel")
+            .field("name", &self.name)
+            .field("iter_type", &self.iter_type)
+            .field("base", &self.base)
+            .field("parent_ids", &self.parent_ids)
+            .field("summary_fields", &self.summary_fields)
+            .field("queryable_fields", &self.queryable_fields)
+            .finish()
     }
 }
 
