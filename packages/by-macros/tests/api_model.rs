@@ -171,9 +171,11 @@ mod normal {
 #[cfg(feature = "server")]
 mod server_tests {
     use std::time::SystemTime;
+    use validator::Validate;
 
     use super::*;
 
+    #[derive(validator::Validate)]
     #[api_model(base = "/users/v1", read_action = user_info, table = users, iter_type=Vec)]
     pub struct User {
         #[api_model(primary_key)]
@@ -187,7 +189,8 @@ mod server_tests {
         pub nickname: String,
         #[api_model(unique, read_action=check_principal)]
         pub principal: String,
-        #[api_model(action = signup, read_action = check_email, unique)]
+        #[api_model(action = signup, read_action = check_email, unique, queryable, action_by_id = update)]
+        #[validate(email)]
         pub email: String,
         #[api_model(action = signup)]
         pub profile_url: String,
@@ -205,11 +208,44 @@ mod server_tests {
             profile_url: "profile_url".to_string(),
         };
 
-        let _ = UserReadAction {
+        let mut read = UserReadAction {
             action: Some(UserReadActionType::CheckEmail),
             email: Some("email".to_string()),
             principal: Some("principal".to_string()),
         };
+
+        assert!(read.validate().is_err());
+
+        read.email = Some("abc@test.com".to_string());
+        assert!(read.validate().is_ok());
+
+        let mut q = UserQuery {
+            size: 10,
+            bookmark: None,
+            email: Some("email".to_string()),
+        };
+        assert!(q.validate().is_err());
+
+        q.email = Some("abc@test.com".to_string());
+        assert!(q.validate().is_ok());
+
+        let mut action = UserSignupRequest {
+            nickname: "nickname".to_string(),
+            email: "email".to_string(),
+            profile_url: "profile_url".to_string(),
+        };
+        assert!(action.validate().is_err());
+
+        action.email = "abc@test.com".to_string();
+        assert!(action.validate().is_ok());
+
+        let mut action = UserUpdateRequest {
+            email: "email".to_string(),
+        };
+        assert!(action.validate().is_err());
+
+        action.email = "abc@test.com".to_string();
+        assert!(action.validate().is_ok());
 
         let cli = User::get_client("");
         let _ = cli.user_info();
@@ -329,8 +365,8 @@ mod server_tests {
         assert_eq!(users_4.len(), 2);
 
         for i in 0..users_4.len() {
-            assert_eq!(users_3[i].principal, users_4[i].principal);
-            assert_eq!(users_3[i].email, users_4[i].email);
+            assert_ne!(users_3[i].principal, users_4[i].principal);
+            assert_ne!(users_3[i].email, users_4[i].email);
         }
     }
 }

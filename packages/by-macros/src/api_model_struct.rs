@@ -347,18 +347,29 @@ impl ApiModel<'_> {
         };
         let compose_query = if fields.len() > 0 {
             quote! {
-                let where_clause = where_clause.join(" AND ");
-                let query = format!("{} WHERE {} {}", #q, where_clause, #tail_q);
-                let count_query = format!("{} WHERE {}", #qc, where_clause);
+                let where_clause_str = where_clause.join(" AND ");
+                let query = if where_clause.len() > 0 {
+                    format!("{} WHERE {} {}", #q, where_clause_str, #tail_q)
+                } else {
+                    format!("{} {}", #q, #tail_q)
+                };
+
+                let count_query = if where_clause.len() > 0 {
+                    format!("{} WHERE {}", #qc, where_clause_str)
+                } else {
+                    format!("{}", #qc)
+                };
                 let query = format!("WITH data AS ({}) SELECT ({}) AS total_count, data.* FROM data;", query, count_query);
                 tracing::debug!("{} query {}", #fmt_str, query);
-                let mut q = sqlx::query(&query).bind(param.size as i32).bind(param.page());
+                let offset: i32 = (param.size as i32) * (param.page() - 1);
+                let mut q = sqlx::query(&query).bind(param.size as i32).bind(offset);
             }
         } else {
             quote! {
                 let query = format!("WITH data AS ({} {}) SELECT ({}) AS total_count, data.* FROM data;", #q, #tail_q, #qc);
                 tracing::debug!("{} query {}", #fmt_str, query);
-                let q = sqlx::query(&query).bind(param.size as i32).bind(param.page());
+                let offset: i32 = (param.size as i32) * (param.page() - 1);
+                let q = sqlx::query(&query).bind(param.size as i32).bind(offset);
             }
         };
 
@@ -428,8 +439,12 @@ impl ApiModel<'_> {
                 let mut where_clause = vec![];
                 #(#where_clause)*
 
-                let where_clause = where_clause.join(" AND ");
-                let query = format!("{} WHERE {}", #q, where_clause);
+                let where_clause_str = where_clause.join(" AND ");
+                let query = if where_clause.len() > 0 {
+                    format!("{} WHERE {}", #q, where_clause_str)
+                } else {
+                    format!("{}", #q)
+                };
                 tracing::debug!("{} query {}", #fmt_str, query);
 
                 let mut q = sqlx::query(&query);

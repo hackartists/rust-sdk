@@ -244,6 +244,7 @@ fn generate_read_struct(
 
     let mut query_fields = vec![];
     let mut read_action_types = vec![];
+    let mut has_validator = false;
 
     for (read_action, fields) in read_actions {
         let mut params = vec![];
@@ -263,7 +264,18 @@ fn generate_read_struct(
                         continue;
                     }
                     hashed_fields.insert(field_name.clone());
+
+                    let mut validate_attributes = Vec::new();
+                    for attr in &field.attrs {
+                        if let Meta::List(meta_list) = attr.meta.clone() {
+                            if meta_list.path.is_ident("validate") {
+                                validate_attributes.push(attr.clone());
+                                has_validator = true;
+                            }
+                        }
+                    }
                     query_fields.push(quote! {
+                        #(#validate_attributes)*
                         pub #field_name: Option<#field_type>,
                     });
                 }
@@ -340,7 +352,14 @@ fn generate_read_struct(
         (quote! {}, quote! {})
     };
 
+    let validator_derive = if has_validator {
+        quote! { #[derive(validator::Validate)] }
+    } else {
+        quote! {}
+    };
+
     quote! {
+        #validator_derive
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         pub struct #read_action_struct_name {
@@ -393,6 +412,7 @@ fn generate_action_by_id_struct(
     let mut action_fields = vec![];
     let mut action_requests = vec![];
     let mut cli_actions = vec![];
+    let mut has_validator = false;
 
     for (k, v) in actions.iter() {
         let act = syn::Ident::new(&k.to_case(Case::Pascal), struct_name.span());
@@ -409,24 +429,40 @@ fn generate_action_by_id_struct(
         });
 
         if let ActionField::Fields(v) = v {
-            let fields = v.iter().map(|field| {
+            let mut fields = vec![];
+            let mut params = vec![];
+            let mut field_names = vec![];
+
+            for field in v.iter() {
                 let field_name = &field.ident;
                 let field_type = &field.ty;
-                quote! { pub #field_name: #field_type, }
-            });
+                let mut validate_attributes = Vec::new();
 
-            let params = v.iter().map(|field| {
-                let field_name = &field.ident;
-                let field_type = &field.ty;
-                quote! { #field_name: #field_type, }
-            });
+                for attr in &field.attrs {
+                    if let Meta::List(meta_list) = attr.meta.clone() {
+                        if meta_list.path.is_ident("validate") {
+                            validate_attributes.push(attr.clone());
+                            has_validator = true;
+                        }
+                    }
+                }
 
-            let field_names = v.iter().map(|field| {
-                let field_name = &field.ident;
-                quote! { #field_name, }
-            });
+                fields.push(quote! {
+                    #(#validate_attributes)*
+                    pub #field_name: #field_type,
+                });
+                params.push(quote! { #field_name: #field_type, });
+                field_names.push(quote! { #field_name, });
+            }
+
+            let validator_derive = if has_validator {
+                quote! { #[derive(validator::Validate)] }
+            } else {
+                quote! {}
+            };
 
             action_requests.push(quote! {
+                #validator_derive
                 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
                 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                 pub struct #request_struct_name {
@@ -516,6 +552,7 @@ fn generate_action_struct(
     let mut action_fields = vec![];
     let mut action_requests = vec![];
     let mut cli_actions = vec![];
+    let mut has_validator = false;
 
     for (k, v) in actions.iter() {
         let act = syn::Ident::new(&k.to_case(Case::Pascal), struct_name.span());
@@ -532,24 +569,40 @@ fn generate_action_struct(
         });
 
         if let ActionField::Fields(v) = v {
-            let fields = v.iter().map(|field| {
+            let mut fields = vec![];
+            let mut params = vec![];
+            let mut field_names = vec![];
+
+            for field in v.iter() {
                 let field_name = &field.ident;
                 let field_type = &field.ty;
-                quote! { pub #field_name: #field_type, }
-            });
+                let mut validate_attributes = Vec::new();
 
-            let params = v.iter().map(|field| {
-                let field_name = &field.ident;
-                let field_type = &field.ty;
-                quote! { #field_name: #field_type, }
-            });
+                for attr in &field.attrs {
+                    if let Meta::List(meta_list) = attr.meta.clone() {
+                        if meta_list.path.is_ident("validate") {
+                            validate_attributes.push(attr.clone());
+                            has_validator = true;
+                        }
+                    }
+                }
 
-            let field_names = v.iter().map(|field| {
-                let field_name = &field.ident;
-                quote! { #field_name, }
-            });
+                fields.push(quote! {
+                    #(#validate_attributes)*
+                    pub #field_name: #field_type,
+                });
+                params.push(quote! { #field_name: #field_type, });
+                field_names.push(quote! { #field_name, });
+            }
+
+            let validator_derive = if has_validator {
+                quote! { #[derive(validator::Validate)] }
+            } else {
+                quote! {}
+            };
 
             action_requests.push(quote! {
+                #validator_derive
                 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
                 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                 pub struct #request_struct_name {
@@ -650,12 +703,26 @@ fn generate_query_struct(
     let mut query_fields = vec![];
     let mut query_builder_functions = vec![];
     let mut cli_read_action_functions = vec![];
+    let mut has_validator = false;
 
     for field in queryable_fields {
         let field_name = &field.ident;
         hashed_fields.insert(field_name.clone());
         let field_type = &field.ty;
-        query_fields.push(quote! { pub #field_name: Option<#field_type>, });
+        let mut validate_attributes = Vec::new();
+        for attr in &field.attrs {
+            if let Meta::List(meta_list) = attr.meta.clone() {
+                if meta_list.path.is_ident("validate") {
+                    validate_attributes.push(attr.clone());
+                    has_validator = true;
+                }
+            }
+        }
+
+        query_fields.push(quote! {
+            #(#validate_attributes)*
+            pub #field_name: Option<#field_type>,
+        });
         let function_name = syn::Ident::new(
             &format!("with_{}", field_name.as_ref().unwrap()),
             struct_name.span(),
@@ -779,7 +846,14 @@ fn generate_query_struct(
         (quote! {}, quote! {})
     };
 
+    let validator_derive = if has_validator {
+        quote! { #[derive(validator::Validate)] }
+    } else {
+        quote! {}
+    };
+
     quote! {
+        #validator_derive
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
         #[serde(rename_all = "kebab-case")]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
