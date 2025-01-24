@@ -30,10 +30,6 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_cloned = item.clone();
     let input = parse_macro_input!(item as DeriveInput);
     let struct_name = &input.ident;
-    // let data = match &input.data {
-    //     Data::Struct(data_struct) => data_struct,
-    //     _ => panic!("api_mode can only be applied to structs"),
-    // };
 
     let model = ApiModel::new(&input, attr.clone());
     tracing::debug!("Model: {:#?}", model);
