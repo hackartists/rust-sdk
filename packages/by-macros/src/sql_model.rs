@@ -15,7 +15,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => panic!("api_mode can only be applied to structs"),
     };
 
-    let model = ApiModel::new(name, data, attr.clone());
+    let model = ApiModel::new(&input, attr.clone());
 
     let fields = &data.fields;
 

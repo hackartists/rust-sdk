@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use proc_macro::TokenStream;
 use quote::quote;
 use std::collections::HashSet;
-use syn::{parse_macro_input, Attribute, Data, DeriveInput, Field, Meta};
+use syn::*;
 
 use crate::api_model_struct::ApiModel;
 
@@ -31,12 +31,12 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_cloned = item.clone();
     let input = parse_macro_input!(item as DeriveInput);
     let struct_name = &input.ident;
-    let data = match &input.data {
-        Data::Struct(data_struct) => data_struct,
-        _ => panic!("api_mode can only be applied to structs"),
-    };
+    // let data = match &input.data {
+    //     Data::Struct(data_struct) => data_struct,
+    //     _ => panic!("api_mode can only be applied to structs"),
+    // };
 
-    let model = ApiModel::new(struct_name, &data, attr.clone());
+    let model = ApiModel::new(&input, attr.clone());
     tracing::debug!("Model: {:#?}", model);
     let param_struct = model.param_struct();
     tracing::debug!("Param struct: {}", param_struct.to_string());
@@ -53,6 +53,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         action_names,
         action_by_id_names,
         query_action_names,
+        has_validator,
         ..
     } = model;
     let summary_struct = generate_summary_struct(&struct_name, &summary_fields);
@@ -64,6 +65,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         &iter_type,
         &queryable_fields,
         &query_action_names,
+        has_validator,
     );
     tracing::debug!("Query struct: {}", query_struct.to_string());
     let read_action_struct = generate_read_struct(
@@ -71,16 +73,23 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         &base_endpoint,
         &parent_ids,
         &read_action_names,
+        has_validator,
     );
     tracing::debug!("Read action struct: {}", read_action_struct.to_string());
-    let action_struct =
-        generate_action_struct(&struct_name, &base_endpoint, &parent_ids, &action_names);
+    let action_struct = generate_action_struct(
+        &struct_name,
+        &base_endpoint,
+        &parent_ids,
+        &action_names,
+        has_validator,
+    );
     tracing::debug!("Action struct: {}", action_struct.to_string());
     let action_by_id_struct = generate_action_by_id_struct(
         &struct_name,
         &base_endpoint,
         &parent_ids,
         &action_by_id_names,
+        has_validator,
     );
     tracing::debug!("Action by id struct: {}", action_by_id_struct.to_string());
 
@@ -224,6 +233,7 @@ fn generate_read_struct(
     parent_ids: &[String],
 
     read_actions: &IndexMap<String, ActionField>,
+    has_validator: bool,
 ) -> proc_macro2::TokenStream {
     let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
     let read_action_struct_name =
@@ -244,7 +254,6 @@ fn generate_read_struct(
 
     let mut query_fields = vec![];
     let mut read_action_types = vec![];
-    let mut has_validator = false;
 
     for (read_action, fields) in read_actions {
         let mut params = vec![];
@@ -270,7 +279,6 @@ fn generate_read_struct(
                         if let Meta::List(meta_list) = attr.meta.clone() {
                             if meta_list.path.is_ident("validate") {
                                 validate_attributes.push(attr.clone());
-                                has_validator = true;
                             }
                         }
                     }
@@ -330,6 +338,12 @@ fn generate_read_struct(
         })
     }
 
+    let validator_derive = if has_validator {
+        quote! { #[derive(validator::Validate)] }
+    } else {
+        quote! {}
+    };
+
     let (read_action_enum, read_action_type_field) = if read_action_types.len() > 0 {
         let read_action_enum_name = syn::Ident::new(
             &format!("{}ReadActionType", struct_name),
@@ -350,12 +364,6 @@ fn generate_read_struct(
         )
     } else {
         (quote! {}, quote! {})
-    };
-
-    let validator_derive = if has_validator {
-        quote! { #[derive(validator::Validate)] }
-    } else {
-        quote! {}
     };
 
     quote! {
@@ -389,6 +397,7 @@ fn generate_action_by_id_struct(
     base_endpoint: &str,
     parent_ids: &[String],
     actions: &IndexMap<String, ActionField>,
+    has_validator: bool,
 ) -> proc_macro2::TokenStream {
     if actions.is_empty() {
         return quote! {};
@@ -412,7 +421,12 @@ fn generate_action_by_id_struct(
     let mut action_fields = vec![];
     let mut action_requests = vec![];
     let mut cli_actions = vec![];
-    let mut has_validator = false;
+    let mut validates = vec![];
+    let validator_derive = if has_validator {
+        quote! { #[derive(validator::Validate)] }
+    } else {
+        quote! {}
+    };
 
     for (k, v) in actions.iter() {
         let act = syn::Ident::new(&k.to_case(Case::Pascal), struct_name.span());
@@ -442,7 +456,6 @@ fn generate_action_by_id_struct(
                     if let Meta::List(meta_list) = attr.meta.clone() {
                         if meta_list.path.is_ident("validate") {
                             validate_attributes.push(attr.clone());
-                            has_validator = true;
                         }
                     }
                 }
@@ -455,12 +468,6 @@ fn generate_action_by_id_struct(
                 field_names.push(quote! { #field_name, });
             }
 
-            let validator_derive = if has_validator {
-                quote! { #[derive(validator::Validate)] }
-            } else {
-                quote! {}
-            };
-
             action_requests.push(quote! {
                 #validator_derive
                 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
@@ -468,6 +475,9 @@ fn generate_action_by_id_struct(
                 pub struct #request_struct_name {
                     #(#fields)*
                 }
+            });
+            validates.push(quote! {
+                #action_name::#act(req) => req.validate(),
             });
 
             let parent_params = parent_params.clone();
@@ -501,6 +511,21 @@ fn generate_action_by_id_struct(
         }
     }
 
+    let validate_function = if has_validator {
+        quote! {
+            impl validator::Validate for #action_name {
+                fn validate(&self) -> std::result::Result<(), validator::ValidationErrors> {
+                    match self {
+                        #(#validates)*
+                    }
+                }
+            }
+
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
         #[serde(rename_all = "snake_case")]
@@ -508,6 +533,8 @@ fn generate_action_by_id_struct(
         pub enum #action_name {
             #(#action_fields)*
         }
+
+        #validate_function
 
         #(#action_requests)*
 
@@ -528,6 +555,7 @@ fn generate_action_struct(
     base_endpoint: &str,
     parent_ids: &[String],
     actions: &IndexMap<String, ActionField>,
+    has_validator: bool,
 ) -> proc_macro2::TokenStream {
     if actions.is_empty() {
         return quote! {};
@@ -552,7 +580,12 @@ fn generate_action_struct(
     let mut action_fields = vec![];
     let mut action_requests = vec![];
     let mut cli_actions = vec![];
-    let mut has_validator = false;
+    let validator_derive = if has_validator {
+        quote! { #[derive(validator::Validate)] }
+    } else {
+        quote! {}
+    };
+    let mut validates = vec![];
 
     for (k, v) in actions.iter() {
         let act = syn::Ident::new(&k.to_case(Case::Pascal), struct_name.span());
@@ -582,7 +615,6 @@ fn generate_action_struct(
                     if let Meta::List(meta_list) = attr.meta.clone() {
                         if meta_list.path.is_ident("validate") {
                             validate_attributes.push(attr.clone());
-                            has_validator = true;
                         }
                     }
                 }
@@ -595,12 +627,6 @@ fn generate_action_struct(
                 field_names.push(quote! { #field_name, });
             }
 
-            let validator_derive = if has_validator {
-                quote! { #[derive(validator::Validate)] }
-            } else {
-                quote! {}
-            };
-
             action_requests.push(quote! {
                 #validator_derive
                 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
@@ -611,6 +637,9 @@ fn generate_action_struct(
             });
             let parent_params = parent_params.clone();
             let parent_names = parent_names.clone();
+            validates.push(quote! {
+                #action_name::#act(req) => req.validate(),
+            });
 
             cli_actions.push(quote! {
                 pub async fn #cli_act(&self, #(#parent_params)* #(#params)*) -> crate::Result<#struct_name> {
@@ -641,13 +670,31 @@ fn generate_action_struct(
         }
     }
 
+    let validate_function = if has_validator {
+        quote! {
+            impl validator::Validate for #action_name {
+                fn validate(&self) -> std::result::Result<(), validator::ValidationErrors> {
+                    match self {
+                        #(#validates)*
+                    }
+                }
+            }
+
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
+
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
         #[serde(rename_all = "snake_case")]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         pub enum #action_name {
             #(#action_fields)*
         }
+
+        #validate_function
 
         #(#action_requests)*
 
@@ -691,6 +738,7 @@ fn generate_query_struct(
 
     queryable_fields: &[syn::Field],
     read_actions: &IndexMap<String, ActionField>,
+    has_validator: bool,
 ) -> proc_macro2::TokenStream {
     let summary_name = syn::Ident::new(&format!("{}Summary", struct_name), struct_name.span());
     let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
@@ -703,7 +751,6 @@ fn generate_query_struct(
     let mut query_fields = vec![];
     let mut query_builder_functions = vec![];
     let mut cli_read_action_functions = vec![];
-    let mut has_validator = false;
 
     for field in queryable_fields {
         let field_name = &field.ident;
@@ -714,7 +761,6 @@ fn generate_query_struct(
             if let Meta::List(meta_list) = attr.meta.clone() {
                 if meta_list.path.is_ident("validate") {
                     validate_attributes.push(attr.clone());
-                    has_validator = true;
                 }
             }
         }

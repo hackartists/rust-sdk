@@ -239,6 +239,8 @@ mod server_tests {
         action.email = "abc@test.com".to_string();
         assert!(action.validate().is_ok());
 
+        assert!(UserAction::Signup(action).validate().is_ok());
+
         let mut action = UserUpdateRequest {
             email: "email".to_string(),
         };
@@ -246,6 +248,8 @@ mod server_tests {
 
         action.email = "abc@test.com".to_string();
         assert!(action.validate().is_ok());
+
+        assert!(UserByIdAction::Update(action).validate().is_ok());
 
         let cli = User::get_client("");
         let _ = cli.user_info();

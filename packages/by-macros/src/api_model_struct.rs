@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use proc_macro::TokenStream;
 use quote::quote;
 use std::{collections::HashSet, convert::From};
-use syn::{DataStruct, Field};
+use syn::*;
 
 #[cfg(feature = "server")]
 use crate::sql_model::{AutoOperation, SqlAttribute, SqlAttributeKey, SqlModel, SqlModelKey};
@@ -22,6 +22,7 @@ pub struct ApiModel<'a> {
     pub name: String,
     pub name_id: &'a syn::Ident,
 
+    pub has_validator: bool,
     pub iter_type: String,
     pub base: String,
     pub parent_ids: Vec<String>,
@@ -44,6 +45,7 @@ impl std::fmt::Debug for ApiModel<'_> {
             .field("iter_type", &self.iter_type)
             .field("base", &self.base)
             .field("parent_ids", &self.parent_ids)
+            .field("has_validator", &self.has_validator)
             .field("summary_fields", &self.summary_fields)
             .field("queryable_fields", &self.queryable_fields)
             .finish();
@@ -54,6 +56,7 @@ impl std::fmt::Debug for ApiModel<'_> {
             .field("iter_type", &self.iter_type)
             .field("base", &self.base)
             .field("parent_ids", &self.parent_ids)
+            .field("has_validator", &self.has_validator)
             .field("summary_fields", &self.summary_fields)
             .field("queryable_fields", &self.queryable_fields)
             .finish()
@@ -61,6 +64,14 @@ impl std::fmt::Debug for ApiModel<'_> {
 }
 
 impl ApiModel<'_> {
+    pub fn derives(&self) -> proc_macro2::TokenStream {
+        if self.has_validator {
+            quote! { #[derive(validator::Validate)] }
+        } else {
+            quote! {}
+        }
+    }
+
     pub fn query_fields(&self) -> Vec<syn::Ident> {
         let mut hashed_fields = HashSet::new();
         let mut fields = vec![];
@@ -720,10 +731,36 @@ impl ApiModel<'_> {
 }
 
 impl<'a> ApiModel<'a> {
-    pub fn new(name_id: &'a syn::Ident, data: &DataStruct, attr: TokenStream) -> Self {
+    pub fn new(input: &'a DeriveInput, attr: TokenStream) -> Self {
         #[cfg(feature = "server")]
         let mut api_fields = IndexMap::new();
-        let name = name_id.to_string();
+        let name = input.ident.to_string();
+        let mut has_validator = false;
+        tracing::debug!("Length of attributes: {}", input.attrs.len());
+        for at in &input.attrs {
+            tracing::debug!("Meta: {:?}", at);
+            if let Meta::List(meta_list) = at.meta.clone() {
+                tracing::debug!("Meta list: {}", meta_list.tokens.to_string());
+                let validate: Vec<String> = meta_list
+                    .tokens
+                    .to_string()
+                    .split(",")
+                    .filter(|f| f.contains("Validate"))
+                    .map(|f| f.to_string())
+                    .collect();
+                if validate.len() > 0 {
+                    tracing::debug!("Has validator: true");
+                    has_validator = true;
+                    break;
+                }
+            }
+        }
+
+        let data = match &input.data {
+            syn::Data::Struct(data_struct) => data_struct,
+            _ => panic!("api_mode can only be applied to structs"),
+        };
+        let name_id = &input.ident;
 
         let mut base = String::new();
         let mut parent_ids = Vec::new();
@@ -803,6 +840,12 @@ impl<'a> ApiModel<'a> {
                 for attr in &field.attrs {
                     let mut actions = vec![];
                     let mut related = None::<String>;
+
+                    if let Meta::List(meta_list) = attr.meta.clone() {
+                        if meta_list.path.is_ident("validate") {
+                            has_validator = true;
+                        }
+                    }
 
                     for t in parse_action_attr(attr) {
                         match t {
@@ -935,6 +978,7 @@ impl<'a> ApiModel<'a> {
             action_names,
             action_by_id_names,
             query_action_names,
+            has_validator,
         }
     }
 }
