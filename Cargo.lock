@@ -366,11 +366,13 @@ dependencies = [
  "tower 0.5.2",
  "tower-http",
  "tower-service",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
 name = "by-macros"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "by-axum",
  "by-types",

@@ -19,7 +19,6 @@ pub enum ActionType {
 }
 
 pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let _ = tracing_subscriber::fmt::try_init();
     #[cfg(feature = "server")]
     let db_structs: proc_macro2::TokenStream =
         crate::sql_model::sql_model_impl(attr.clone(), item.clone()).into();

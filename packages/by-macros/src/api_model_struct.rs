@@ -11,6 +11,10 @@ use syn::*;
 #[cfg(feature = "server")]
 use crate::sql_model::{AutoOperation, SqlAttribute, SqlAttributeKey, SqlModel, SqlModelKey};
 
+pub enum Database {
+    Postgres,
+}
+
 pub struct ApiModel<'a> {
     #[cfg(feature = "server")]
     pub table_name: String,
@@ -18,6 +22,9 @@ pub struct ApiModel<'a> {
     pub rename: Case,
     #[cfg(feature = "server")]
     pub fields: IndexMap<String, ApiField>,
+
+    #[cfg(feature = "server")]
+    pub database: Option<Database>,
 
     pub name: String,
     pub name_id: &'a syn::Ident,
@@ -734,7 +741,10 @@ impl<'a> ApiModel<'a> {
     pub fn new(input: &'a DeriveInput, attr: TokenStream) -> Self {
         #[cfg(feature = "server")]
         let mut api_fields = IndexMap::new();
+        #[cfg(feature = "server")]
+        let mut database = Some(Database::Postgres);
         let name = input.ident.to_string();
+
         let mut has_validator = false;
         tracing::debug!("Length of attributes: {}", input.attrs.len());
         for at in &input.attrs {
@@ -800,6 +810,12 @@ impl<'a> ApiModel<'a> {
                             tracing::debug!("Read action: {}", v);
                             let v = v.trim();
                             read_action_names.insert(v.to_string(), ActionField::Fields(vec![]));
+                        }
+                    }
+                    #[cfg(feature = "server")]
+                    "database" => {
+                        if value.contains("skip") {
+                            database = None;
                         }
                     }
                     _ => {}
@@ -965,6 +981,8 @@ impl<'a> ApiModel<'a> {
             table_name,
             #[cfg(feature = "server")]
             rename,
+            #[cfg(feature = "server")]
+            database,
 
             name,
             name_id,

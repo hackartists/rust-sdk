@@ -5,7 +5,6 @@ use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput};
 
 pub fn enum_prop_impl(input: TokenStream) -> TokenStream {
-    let _ = tracing_subscriber::fmt::try_init();
     tracing::debug!("enum_prop_impl");
 
     let input = parse_macro_input!(input as DeriveInput);

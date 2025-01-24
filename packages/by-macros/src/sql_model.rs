@@ -16,6 +16,9 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let model = ApiModel::new(&input, attr.clone());
+    if model.database.is_none() {
+        return quote! {}.into();
+    }
 
     let fields = &data.fields;
 
