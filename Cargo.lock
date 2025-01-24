@@ -2774,6 +2774,7 @@ dependencies = [
  "serde",
  "simple_asn1",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

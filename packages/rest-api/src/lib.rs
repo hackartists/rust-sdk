@@ -58,12 +58,14 @@ pub fn sign_request(req: RequestBuilder) -> RequestBuilder {
     if let (Some(signer), Some(msg)) = unsafe { (&SIGNER, &MESSAGE) } {
         let signer = signer.read().unwrap();
         let address = signer.signer();
+        tracing::debug!("Signer address: {}", address);
         if address.is_empty() {
             return req;
         }
 
         let timestamp = chrono::Utc::now().timestamp();
         let msg = format!("{}-{}", msg, timestamp);
+        tracing::debug!("Signing message: {}", msg);
         let signature = signer.sign(&msg);
         if signature.is_err() {
             return req;
@@ -72,6 +74,7 @@ pub fn sign_request(req: RequestBuilder) -> RequestBuilder {
         let signature = signature.unwrap();
         req.header("Authorization", format!("UserSig {timestamp}:{signature}"))
     } else {
+        tracing::debug!("No signer found");
         req
     }
 }
