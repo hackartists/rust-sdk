@@ -13,8 +13,7 @@ aide = { workspace = true,  optional = true }
 axum = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 reqwest = "0.12.12"
-sqlx = { version = "0.8.3", optional = true }
+sqlx = { version = "0.8.*", optional = true }
 
 [features]
 server = [ "aide", "axum", "schemars", "sqlx"]
-sqlx = ["dep:sqlx"]
