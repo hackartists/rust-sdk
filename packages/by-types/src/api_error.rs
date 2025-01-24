@@ -1,20 +1,7 @@
 use std::fmt::{Debug, Display};
 
-use serde::{Deserialize, Serialize};
-
-#[cfg(feature = "server")]
-#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema, aide::OperationIo)]
-#[serde(tag = "status_code", rename_all = "snake_case")]
-pub enum ApiError<T> {
-    BadRequest(T),
-    Unauthorized(T),
-    Forbidden(T),
-    NotFound(T),
-    InternalServerError(T),
-}
-
-#[cfg(not(feature = "server"))]
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 #[serde(tag = "status_code", rename_all = "snake_case")]
 pub enum ApiError<T> {
     BadRequest(T),
@@ -53,7 +40,7 @@ impl<T> ApiError<T> {
 #[cfg(feature = "server")]
 impl<T> axum::response::IntoResponse for ApiError<T>
 where
-    T: Serialize,
+    T: serde::Serialize,
 {
     fn into_response(self) -> axum::response::Response {
         let code = match self {
@@ -79,6 +66,16 @@ where
     T: From<String>,
 {
     fn from(error: reqwest::Error) -> Self {
+        ApiError::InternalServerError(error.to_string().into())
+    }
+}
+
+#[cfg(feature = "server")]
+impl<T> From<sqlx::Error> for ApiError<T>
+where
+    T: From<String>,
+{
+    fn from(error: sqlx::Error) -> Self {
         ApiError::InternalServerError(error.to_string().into())
     }
 }

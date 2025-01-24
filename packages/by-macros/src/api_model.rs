@@ -1,11 +1,14 @@
 use convert_case::{Case, Casing};
+use indexmap::IndexMap;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::collections::{HashMap, HashSet};
-use syn::{parse_macro_input, Attribute, Data, DeriveInput, Field, Fields, Meta};
+use std::collections::HashSet;
+use syn::{parse_macro_input, Attribute, Data, DeriveInput, Field, Meta};
+
+use crate::api_model_struct::ApiModel;
 
 #[derive(Debug)]
-enum ActionType {
+pub enum ActionType {
     Summary,
     Queryable,
     Action(Vec<String>),
@@ -15,11 +18,105 @@ enum ActionType {
     ReadActions(Vec<String>),
 }
 
+pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let _ = tracing_subscriber::fmt::try_init();
+    #[cfg(feature = "server")]
+    let db_structs: proc_macro2::TokenStream =
+        crate::sql_model::sql_model_impl(attr.clone(), item.clone()).into();
+    #[cfg(not(feature = "server"))]
+    let db_structs: proc_macro2::TokenStream = quote! {};
+
+    tracing::debug!("generated db code: {}", db_structs.to_string());
+
+    let input_cloned = item.clone();
+    let input = parse_macro_input!(item as DeriveInput);
+    let struct_name = &input.ident;
+    let data = match &input.data {
+        Data::Struct(data_struct) => data_struct,
+        _ => panic!("api_mode can only be applied to structs"),
+    };
+
+    let model = ApiModel::new(struct_name, &data, attr.clone());
+    tracing::debug!("Model: {:#?}", model);
+    let param_struct = model.param_struct();
+    tracing::debug!("Param struct: {}", param_struct.to_string());
+    let get_response = model.get_response_struct();
+    tracing::debug!("Get response struct: {}", get_response.to_string());
+
+    let ApiModel {
+        iter_type,
+        base: base_endpoint,
+        parent_ids,
+        read_action_names,
+        summary_fields,
+        queryable_fields,
+        action_names,
+        action_by_id_names,
+        query_action_names,
+        ..
+    } = model;
+    let summary_struct = generate_summary_struct(&struct_name, &summary_fields);
+    tracing::debug!("Summary struct: {}", summary_struct.to_string());
+    let query_struct = generate_query_struct(
+        &struct_name,
+        &base_endpoint,
+        &parent_ids,
+        &iter_type,
+        &queryable_fields,
+        &query_action_names,
+    );
+    tracing::debug!("Query struct: {}", query_struct.to_string());
+    let read_action_struct = generate_read_struct(
+        &struct_name,
+        &base_endpoint,
+        &parent_ids,
+        &read_action_names,
+    );
+    tracing::debug!("Read action struct: {}", read_action_struct.to_string());
+    let action_struct =
+        generate_action_struct(&struct_name, &base_endpoint, &parent_ids, &action_names);
+    tracing::debug!("Action struct: {}", action_struct.to_string());
+    let action_by_id_struct = generate_action_by_id_struct(
+        &struct_name,
+        &base_endpoint,
+        &parent_ids,
+        &action_by_id_names,
+    );
+    tracing::debug!("Action by id struct: {}", action_by_id_struct.to_string());
+
+    let client_impl = generate_client_impl(struct_name, &base_endpoint, &parent_ids, &iter_type);
+    tracing::debug!("Client impl: {}", client_impl.to_string());
+    let input = parse_macro_input!(input_cloned as syn::ItemStruct);
+    let stripped_input = strip_struct_attributes(&input);
+
+    let output = quote! {
+        #db_structs
+
+        #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
+        #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo, sqlx::FromRow))]
+        #stripped_input
+
+        #action_struct
+        #action_by_id_struct
+        #summary_struct
+        #query_struct
+        #client_impl
+
+        #read_action_struct
+
+        #param_struct
+
+        #get_response
+    };
+
+    tracing::debug!("Generated code: {}", output.to_string());
+
+    output.into()
+}
+
 /// Parse the attribute string and return the action type
 /// The attribute should be in the form of #[api_model(action::action_name, action_by_id::action_name)]
-///
-
-fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
+pub fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
     let mut types = Vec::new();
 
     if let Meta::List(meta_list) = attr.meta.clone() {
@@ -116,241 +213,9 @@ fn parse_action_attr(attr: &Attribute) -> Vec<ActionType> {
 }
 
 #[derive(Debug)]
-enum ActionField {
+pub enum ActionField {
     Fields(Vec<Field>),
     Related(String),
-}
-
-pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let _ = tracing_subscriber::fmt::try_init();
-    #[cfg(feature = "server")]
-    let db_structs: proc_macro2::TokenStream =
-        crate::sql_model::sql_model_impl(attr.clone(), item.clone()).into();
-    #[cfg(not(feature = "server"))]
-    let db_structs: proc_macro2::TokenStream = quote! {};
-
-    tracing::debug!("generated db code: {}", db_structs.to_string());
-
-    let input_cloned = item.clone();
-    let input = parse_macro_input!(item as DeriveInput);
-    let struct_name = &input.ident;
-    let fields = match &input.data {
-        Data::Struct(data_struct) => &data_struct.fields,
-        _ => panic!("api_mode can only be applied to structs"),
-    };
-
-    let attr_args = attr.to_string();
-    let mut iter_type = "CommonQueryResponse".to_string();
-    let mut base_endpoint = String::new();
-
-    let mut summary_fields = Vec::new();
-    let mut queryable_fields = Vec::new();
-    let mut action_names = HashMap::<String, ActionField>::new();
-    let mut action_by_id_names = HashMap::<String, ActionField>::new();
-    let mut query_action_names = HashMap::<String, ActionField>::new();
-    let mut read_action_names = HashMap::<String, ActionField>::new();
-    let mut parent_ids = Vec::new();
-
-    for arg in attr_args.split(',') {
-        let parts: Vec<&str> = arg.split('=').collect();
-        if parts.len() == 2 {
-            let key = parts[0].trim();
-            let value = parts[1].trim().trim_matches('"');
-            match key {
-                "base" => {
-                    base_endpoint = value
-                        .split('/')
-                        .map(|v| {
-                            if v.starts_with(':') {
-                                parent_ids.push(
-                                    v.trim_start_matches(':').to_string().to_case(Case::Snake),
-                                );
-                                "{}"
-                            } else {
-                                v
-                            }
-                        })
-                        .collect::<Vec<&str>>()
-                        .join("/");
-                }
-                "iter_type" => iter_type = value.to_string(),
-                "read_action" => {
-                    let value = value
-                        .trim_matches('[')
-                        .trim_matches(']')
-                        .split(",")
-                        .collect::<Vec<&str>>();
-                    for v in value {
-                        tracing::debug!("Read action: {}", v);
-                        let v = v.trim();
-                        read_action_names.insert(v.to_string(), ActionField::Fields(vec![]));
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    if let Fields::Named(named_fields) = fields {
-        for field in &named_fields.named {
-            for attr in &field.attrs {
-                let mut actions = vec![];
-                let mut related = None::<String>;
-
-                for t in parse_action_attr(attr) {
-                    match t {
-                        ActionType::Summary => {
-                            summary_fields.push(field.clone());
-                        }
-                        ActionType::Queryable => {
-                            queryable_fields.push(field.clone());
-                        }
-                        ActionType::Action(action_names) => {
-                            actions.push(ActionType::Action(action_names));
-                        }
-                        ActionType::ActionById(action_names) => {
-                            actions.push(ActionType::ActionById(action_names));
-                        }
-                        ActionType::Related(st) => {
-                            related = Some(st);
-                        }
-                        ActionType::QueryActions(action_names) => {
-                            actions.push(ActionType::QueryActions(action_names));
-                        }
-                        ActionType::ReadActions(action_names) => {
-                            actions.push(ActionType::ReadActions(action_names));
-                        }
-                    }
-                }
-
-                for action in actions {
-                    match (related.clone(), action) {
-                        (Some(st), ActionType::Action(actions)) => {
-                            for action_name in actions {
-                                action_names
-                                    .entry(action_name)
-                                    .or_insert_with(|| ActionField::Related(st.clone()));
-                            }
-                        }
-                        (Some(st), ActionType::ActionById(actions)) => {
-                            for action_name in actions {
-                                action_by_id_names
-                                    .entry(action_name)
-                                    .or_insert_with(|| ActionField::Related(st.clone()));
-                            }
-                        }
-                        (None, ActionType::Action(actions)) => {
-                            for action_name in actions {
-                                match action_names
-                                    .entry(action_name)
-                                    .or_insert_with(|| ActionField::Fields(vec![]))
-                                {
-                                    ActionField::Fields(v) => {
-                                        v.push(field.clone());
-                                    }
-
-                                    _ => {
-                                        panic!("Action should have fields")
-                                    }
-                                };
-                            }
-                        }
-                        (None, ActionType::ActionById(actions)) => {
-                            for action_name in actions {
-                                match action_by_id_names
-                                    .entry(action_name)
-                                    .or_insert_with(|| ActionField::Fields(vec![]))
-                                {
-                                    ActionField::Fields(v) => {
-                                        v.push(field.clone());
-                                    }
-                                    _ => {
-                                        panic!("ActionById should have fields")
-                                    }
-                                };
-                            }
-                        }
-                        (_, ActionType::QueryActions(actions)) => {
-                            for action_name in actions {
-                                match query_action_names
-                                    .entry(action_name)
-                                    .or_insert_with(|| ActionField::Fields(vec![]))
-                                {
-                                    ActionField::Fields(v) => {
-                                        v.push(field.clone());
-                                    }
-                                    _ => {
-                                        panic!("ActionById should have fields")
-                                    }
-                                };
-                            }
-                        }
-                        (_, ActionType::ReadActions(actions)) => {
-                            for action_name in actions {
-                                match read_action_names
-                                    .entry(action_name)
-                                    .or_insert_with(|| ActionField::Fields(vec![]))
-                                {
-                                    ActionField::Fields(v) => {
-                                        v.push(field.clone());
-                                    }
-                                    _ => {
-                                        panic!("ActionById should have fields")
-                                    }
-                                };
-                            }
-                        }
-
-                        _ => {}
-                    }
-                }
-            }
-        }
-    }
-
-    let summary_struct = generate_summary_struct(&struct_name, &summary_fields);
-    let query_struct = generate_query_struct(
-        &struct_name,
-        &base_endpoint,
-        &parent_ids,
-        &iter_type,
-        &queryable_fields,
-        &query_action_names,
-    );
-    let read_action_struct = generate_read_struct(
-        &struct_name,
-        &base_endpoint,
-        &parent_ids,
-        &read_action_names,
-    );
-    let action_struct =
-        generate_action_struct(&struct_name, &base_endpoint, &parent_ids, &action_names);
-    let action_by_id_struct = generate_action_by_id_struct(
-        &struct_name,
-        &base_endpoint,
-        &parent_ids,
-        &action_by_id_names,
-    );
-
-    let client_impl = generate_client_impl(struct_name, &base_endpoint, &parent_ids, &iter_type);
-    let input = parse_macro_input!(input_cloned as syn::ItemStruct);
-    let stripped_input = strip_struct_attributes(&input);
-
-    let output = quote! {
-        #db_structs
-        #stripped_input
-        #action_struct
-        #action_by_id_struct
-        #summary_struct
-        #query_struct
-        #client_impl
-
-        #read_action_struct
-    };
-
-    tracing::debug!("Generated code: {}", output.to_string());
-
-    output.into()
 }
 
 fn generate_read_struct(
@@ -358,7 +223,7 @@ fn generate_read_struct(
     base_endpoint: &str,
     parent_ids: &[String],
 
-    read_actions: &HashMap<String, ActionField>,
+    read_actions: &IndexMap<String, ActionField>,
 ) -> proc_macro2::TokenStream {
     let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
     let read_action_struct_name =
@@ -504,7 +369,7 @@ fn generate_action_by_id_struct(
     struct_name: &syn::Ident,
     base_endpoint: &str,
     parent_ids: &[String],
-    actions: &HashMap<String, ActionField>,
+    actions: &IndexMap<String, ActionField>,
 ) -> proc_macro2::TokenStream {
     if actions.is_empty() {
         return quote! {};
@@ -626,7 +491,7 @@ fn generate_action_struct(
     struct_name: &syn::Ident,
     base_endpoint: &str,
     parent_ids: &[String],
-    actions: &HashMap<String, ActionField>,
+    actions: &IndexMap<String, ActionField>,
 ) -> proc_macro2::TokenStream {
     if actions.is_empty() {
         return quote! {};
@@ -758,7 +623,7 @@ fn generate_summary_struct(
 
     quote! {
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
-        #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+        #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo, sqlx::FromRow))]
         pub struct #summary_name {
             #(#fields)*
         }
@@ -772,7 +637,7 @@ fn generate_query_struct(
     iter_type: &str,
 
     queryable_fields: &[syn::Field],
-    read_actions: &HashMap<String, ActionField>,
+    read_actions: &IndexMap<String, ActionField>,
 ) -> proc_macro2::TokenStream {
     let summary_name = syn::Ident::new(&format!("{}Summary", struct_name), struct_name.span());
     let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
@@ -916,6 +781,7 @@ fn generate_query_struct(
 
     quote! {
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+        #[serde(rename_all = "kebab-case")]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         pub struct #query_name {
             pub size: usize,
@@ -936,6 +802,19 @@ fn generate_query_struct(
             pub fn with_bookmark(mut self, bookmark: String) -> Self {
                 self.bookmark = Some(bookmark);
                 self
+            }
+
+            pub fn with_page(mut self, page: usize) -> Self {
+                self.bookmark = Some(page.to_string());
+                self
+            }
+
+            pub fn page(&self) -> i32 {
+                self.bookmark
+                    .as_ref()
+                    .unwrap_or(&"1".to_string())
+                    .parse()
+                    .unwrap_or(1)
             }
 
             #(#query_builder_functions)*

@@ -12,6 +12,7 @@ proc-macro = true
 
 [dependencies]
 convert_case = "0.7.1"
+indexmap = "2.7.1"
 proc-macro2 = "1.0.93"
 quote = "1.0.38"
 serde = { version = "1.0.217", features = ["derive"] }
