@@ -220,9 +220,11 @@ impl ApiModel<'_> {
 
     pub fn iter_type_name(&self) -> proc_macro2::TokenStream {
         if self.should_have_summary() {
-            format!("Vec<{}Summary>", self.name)
+            format!("{}<{}Summary>", self.iter_type, self.name)
+        } else if &self.iter_type == "Vec" {
+            format!("(Vec<{}>, i64)", self.name)
         } else {
-            format!("Vec<{}>", self.name)
+            format!("{}<{}>", self.iter_type, self.name)
         }
         .parse()
         .unwrap()
@@ -392,7 +394,7 @@ impl ApiModel<'_> {
         };
 
         let output = quote! {
-            pub async fn find(&self, param: &#query_struct) -> Result<(#name, i64)> {
+            pub async fn find(&self, param: &#query_struct) -> Result<#name> {
                 use sqlx::Row;
 
                 #declare_where_clause
@@ -401,12 +403,12 @@ impl ApiModel<'_> {
                 #compose_query
 
                 #(#binds)*
-                let mut total = 0;
+                let mut total: i64 = 0;
                 let rows = q
                     #call_map
                 .fetch_all(&self.pool).await?;
 
-                Ok((rows, total))
+                Ok((rows, total).into())
             }
         };
 
