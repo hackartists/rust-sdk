@@ -79,3 +79,12 @@ where
         ApiError::InternalServerError(error.to_string().into())
     }
 }
+
+impl<T> From<validator::ValidationError> for ApiError<T>
+where
+    T: From<String>,
+{
+    fn from(error: validator::ValidationError) -> Self {
+        ApiError::BadRequest(error.to_string().into())
+    }
+}

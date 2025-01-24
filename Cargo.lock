@@ -393,7 +393,7 @@ dependencies = [
 
 [[package]]
 name = "by-types"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "aide",
  "axum",
@@ -401,6 +401,7 @@ dependencies = [
  "schemars",
  "serde",
  "sqlx",
+ "validator",
 ]
 
 [[package]]
