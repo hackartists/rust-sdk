@@ -39,7 +39,7 @@ pub fn KakaoLogin() -> Element {
         button {
             onclick: move |_| async move {
                 let client = dioxus_oauth::prelude::OAuthClient::new(
-                        env!("CLIENT_ID"),
+                        option_env!("CLIENT_ID").unwrap_or(""),
                         option_env!("REDIRECT_URI")
                             .unwrap_or("http://localhost:8000/oauth/kakao"),
                         "https://kauth.kakao.com/oauth/authorize",
