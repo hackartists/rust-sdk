@@ -6,7 +6,7 @@ use simple_asn1::{
 };
 use std::{fmt::Display, str::FromStr};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum SignatureAlgorithm {
     EdDSA,
 }
@@ -28,7 +28,7 @@ impl FromStr for SignatureAlgorithm {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Signature {
     pub signature: Vec<u8>,
     pub algorithm: SignatureAlgorithm,

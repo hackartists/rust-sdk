@@ -1,4 +1,4 @@
-use std::{str::FromStr, time::SystemTime};
+use std::{collections::HashMap, str::FromStr, time::SystemTime};
 
 use crate::axum::{
     body::Body,
@@ -14,6 +14,26 @@ fn now() -> i64 {
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64
+}
+
+/// Authorization enum
+///
+/// # Variants
+///
+/// * `UserSig(Signature)` - User signature
+/// * `Bearer(String)` - Bearer token
+/// * `Basic` - Basic authentication
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum Authorization {
+    UserSig(Signature),
+    Bearer {
+        token: String,
+        claims: HashMap<String, String>,
+    },
+    Basic {
+        username: String,
+        password: String,
+    },
 }
 
 /// Authorization middleware
@@ -41,7 +61,8 @@ pub async fn authorization_middleware(
                 "usersig" => {
                     tracing::debug!("User signature");
                     let sig = verify_usersig(value)?;
-                    req.extensions_mut().insert(Some(sig));
+                    req.extensions_mut()
+                        .insert(Some(Authorization::UserSig(sig)));
                     return Ok(next.run(req).await);
                 }
                 _ => {
@@ -52,7 +73,7 @@ pub async fn authorization_middleware(
     }
 
     tracing::debug!("No Authorization header");
-    req.extensions_mut().insert(None::<Signature>);
+    req.extensions_mut().insert(None::<Authorization>);
 
     return Ok(next.run(req).await);
 }
