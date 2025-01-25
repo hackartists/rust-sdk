@@ -7,6 +7,7 @@ use crate::axum::{
     middleware::Next,
 };
 use rest_api::Signature;
+use tracing::instrument;
 
 fn now() -> i64 {
     SystemTime::now()
@@ -26,25 +27,31 @@ fn now() -> i64 {
 ///
 /// * `Response<Body>` - The response
 /// * `StatusCode` - The status code of the response
+#[instrument]
 pub async fn authorization_middleware(
     mut req: Request,
     next: Next,
 ) -> Result<Response<Body>, StatusCode> {
+    tracing::debug!("Authorization middleware");
     if let Some(auth_header) = req.headers().get(AUTHORIZATION) {
         if let Ok(auth_value) = auth_header.to_str() {
             let mut auth_value = auth_value.split_whitespace();
             let (scheme, value) = (auth_value.next(), auth_value.next());
             match scheme.unwrap_or_default().to_lowercase().as_str() {
                 "usersig" => {
+                    tracing::debug!("User signature");
                     let sig = verify_usersig(value)?;
                     req.extensions_mut().insert(Some(sig));
                     return Ok(next.run(req).await);
                 }
-                _ => {}
+                _ => {
+                    tracing::debug!("Unknown scheme: {}", scheme.unwrap_or_default());
+                }
             }
         }
     }
 
+    tracing::debug!("No Authorization header");
     req.extensions_mut().insert(None::<Signature>);
 
     return Ok(next.run(req).await);
