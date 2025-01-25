@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod axum;
 mod docs;
 use std::sync::Arc;

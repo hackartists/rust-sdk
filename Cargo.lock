@@ -423,7 +423,7 @@ checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
 name = "by-axum"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "aide",
  "axum 0.8.1",
@@ -432,6 +432,7 @@ dependencies = [
  "http",
  "lambda_http",
  "lambda_runtime",
+ "rest-api",
  "schemars",
  "serde",
  "serde_json",
