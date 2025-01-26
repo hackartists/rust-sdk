@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 ///
 /// ```rust
 /// use dioxus::prelude::*;
-/// use by_components::HoverEffects;
+/// use by_components::effects::HoverEffects;
 ///
 /// #[component]
 /// pub fn App() -> Element {
