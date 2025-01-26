@@ -53,7 +53,7 @@ pub fn HoverEffects() -> Element {
                             let y = event.client_y();
 
                             shadow
-                                .set_attribute("style", &format!("left: {}px; top: {}px; position: absolute; width: 50px; height: 50px; background: radial-gradient(circle, rgba(100, 100, 100, 0.5), rgba(0, 0, 0, 0)); border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); mix-blend-mode: screen; opacity: 0.7; filter: blur(15px); z-index: 100; ", x, y))
+                                .set_attribute("style", &format!("left: {}px; top: {}px; position: absolute; width: 50px; height: 50px; background: radial-gradient(circle, rgba(100, 100, 100, 0.5), rgba(0, 0, 0, 0)); border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); mix-blend-mode: screen; opacity: 0.7; filter: blur(15px); z-index: 9999; ", x, y))
                                 .unwrap();
                         } else {
                             shadow.set_attribute("style", "display: none;").unwrap();
