@@ -1,6 +1,6 @@
 #[derive(Debug, Clone)]
 pub struct ColorTheme {
-    pub backgounrd: String,
+    pub background: String,
     pub icon: IconColorTheme,
     pub button: ButtonColorTheme,
     pub text: TextColorTheme,
@@ -13,7 +13,7 @@ pub struct ColorTheme {
 impl Default for ColorTheme {
     fn default() -> Self {
         ColorTheme {
-            backgounrd: "#2C2E42".to_string(),
+            background: "#2C2E42".to_string(),
             icon: IconColorTheme::default(),
             button: ButtonColorTheme::default(),
             text: TextColorTheme::default(),

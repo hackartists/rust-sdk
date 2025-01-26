@@ -17,6 +17,26 @@ impl Default for AwsConfig {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum AuthConfig {
+    Jwt {
+        secret: &'static str,
+        expiration: u64,
+    },
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        AuthConfig::Jwt {
+            secret: option_env!("JWT_SECRET_KEY").expect("You must set SECRET_KEY"),
+            expiration: option_env!("JWT_EXPIRATION")
+                .unwrap_or("3600".into())
+                .parse()
+                .expect("EXPIRATION must be a number"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum DatabaseConfig {
     DynamoDb {
