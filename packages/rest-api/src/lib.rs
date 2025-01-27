@@ -1,5 +1,9 @@
 #![allow(static_mut_refs)]
-use std::{error::Error, sync::RwLock};
+use std::{
+    collections::HashMap,
+    error::Error,
+    sync::{LazyLock, RwLock},
+};
 
 use reqwest::RequestBuilder;
 use serde::Serialize;
@@ -19,6 +23,7 @@ pub trait RequestHooker {
 static mut SIGNER: Option<RwLock<Box<dyn Signer>>> = None;
 static mut MESSAGE: Option<String> = None;
 static mut HOOKS: RwLock<Vec<Box<dyn RequestHooker>>> = RwLock::new(Vec::new());
+static mut HEADERS: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
 
 pub fn add_hook<T: RequestHooker + 'static>(hook: T) {
     unsafe {
@@ -72,11 +77,66 @@ pub fn sign_request(req: RequestBuilder) -> RequestBuilder {
         }
 
         let signature = signature.unwrap();
-        req.header("Authorization", format!("UserSig {timestamp}:{signature}"))
+        req.header(
+            reqwest::header::AUTHORIZATION,
+            format!("UserSig {timestamp}:{signature}"),
+        )
     } else {
         tracing::debug!("No signer found");
         req
     }
+}
+
+pub fn extract_for_next_request(res: &reqwest::Response) {
+    let headers = res.headers();
+    if let Some(authz) = headers.get(reqwest::header::AUTHORIZATION) {
+        unsafe {
+            let mut headers = HEADERS.write().unwrap();
+            match headers.as_mut() {
+                Some(headers) => {
+                    headers.insert(
+                        "Authorization".to_string(),
+                        authz.to_str().unwrap().to_string(),
+                    );
+                }
+                None => {
+                    let mut new_headers = HashMap::new();
+                    new_headers.insert(
+                        "Authorization".to_string(),
+                        authz.to_str().unwrap().to_string(),
+                    );
+                    *headers = Some(new_headers);
+                }
+            }
+        }
+    }
+}
+
+pub fn load_headers(mut req: RequestBuilder) -> RequestBuilder {
+    unsafe {
+        match HEADERS.read().unwrap().as_ref() {
+            Some(ref headers) => {
+                for (k, v) in headers.iter() {
+                    req = req.header(k, v);
+                }
+
+                req
+            }
+            None => req,
+        }
+    }
+}
+
+pub async fn send(req: RequestBuilder) -> reqwest::Result<reqwest::Response> {
+    let req = run_hooks(req);
+    let req = sign_request(req);
+    let req = load_headers(req);
+    let res = req.send().await;
+    if let Ok(res) = &res {
+        extract_for_next_request(res);
+    }
+
+    res
 }
 
 pub async fn get<T, E>(url: &str) -> Result<T, E>
@@ -87,10 +147,7 @@ where
     let client = reqwest::Client::builder().build()?;
 
     let req = client.get(url);
-    let req = run_hooks(req);
-
-    let req = sign_request(req);
-    let res = req.send().await?;
+    let res = send(req).await?;
 
     if res.status().is_success() {
         Ok(res.json().await?)
@@ -116,10 +173,7 @@ where
     let client = reqwest::Client::builder().build()?;
 
     let req = client.get(url).query(query_params);
-    let req = run_hooks(req);
-
-    let req = sign_request(req);
-    let res = req.send().await?;
+    let res = send(req).await?;
 
     if res.status().is_success() {
         Ok(res.json().await?)
@@ -137,11 +191,7 @@ where
     let client = reqwest::Client::builder().build()?;
 
     let req = client.post(url).json(&body);
-    let req = run_hooks(req);
-
-    let req = sign_request(req);
-
-    let res = req.send().await?;
+    let res = send(req).await?;
 
     if res.status().is_success() {
         Ok(res.json().await?)
