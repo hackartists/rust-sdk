@@ -1,9 +1,5 @@
 #![allow(static_mut_refs)]
-use std::{
-    collections::HashMap,
-    error::Error,
-    sync::{LazyLock, RwLock},
-};
+use std::{collections::HashMap, error::Error, sync::RwLock};
 
 use reqwest::RequestBuilder;
 use serde::Serialize;
@@ -22,22 +18,51 @@ pub trait RequestHooker {
 
 static mut SIGNER: Option<RwLock<Box<dyn Signer>>> = None;
 static mut MESSAGE: Option<String> = None;
-static mut HOOKS: RwLock<Vec<Box<dyn RequestHooker>>> = RwLock::new(Vec::new());
+// FIXME: It causes dropping Signal of dioxus
+// static mut HOOKS: RwLock<Vec<Box<dyn RequestHooker>>> = RwLock::new(Vec::new());
 static mut HEADERS: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
 
-pub fn add_hook<T: RequestHooker + 'static>(hook: T) {
+// pub fn add_hook<T: RequestHooker + 'static>(hook: T) {
+//     unsafe {
+//         HOOKS.write().unwrap().push(Box::new(hook));
+//     }
+// }
+
+// pub fn run_hooks(req: RequestBuilder) -> RequestBuilder {
+//     unsafe {
+//         HOOKS
+//             .read()
+//             .unwrap()
+//             .iter()
+//             .fold(req, |req, hook| hook.before_request(req))
+//     }
+// }
+
+pub fn add_header(key: String, value: String) {
     unsafe {
-        HOOKS.write().unwrap().push(Box::new(hook));
+        let mut headers = HEADERS.write().unwrap();
+        match headers.as_mut() {
+            Some(headers) => {
+                headers.insert(key, value);
+            }
+            None => {
+                let mut new_headers = HashMap::new();
+                new_headers.insert(key, value);
+                *headers = Some(new_headers);
+            }
+        }
     }
 }
 
-pub fn run_hooks(req: RequestBuilder) -> RequestBuilder {
+pub fn remove_header(key: &str) {
     unsafe {
-        HOOKS
-            .read()
-            .unwrap()
-            .iter()
-            .fold(req, |req, hook| hook.before_request(req))
+        let mut headers = HEADERS.write().unwrap();
+        match headers.as_mut() {
+            Some(headers) => {
+                headers.remove(key);
+            }
+            None => {}
+        }
     }
 }
 
