@@ -25,6 +25,7 @@ impl TryFrom<i32> for Role {
         match value {
             0 => Ok(Role::Admin),
             1 => Ok(Role::User),
+            10 => Ok(Role::Guest),
             _ => Err(format!("Invalid Role: {}", value)),
         }
     }
