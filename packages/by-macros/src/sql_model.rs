@@ -62,6 +62,7 @@ pub enum SqlAttributeKey {
     Unique,
     Auto,
     Version,
+    Nullable,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -93,6 +94,7 @@ pub enum SqlAttribute {
     Unique,
     Auto(Vec<AutoOperation>),
     Version(String),
+    Nullable,
 }
 
 #[derive(Debug)]
@@ -136,6 +138,10 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             "primary_key" => {
                                 field_attrs
                                     .insert(SqlAttributeKey::PrimaryKey, SqlAttribute::PrimaryKey);
+                            }
+                            "nullable" => {
+                                field_attrs
+                                    .insert(SqlAttributeKey::Nullable, SqlAttribute::Nullable);
                             }
                             "unique" => {
                                 field_attrs.insert(SqlAttributeKey::Unique, SqlAttribute::Unique);

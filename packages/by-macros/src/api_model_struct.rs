@@ -1474,17 +1474,25 @@ impl ApiField {
             _ => None,
         };
 
-        let ((mut r#type, nullable), failed_type_inference) =
-            match f.attrs.get(&SqlAttributeKey::SqlType) {
-                Some(SqlAttribute::SqlType(t)) => ((t.to_string(), true), false),
-                _ => match to_type(&field.ty) {
-                    Some(t) => (t, false),
-                    None => {
-                        tracing::debug!("field type: {:?}", field.ty);
-                        (("TEXT".to_string(), true), true)
-                    }
-                },
-            };
+        let ((mut r#type, mut nullable), mut failed_type_inference) = match to_type(&field.ty) {
+            Some(t) => (t, false),
+            None => {
+                tracing::debug!("field type: {:?}", field.ty);
+                (("TEXT".to_string(), false), true)
+            }
+        };
+
+        match f.attrs.get(&SqlAttributeKey::SqlType) {
+            Some(SqlAttribute::SqlType(t)) => {
+                failed_type_inference = false;
+                r#type = t.to_string();
+            }
+            _ => {}
+        };
+
+        if f.attrs.contains_key(&SqlAttributeKey::Nullable) {
+            nullable = true;
+        };
 
         if primary_key {
             r#type = "BIGINT".to_string();
