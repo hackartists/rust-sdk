@@ -107,7 +107,10 @@ pub fn generate_jwt(claims: &mut Claims) -> Result<String, StatusCode> {
         } => {
             let exp = SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
-                .map_err(|e| StatusCode::UNAUTHORIZED)?
+                .map_err(|e| {
+                    tracing::error!("Failed to get current time: {}", e);
+                    StatusCode::UNAUTHORIZED
+                })?
                 .as_secs()
                 + expiration;
             claims.exp = exp;
