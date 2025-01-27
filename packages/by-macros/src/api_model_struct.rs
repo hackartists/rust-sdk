@@ -251,8 +251,7 @@ impl ApiModel<'_> {
         let output = quote! {
             #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq, by_macros::QueryDisplay)]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-            #[serde(tag = "param-type")]
-            #[serde(rename_all = "kebab-case")]
+            #[serde(tag = "param-type", rename_all = "kebab-case")]
             pub enum #name {
                 #(#enums)*
             }
@@ -1393,6 +1392,12 @@ END $$;
         query.extend(self.alter_query());
 
         query
+    }
+}
+pub fn to_string(ty: &syn::Type) -> String {
+    match &ty {
+        syn::Type::Path(ref type_path) => type_path.path.segments.last().unwrap().ident.to_string(),
+        _ => panic!("it must be valid type"),
     }
 }
 

@@ -98,6 +98,11 @@ mod normal {
             .with_bookmark("test".to_string())
             .date_from(1);
 
+        assert_eq!(
+            format!("{}", TopicParam::Query(q.clone())),
+            "param-type=query&size=10&bookmark=test&action=date-from&created-at=1"
+        );
+
         let summary = TopicSummary::default();
         assert_eq!(summary.id, "".to_string());
         assert_eq!(summary.title, "".to_string());
