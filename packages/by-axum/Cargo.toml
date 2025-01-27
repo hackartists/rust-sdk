@@ -1,6 +1,6 @@
 [package]
 name = "by-axum"
-version = "0.2.9"
+version = "0.2.10"
 edition = "2021"
 description = "Library satisfying Biyard API convention"
 license = "Apache-2.0"
@@ -34,6 +34,7 @@ serde_json = "1.0.135"
 tracing-subscriber = "0.3.19"
 tracing = "0.1.41"
 rest-api.workspace = true
+jsonwebtoken = "9.3.0"
 
 [features]
 lambda = ["dioxus-aws", "lambda_runtime", "lambda_http", "http"]

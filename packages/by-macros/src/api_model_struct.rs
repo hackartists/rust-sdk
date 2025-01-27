@@ -1115,7 +1115,6 @@ pub struct ApiField {
     pub unique: bool,
     pub auto: Vec<AutoOperation>,
     pub nullable: bool,
-    pub skip: bool,
     pub omitted: bool,
     pub rust_type: String,
 
@@ -1254,10 +1253,6 @@ END $$;
     }
 
     fn create_field_query_line(&self) -> Option<String> {
-        if self.skip {
-            return None;
-        }
-
         let name = self.name.to_case(self.rename);
 
         let mut line = match &self.relation {
@@ -1518,15 +1513,12 @@ impl ApiField {
             _ => vec![],
         };
 
-        let skip = f.attrs.contains_key(&SqlAttributeKey::Skip);
-
         let omitted = failed_type_inference
             || match relation {
                 Some(Relation::OneToMany { .. }) => true,
                 _ => false,
             }
             || primary_key
-            || skip
             || !auto.is_empty();
 
         let unique = f.attrs.contains_key(&SqlAttributeKey::Unique);
@@ -1539,7 +1531,6 @@ impl ApiField {
             unique,
             auto,
             nullable,
-            skip,
             omitted,
             rust_type,
             summary,
