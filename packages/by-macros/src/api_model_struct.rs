@@ -318,15 +318,9 @@ impl ApiModel<'_> {
         let mut create_query_fields = vec![];
         let mut additional_queries = vec![];
 
-        let mut primary_key_name = "id".to_string().to_case(self.rename);
-        let mut primary_key_type = "TEXT".to_string();
+        let (ref primary_key_name, ref primary_key_type) = self.primary_key;
 
         for (sql_field_name, field) in self.fields.iter() {
-            if field.primary_key {
-                primary_key_name = sql_field_name.clone();
-                primary_key_type = field.r#type.clone();
-            }
-
             match field.get_field_query_line() {
                 Some(query) => {
                     create_query_fields.push(query);
@@ -1152,9 +1146,77 @@ impl ApiField {
         output.into()
     }
 
-    pub fn alter_query(&self) -> Option<String> {
+    pub fn trigger_query(&self) -> Vec<String> {
+        let mut query = vec![];
+
+        if self.auto.len() > 0 {
+            let function_name = format!("set_{}", self.name);
+            let field_name = self.name.to_case(self.rename);
+
+            //             query.push(format!(
+            //                 r#"DO $$
+            // BEGIN
+            //     IF NOT EXISTS (
+            //         SELECT 1
+            //         FROM pg_proc
+            //         WHERE proname = '{}'
+            //         AND pg_catalog.pg_function_is_visible(oid)
+            //     ) THEN
+            //         CREATE FUNCTION {}()
+            //             RETURNS TRIGGER AS $$
+            //             BEGIN
+            //                 NEW.{} := EXTRACT(EPOCH FROM now()); -- seconds
+            //                 RETURN NEW;
+            //             END;
+            //         $$ LANGUAGE plpgsql;
+            //     END IF;
+            // END $$"#,
+            //                 function_name, function_name, field_name,
+            //             ));
+
+            let op = self
+                .auto
+                .iter()
+                .map(|a| match a {
+                    AutoOperation::Update => "UPDATE",
+                    AutoOperation::Insert => "INSERT",
+                })
+                .collect::<Vec<&str>>()
+                .join(" OR ");
+
+            let trigger_name = format!("trigger_{}_on_{}", self.name, self.table);
+
+            query.push(format!(
+                r#"DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_trigger
+        WHERE tgname = '{}'
+        AND tgrelid = '{}'::regclass
+    ) THEN
+        CREATE TRIGGER {}
+        BEFORE {} ON {}
+        FOR EACH ROW
+        EXECUTE FUNCTION {}();
+    END IF;
+END $$"#,
+                trigger_name,
+                self.table,
+                trigger_name,
+                op,
+                self.table,
+                // function name
+                function_name,
+            ));
+        }
+
+        query
+    }
+
+    pub fn alter_query(&self) -> Vec<String> {
         if self.version.is_none() {
-            return None;
+            return vec![];
         }
 
         let q = format!(
@@ -1178,7 +1240,7 @@ END $$;
             self.name.to_case(self.rename),
             self.r#type
         );
-        Some(q)
+        vec![q]
     }
 
     fn get_field_query_line(&self) -> Option<String> {
@@ -1204,6 +1266,12 @@ END $$;
             //       ManyToMany field not yet tested.
             _ => format!("{} {}", name, self.r#type),
         };
+
+        if self.nullable {
+            line = format!("{} NULL", line);
+        } else {
+            line = format!("{} NOT NULL", line);
+        }
 
         if self.unique {
             line = format!("{} UNIQUE", line);
@@ -1240,8 +1308,6 @@ END $$;
 
         tracing::debug!("additional query for {var_name}");
         let mut query = vec![];
-
-        let this_primary_key_type = this_primary_key_type.replace("PRIMARY KEY", "");
 
         match &self.relation {
             Some(Relation::ManyToMany {
@@ -1313,67 +1379,8 @@ END $$;
             _ => {}
         }
 
-        if self.auto.len() > 0 {
-            let function_name = format!("set_{}", self.name);
-            let field_name = self.name.to_case(self.rename);
-
-            //             query.push(format!(
-            //                 r#"DO $$
-            // BEGIN
-            //     IF NOT EXISTS (
-            //         SELECT 1
-            //         FROM pg_proc
-            //         WHERE proname = '{}'
-            //         AND pg_catalog.pg_function_is_visible(oid)
-            //     ) THEN
-            //         CREATE FUNCTION {}()
-            //             RETURNS TRIGGER AS $$
-            //             BEGIN
-            //                 NEW.{} := EXTRACT(EPOCH FROM now()); -- seconds
-            //                 RETURN NEW;
-            //             END;
-            //         $$ LANGUAGE plpgsql;
-            //     END IF;
-            // END $$"#,
-            //                 function_name, function_name, field_name,
-            //             ));
-
-            let op = self
-                .auto
-                .iter()
-                .map(|a| match a {
-                    AutoOperation::Update => "UPDATE",
-                    AutoOperation::Insert => "INSERT",
-                })
-                .collect::<Vec<&str>>()
-                .join(" OR ");
-
-            let trigger_name = format!("trigger_{}_on_{}", self.name, self.table);
-
-            query.push(format!(
-                r#"DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_trigger
-        WHERE tgname = '{}'
-        AND tgrelid = '{}'::regclass
-    ) THEN
-        CREATE TRIGGER {}
-        BEFORE {} ON {}
-        FOR EACH ROW
-        EXECUTE FUNCTION {}();
-    END IF;
-END $$"#,
-                trigger_name,
-                this_table_name,
-                trigger_name,
-                op,
-                this_table_name,
-                // function name
-                function_name,
-            ));
-        }
+        query.extend(self.trigger_query());
+        query.extend(self.alter_query());
 
         query
     }
