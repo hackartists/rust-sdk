@@ -461,7 +461,7 @@ dependencies = [
 
 [[package]]
 name = "by-macros"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "by-axum",
  "by-types",
@@ -484,7 +484,7 @@ dependencies = [
 
 [[package]]
 name = "by-types"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "aide",
  "axum 0.8.1",
@@ -492,6 +492,7 @@ dependencies = [
  "schemars",
  "serde",
  "sqlx",
+ "tracing",
  "validator",
 ]
 

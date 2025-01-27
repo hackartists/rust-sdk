@@ -27,12 +27,21 @@ pub enum AuthConfig {
 
 impl Default for AuthConfig {
     fn default() -> Self {
-        AuthConfig::Jwt {
-            secret: option_env!("JWT_SECRET_KEY").expect("You must set SECRET_KEY"),
-            expiration: option_env!("JWT_EXPIRATION")
-                .unwrap_or("3600".into())
-                .parse()
-                .expect("EXPIRATION must be a number"),
+        let auth_type = option_env!("AUTH_TYPE").unwrap_or_else(|| {
+            tracing::warn!("You didn't set AUTH_TYPE and it will be set to jwt by default");
+            "jwt"
+        });
+
+        if auth_type.to_lowercase() == "jwt" {
+            AuthConfig::Jwt {
+                secret: option_env!("JWT_SECRET_KEY").expect("You must set JWT_SECRET_KEY"),
+                expiration: option_env!("JWT_EXPIRATION")
+                    .unwrap_or("3600".into())
+                    .parse()
+                    .expect("EXPIRATION must be a number"),
+            }
+        } else {
+            panic!("AUTH_TYPE must be jwt");
         }
     }
 }
