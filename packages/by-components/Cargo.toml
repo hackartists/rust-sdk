@@ -1,0 +1,18 @@
+[package]
+name = "by-components"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Biyard components"
+repository = "https://github.com/biyard/rust-sdk/tree/main/packages/by-components"
+
+[dependencies]
+dioxus.workspace = true
+wasm-bindgen = { version = "0.2.*", optional = true }
+wasm-bindgen-futures = { version = "0.4.*", optional = true }
+web-sys = { version = "0.3.72", features=["Navigator", "HtmlCollection"], optional = true}
+tracing = { version = "0.1.40" }
+
+[features]
+web = ["web-sys", "wasm-bindgen", "wasm-bindgen-futures"]

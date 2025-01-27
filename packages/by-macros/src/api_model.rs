@@ -5,7 +5,7 @@ use quote::quote;
 use std::collections::HashSet;
 use syn::*;
 
-use crate::api_model_struct::ApiModel;
+use crate::api_model_struct::{to_string, ApiModel};
 
 #[derive(Debug)]
 pub enum ActionType {
@@ -234,6 +234,7 @@ fn generate_read_struct(
     let read_action_struct_name =
         syn::Ident::new(&format!("{}ReadAction", struct_name), struct_name.span());
     let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
+    let param_name = syn::Ident::new(&format!("{}Param", struct_name), struct_name.span());
     let parent_params = parent_ids.iter().map(|id| {
         let id = syn::Ident::new(id, struct_name.span());
         quote! { #id: &str, }
@@ -249,6 +250,7 @@ fn generate_read_struct(
 
     let mut query_fields = vec![];
     let mut read_action_types = vec![];
+    let mut parsers = vec![];
 
     for (read_action, fields) in read_actions {
         let mut params = vec![];
@@ -277,8 +279,53 @@ fn generate_read_struct(
                             }
                         }
                     }
+                    let convert = match to_string(&field_type).as_str() {
+                        "String" => quote! {},
+                        _ => {
+                            let fname = syn::Ident::new(
+                                &format!(
+                                    "parse_{}_of_{}_read",
+                                    field_name.clone().unwrap().to_string().to_case(Case::Snake),
+                                    struct_name.to_string().to_case(Case::Snake)
+                                ),
+                                struct_name.span(),
+                            );
+                            let fname_str = syn::LitStr::new(
+                                &format!(
+                                    "parse_{}_of_{}_read",
+                                    field_name.clone().unwrap().to_string().to_case(Case::Snake),
+                                    struct_name.to_string().to_case(Case::Snake)
+                                ),
+                                struct_name.span(),
+                            );
+
+                            parsers.push(quote! {
+                                pub fn #fname<'de, D>(deserializer: D) -> std::result::Result<Option<#field_type>, D::Error>
+                                where
+                                    D: serde::Deserializer<'de>,
+                                {
+                                    use serde::Deserialize;
+
+                                    let s: Option<String> = Option::deserialize(deserializer)?;
+                                    match s {
+                                        Some(s) => {
+                                            s.parse::<#field_type>()
+                                                .map_err(serde::de::Error::custom)
+                                                .map(Some)
+                                        }
+                                        None => Ok(None),
+                                    }
+                                }
+                            });
+                            quote! {
+                                #[serde(deserialize_with = #fname_str)]
+                            }
+                        }
+                    };
+
                     query_fields.push(quote! {
                         #(#validate_attributes)*
+                        #convert
                         pub #field_name: Option<#field_type>,
                     });
                 }
@@ -327,7 +374,7 @@ fn generate_read_struct(
                 let endpoint = format!("{}{}", self.endpoint, path);
                 let params = #read_action_struct_name::new()
                     .#function_name(#(#field_names)*);
-                let query = format!("{}?{}", endpoint, params);
+                let query = format!("{}?{}", endpoint, #param_name::Read(params));
                 rest_api::get(&query).await
             }
         })
@@ -369,6 +416,8 @@ fn generate_read_struct(
             #read_action_type_field
             #(#query_fields)*
         }
+
+        #(#parsers)*
 
         impl #read_action_struct_name {
             pub fn new() -> Self {
@@ -738,6 +787,7 @@ fn generate_query_struct(
     let summary_name = syn::Ident::new(&format!("{}Summary", struct_name), struct_name.span());
     let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
     let query_name = syn::Ident::new(&format!("{}Query", struct_name), struct_name.span());
+    let param_name = syn::Ident::new(&format!("{}Param", struct_name), struct_name.span());
     let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
     let iter_type_with_summary = format!("{}<{}>", iter_type, summary_name);
     let iter_type_tokens: proc_macro2::TokenStream = iter_type_with_summary.parse().unwrap();
@@ -746,6 +796,7 @@ fn generate_query_struct(
     let mut query_fields = vec![];
     let mut query_builder_functions = vec![];
     let mut cli_read_action_functions = vec![];
+    let mut parsers = vec![];
 
     for field in queryable_fields {
         let field_name = &field.ident;
@@ -760,8 +811,54 @@ fn generate_query_struct(
             }
         }
 
+        let convert = match to_string(&field_type).as_str() {
+            "String" => quote! {},
+            _ => {
+                let fname = syn::Ident::new(
+                    &format!(
+                        "parse_{}_of_{}_query",
+                        field_name.clone().unwrap().to_string().to_case(Case::Snake),
+                        struct_name.to_string().to_case(Case::Snake)
+                    ),
+                    struct_name.span(),
+                );
+
+                let fname_str = syn::LitStr::new(
+                    &format!(
+                        "parse_{}_of_{}_query",
+                        field_name.clone().unwrap().to_string().to_case(Case::Snake),
+                        struct_name.to_string().to_case(Case::Snake)
+                    ),
+                    struct_name.span(),
+                );
+
+                parsers.push(quote! {
+                    pub fn #fname<'de, D>(deserializer: D) -> std::result::Result<Option<#field_type>, D::Error>
+                    where
+                        D: serde::Deserializer<'de>,
+                    {
+                        use serde::Deserialize;
+
+                        let s: Option<String> = Option::deserialize(deserializer)?;
+                        match s {
+                            Some(s) => {
+                                s.parse::<#field_type>()
+                                    .map_err(serde::de::Error::custom)
+                                    .map(Some)
+                            }
+                            None => Ok(None),
+                        }
+                    }
+                });
+                quote! {
+                    #[serde(deserialize_with = #fname_str)]
+                }
+            }
+        };
+
         query_fields.push(quote! {
             #(#validate_attributes)*
+            #convert
             pub #field_name: Option<#field_type>,
         });
         let function_name = syn::Ident::new(
@@ -796,8 +893,64 @@ fn generate_query_struct(
                     if hashed_fields.contains(field_name) {
                         continue;
                     }
+
                     hashed_fields.insert(field_name.clone());
+
+                    let convert = match to_string(&field_type).as_str() {
+                        "String" => quote! {},
+                        _ => {
+                            let fname = syn::Ident::new(
+                                &format!(
+                                    "parse_{}_of_{}_query",
+                                    field_name.clone().unwrap().to_string().to_case(Case::Snake),
+                                    struct_name.to_string().to_case(Case::Snake)
+                                ),
+                                struct_name.span(),
+                            );
+                            let fname_str = syn::LitStr::new(
+                                &format!(
+                                    "parse_{}_of_{}_query",
+                                    field_name.clone().unwrap().to_string().to_case(Case::Snake),
+                                    struct_name.to_string().to_case(Case::Snake)
+                                ),
+                                struct_name.span(),
+                            );
+
+                            parsers.push(quote! {
+                                pub fn #fname<'de, D>(deserializer: D) -> std::result::Result<Option<#field_type>, D::Error>
+                                where
+                                    D: serde::Deserializer<'de>,
+                                {
+                                    use serde::Deserialize;
+
+                                    let s: Option<String> = Option::deserialize(deserializer)?;
+                                    match s {
+                                        Some(s) => {
+                                            s.parse::<#field_type>()
+                                                .map_err(serde::de::Error::custom)
+                                                .map(Some)
+                                        }
+                                        None => Ok(None),
+                                    }
+                                }
+                            });
+                            quote! {
+                                #[serde(deserialize_with = #fname_str)]
+                            }
+                        }
+                    };
+
+                    let mut validate_attributes = Vec::new();
+                    for attr in &field.attrs {
+                        if let Meta::List(meta_list) = attr.meta.clone() {
+                            if meta_list.path.is_ident("validate") {
+                                validate_attributes.push(attr.clone());
+                            }
+                        }
+                    }
                     extended_query_fields.push(quote! {
+                        #(#validate_attributes)*
+                        #convert
                         pub #field_name: Option<#field_type>,
                     });
                 }
@@ -828,9 +981,11 @@ fn generate_query_struct(
             }
         });
 
-        let function_params = params
-            .iter()
-            .map(|(field_name, field_type)| quote! { #field_name: #field_type, });
+        let mut function_params = vec![];
+
+        for (field_name, field_type) in params.iter() {
+            function_params.push(quote! { #field_name: #field_type, });
+        }
         let field_names = params
             .iter()
             .map(|(field_name, _)| quote! { #field_name: Some(#field_name), });
@@ -852,13 +1007,13 @@ fn generate_query_struct(
             ) -> crate::Result<#iter_type_tokens> {
                 let path = format!(#base_endpoint_lit, #(#parent_names)*);
                 let endpoint = format!("{}{}", self.endpoint, path);
-                let params = #query_name {
+                let params = #param_name::Query(#query_name {
                     size,
                     bookmark,
                     action: Some(#read_action_enum_name::#read_action_name),
                     #(#field_names)*
                     ..#query_name::default()
-                };
+                });
                 let query = format!("{}?{}", endpoint, params);
                 rest_api::get(&query).await
             }
@@ -893,17 +1048,38 @@ fn generate_query_struct(
         quote! {}
     };
 
+    let f = format!(
+        "parse_size_of_{}_query",
+        struct_name.to_string().to_case(Case::Snake)
+    );
+
+    let size_fname = syn::Ident::new(&f, struct_name.span());
+    let size_fname_str = syn::LitStr::new(&f, struct_name.span());
+
     quote! {
         #validator_derive
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
         #[serde(rename_all = "kebab-case")]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         pub struct #query_name {
+            #[serde(deserialize_with = #size_fname_str)]
             pub size: usize,
             pub bookmark: Option<String>,
             #read_action_type_field
             #(#query_fields)*
             #(#extended_query_fields)*
+        }
+
+        pub fn #size_fname<'de, D>(deserializer: D) -> std::result::Result<usize, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            use serde::Deserialize;
+
+            let s: Option<String> = Option::deserialize(deserializer)?;
+            s.unwrap_or_else(|| Default::default())
+                .parse::<usize>()
+                .map_err(serde::de::Error::custom)
         }
 
         impl #query_name {
@@ -933,7 +1109,9 @@ fn generate_query_struct(
             }
 
             #(#query_builder_functions)*
+
         }
+        #(#parsers)*
 
         #read_action_enum
 
@@ -952,6 +1130,7 @@ fn generate_client_impl(
     let client_name = syn::Ident::new(&format!("{}Client", struct_name), struct_name.span());
     let query_name = syn::Ident::new(&format!("{}Query", struct_name), struct_name.span());
     let summary_name = syn::Ident::new(&format!("{}Summary", struct_name), struct_name.span());
+    let param_name = syn::Ident::new(&format!("{}Param", struct_name), struct_name.span());
 
     let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
 
@@ -988,7 +1167,7 @@ fn generate_client_impl(
             ) -> crate::Result<#iter_type_tokens> {
                 let path = format!(#base_endpoint_lit, #(#parent_names)*);
                 let endpoint = format!("{}{}", self.endpoint, path);
-                let query = format!("{}?{}", endpoint, params);
+                let query = format!("{}?{}", endpoint, #param_name::Query(params));
                 rest_api::get(&query).await
             }
 

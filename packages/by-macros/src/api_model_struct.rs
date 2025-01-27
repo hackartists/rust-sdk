@@ -22,6 +22,8 @@ pub struct ApiModel<'a> {
     pub rename: Case,
     #[cfg(feature = "server")]
     pub fields: IndexMap<String, ApiField>,
+    #[cfg(feature = "server")]
+    pub primary_key: (String, String), // (sql_name, sql_type)
 
     #[cfg(feature = "server")]
     pub database: Option<Database>,
@@ -249,8 +251,7 @@ impl ApiModel<'_> {
         let output = quote! {
             #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq, by_macros::QueryDisplay)]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-            #[serde(tag = "param-type")]
-            #[serde(rename_all = "kebab-case")]
+            #[serde(tag = "param-type", rename_all = "kebab-case")]
             pub enum #name {
                 #(#enums)*
             }
@@ -312,6 +313,66 @@ impl ApiModel<'_> {
 
 #[cfg(feature = "server")]
 impl ApiModel<'_> {
+    pub fn queries(&self) -> proc_macro2::TokenStream {
+        let mut create_query_fields = vec![];
+        let mut additional_queries = vec![];
+
+        let (ref primary_key_name, ref primary_key_type) = self.primary_key;
+
+        for (sql_field_name, field) in self.fields.iter() {
+            match field.create_field_query_line() {
+                Some(query) => {
+                    create_query_fields.push(query);
+                }
+                None => {}
+            }
+
+            additional_queries
+                .extend(field.get_additional_query(&primary_key_name, &primary_key_type));
+        }
+        let queries: Vec<syn::LitStr> = additional_queries
+            .iter()
+            .map(|item| syn::LitStr::new(item, proc_macro2::Span::call_site()))
+            .collect();
+
+        let q = format!(
+            "CREATE TABLE IF NOT EXISTS {} ({});",
+            self.table_name,
+            create_query_fields.join(","),
+        );
+        let create_query_output = syn::LitStr::new(&q, proc_macro2::Span::call_site());
+        tracing::debug!("create table query: {}", q);
+
+        quote! {
+            pub async fn create_table(&self) -> std::result::Result<(), sqlx::Error> {
+                sqlx::query(#create_query_output).execute(&self.pool).await?;
+
+                for query in [#(#queries),*] {
+                    tracing::debug!("Execute queries: {}", query);
+                    sqlx::query(query).execute(&self.pool).await?;
+                }
+
+                Ok(())
+            }
+
+        }
+    }
+
+    pub fn drop_function(&self) -> proc_macro2::TokenStream {
+        let q = format!("DROP TABLE IF EXISTS {};", self.table_name);
+        let drop_table_query = syn::LitStr::new(&q, proc_macro2::Span::call_site());
+
+        quote! {
+            pub async fn drop_table(&self) -> std::result::Result<(), sqlx::Error> {
+                sqlx::query(#drop_table_query)
+                    .execute(&self.pool)
+                    .await?;
+
+                Ok(())
+            }
+        }
+    }
+
     pub fn find_function(&self) -> proc_macro2::TokenStream {
         let name = self.iter_type_name();
         let query_struct = self.query_action_struct_name();
@@ -452,19 +513,28 @@ impl ApiModel<'_> {
 
         let call_map = self.call_map();
 
-        let output = quote! {
-            pub async fn find_one(&self, param: &#read_action) -> Result<#name> {
-                use sqlx::Row;
-                let mut i = 0;
+        let for_where = if fields.len() > 0 {
+            quote! {
                 let mut where_clause = vec![];
                 #(#where_clause)*
-
                 let where_clause_str = where_clause.join(" AND ");
                 let query = if where_clause.len() > 0 {
                     format!("{} WHERE {}", #q, where_clause_str)
                 } else {
                     format!("{}", #q)
                 };
+            }
+        } else {
+            quote! {
+                let query = format!("{}", #q);
+            }
+        };
+
+        let output = quote! {
+            pub async fn find_one(&self, param: &#read_action) -> Result<#name> {
+                use sqlx::Row;
+                let mut i = 0;
+                #for_where
                 tracing::debug!("{} query {}", #fmt_str, query);
 
                 let mut q = sqlx::query(&query);
@@ -495,7 +565,13 @@ impl ApiModel<'_> {
         let mut return_bounds = vec![];
 
         for field in self.summary_fields.iter() {
-            let field = ApiField::from(field);
+            let n = field
+                .clone()
+                .ident
+                .unwrap()
+                .to_string()
+                .to_case(self.rename);
+            let field = self.fields.get(&n).expect(&format!("Field not found: {n}"));
             let field_name = field.name.clone();
 
             let sql_field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
@@ -844,11 +920,15 @@ impl<'a> ApiModel<'a> {
         let mut action_names = IndexMap::<String, ActionField>::new();
         let mut action_by_id_names = IndexMap::<String, ActionField>::new();
         let mut query_action_names = IndexMap::<String, ActionField>::new();
+        let mut primary_key = (String::new(), String::new());
 
         #[cfg(feature = "server")]
         for f in data.fields.iter() {
             let field_name = f.clone().ident.unwrap().to_string().to_case(rename);
-            let f = ApiField::from(f);
+            let f = ApiField::new(f, table_name.to_string(), rename.clone());
+            if f.primary_key {
+                primary_key = (field_name.clone(), f.r#type.clone());
+            }
 
             api_fields.insert(field_name, f);
         }
@@ -985,6 +1065,8 @@ impl<'a> ApiModel<'a> {
             rename,
             #[cfg(feature = "server")]
             database,
+            #[cfg(feature = "server")]
+            primary_key,
 
             name,
             name_id,
@@ -1042,6 +1124,11 @@ pub struct ApiField {
     pub query_action_names: Vec<String>,
     pub read_action_names: Vec<String>,
     pub related: Option<String>,
+    pub version: Option<String>,
+
+    // depends on struct derive
+    pub rename: Case,
+    pub table: String,
 }
 
 #[cfg(feature = "server")]
@@ -1066,11 +1153,257 @@ impl ApiField {
 
         output.into()
     }
+
+    pub fn trigger_query(&self) -> Vec<String> {
+        let mut query = vec![];
+
+        if self.auto.len() > 0 {
+            let function_name = format!("set_{}", self.name);
+            let field_name = self.name.to_case(self.rename);
+
+            //             query.push(format!(
+            //                 r#"DO $$
+            // BEGIN
+            //     IF NOT EXISTS (
+            //         SELECT 1
+            //         FROM pg_proc
+            //         WHERE proname = '{}'
+            //         AND pg_catalog.pg_function_is_visible(oid)
+            //     ) THEN
+            //         CREATE FUNCTION {}()
+            //             RETURNS TRIGGER AS $$
+            //             BEGIN
+            //                 NEW.{} := EXTRACT(EPOCH FROM now()); -- seconds
+            //                 RETURN NEW;
+            //             END;
+            //         $$ LANGUAGE plpgsql;
+            //     END IF;
+            // END $$"#,
+            //                 function_name, function_name, field_name,
+            //             ));
+
+            let op = self
+                .auto
+                .iter()
+                .map(|a| match a {
+                    AutoOperation::Update => "UPDATE",
+                    AutoOperation::Insert => "INSERT",
+                })
+                .collect::<Vec<&str>>()
+                .join(" OR ");
+
+            let trigger_name = format!("trigger_{}_on_{}", self.name, self.table);
+
+            query.push(format!(
+                r#"DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_trigger
+        WHERE tgname = '{}'
+        AND tgrelid = '{}'::regclass
+    ) THEN
+        CREATE TRIGGER {}
+        BEFORE {} ON {}
+        FOR EACH ROW
+        EXECUTE FUNCTION {}();
+    END IF;
+END $$"#,
+                trigger_name,
+                self.table,
+                trigger_name,
+                op,
+                self.table,
+                // function name
+                function_name,
+            ));
+        }
+
+        query
+    }
+
+    pub fn alter_query(&self) -> Vec<String> {
+        if self.version.is_none() {
+            return vec![];
+        }
+
+        let q = format!(
+            r#"DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = '{}'
+          AND column_name = '{}'
+    ) THEN
+        ALTER TABLE {} ADD COLUMN {} {};
+    END IF;
+END $$;
+"#,
+            // SELECT
+            self.table,
+            self.name.to_case(self.rename),
+            // ALTER
+            self.table,
+            self.name.to_case(self.rename),
+            self.r#type
+        );
+        vec![q]
+    }
+
+    fn create_field_query_line(&self) -> Option<String> {
+        let name = self.name.to_case(self.rename);
+
+        let mut line = match &self.relation {
+            Some(Relation::ManyToOne {
+                table_name,
+                foreign_key,
+                foreign_key_type,
+            }) => format!(
+                "{} {} NOT NULL, FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE",
+                // Foreign field
+                name,
+                foreign_key_type,
+                // Foreign key
+                name,
+                table_name,
+                foreign_key.to_case(self.rename),
+            ),
+            Some(Relation::OneToMany { .. }) => return None,
+            // NOTE: ManyToMany will be handled in the additional query.
+            //       ManyToMany field not yet tested.
+            _ => format!("{} {}", name, self.r#type),
+        };
+
+        if self.primary_key && self.r#type == "BIGINT" {
+            line = format!("{} PRIMARY KEY GENERATED ALWAYS AS IDENTITY", line);
+            return Some(line);
+        }
+
+        if self.nullable {
+            line = format!("{} NULL", line);
+        } else {
+            line = format!("{} NOT NULL", line);
+        }
+
+        if self.unique {
+            line = format!("{} UNIQUE", line);
+        }
+
+        Some(line)
+    }
+
+    pub fn get_sql_field_type(&self) -> Option<String> {
+        if self.omitted {
+            return None;
+        }
+
+        Some(format!(
+            "{} {} {}",
+            self.name.to_case(self.rename),
+            self.r#type,
+            if self.nullable { "" } else { "NOT NULL" }
+        ))
+    }
+
+    pub fn get_additional_query(
+        &self,
+        this_primary_key_name: &str,
+        this_primary_key_type: &str,
+    ) -> Vec<String> {
+        let this_table_name = &self.table;
+        let var_name = self.name.to_case(self.rename);
+        let case = self.rename;
+
+        tracing::debug!("additional query for {var_name}");
+        let mut query = vec![];
+
+        match &self.relation {
+            Some(Relation::ManyToMany {
+                table_name,
+                foreign_table_name,
+                foreign_key,
+                foreign_key_type,
+            }) => {
+                tracing::debug!("additional query for many to many relation: {var_name}");
+                let this_key =
+                    format!("{}_{}", this_table_name, this_primary_key_name).to_case(case);
+                let foreign_pk = format!("{}_{}", foreign_table_name, foreign_key).to_case(case);
+
+                query.push(format!(
+                    "CREATE TABLE IF NOT EXISTS {} ({} {} NOT NULL, {} {} NOT NULL, {} PRIMARY KEY ({}, {}), FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE, FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({}); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({});",
+                    // Table name for many to many relation
+                    table_name,
+                    // key for this table
+                    this_key,
+                    this_primary_key_type,
+                    // key for other table
+                    foreign_pk,
+                    foreign_key_type,
+                    // Additionaly fields
+                    match self.get_sql_field_type() {
+                        Some(field_type) =>
+                            format!("{},", field_type),
+                        None => "".to_string(),
+                    },
+                    // Composited primary key
+                    this_key,
+                    foreign_pk,
+                    // Foreign key for this table key
+                    this_key,
+                    this_table_name,
+                    this_primary_key_name.to_case(case),
+                    // Foreign key for other table
+                    foreign_pk,
+                    foreign_table_name,
+                    foreign_key.to_case(case),
+                    // Index for this table key
+                    table_name,
+                    this_key.to_case(Case::Snake),
+                    table_name,
+                    this_key,
+                    // Index for foreign table key
+                    table_name,
+                    foreign_pk.to_case(Case::Snake),
+                    table_name,
+                    foreign_pk
+                ));
+            }
+            Some(Relation::ManyToOne {
+                table_name,
+                foreign_key,
+                foreign_key_type,
+            }) => {
+                tracing::debug!("additional query for many to one relation: {var_name}");
+                query.push(format!(
+                    "CREATE INDEX idx_{}_{} ON {}({});",
+                    // index name
+                    table_name,
+                    foreign_key.to_case(Case::Snake),
+                    // indexing field
+                    table_name,
+                    foreign_key.to_case(case),
+                ));
+            }
+            _ => {}
+        }
+
+        query.extend(self.trigger_query());
+        query.extend(self.alter_query());
+
+        query
+    }
+}
+pub fn to_string(ty: &syn::Type) -> String {
+    match &ty {
+        syn::Type::Path(ref type_path) => type_path.path.segments.last().unwrap().ident.to_string(),
+        _ => panic!("it must be valid type"),
+    }
 }
 
 #[cfg(feature = "server")]
-impl From<&Field> for ApiField {
-    fn from(field: &Field) -> Self {
+impl ApiField {
+    fn new(field: &Field, table: String, rename: Case) -> Self {
         let name = field.clone().ident.unwrap().to_string();
         let rust_type = match &field.ty {
             syn::Type::Path(ref type_path) => {
@@ -1117,6 +1450,10 @@ impl From<&Field> for ApiField {
 
         let f = super::sql_model::parse_field_attr(field);
         let primary_key = f.attrs.contains_key(&SqlAttributeKey::PrimaryKey);
+        let version = match f.attrs.get(&SqlAttributeKey::Version) {
+            Some(SqlAttribute::Version(v)) => Some(v.to_string()),
+            _ => None,
+        };
 
         let relation = match f.attrs.get(&SqlAttributeKey::ManyToMany) {
             Some(SqlAttribute::ManyToMany {
@@ -1152,17 +1489,29 @@ impl From<&Field> for ApiField {
             _ => None,
         };
 
-        let ((r#type, nullable), failed_type_inference) =
-            match f.attrs.get(&SqlAttributeKey::SqlType) {
-                Some(SqlAttribute::SqlType(t)) => ((t.to_string(), true), false),
-                _ => match to_type(&field.ty) {
-                    Some(t) => (t, false),
-                    None => {
-                        tracing::debug!("field type: {:?}", field.ty);
-                        (("TEXT".to_string(), true), true)
-                    }
-                },
-            };
+        let ((mut r#type, mut nullable), mut failed_type_inference) = match to_type(&field.ty) {
+            Some(t) => (t, false),
+            None => {
+                tracing::debug!("field type: {:?}", field.ty);
+                (("TEXT".to_string(), false), true)
+            }
+        };
+
+        match f.attrs.get(&SqlAttributeKey::SqlType) {
+            Some(SqlAttribute::SqlType(t)) => {
+                failed_type_inference = false;
+                r#type = t.to_string();
+            }
+            _ => {}
+        };
+
+        if f.attrs.contains_key(&SqlAttributeKey::Nullable) {
+            nullable = true;
+        };
+
+        if primary_key {
+            r#type = "BIGINT".to_string();
+        }
 
         let auto: Vec<AutoOperation> = match f.attrs.get(&SqlAttributeKey::Auto) {
             Some(SqlAttribute::Auto(ops)) => ops.to_vec(),
@@ -1196,6 +1545,10 @@ impl From<&Field> for ApiField {
             query_action_names,
             read_action_names,
             related,
+            version,
+
+            table,
+            rename,
         }
     }
 }

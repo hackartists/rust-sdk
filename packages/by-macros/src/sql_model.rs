@@ -2,7 +2,7 @@ use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use quote::quote;
 use std::collections::HashMap;
-use syn::{parse_macro_input, Data, DeriveInput, Field, Fields, Meta};
+use syn::{parse_macro_input, DeriveInput, Field, Meta};
 
 use crate::api_model_struct::ApiModel;
 
@@ -10,39 +10,14 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
     let repo_name = syn::Ident::new(&format!("{name}Repository"), name.span());
-    let data = match &input.data {
-        Data::Struct(data) => data,
-        _ => panic!("api_mode can only be applied to structs"),
-    };
 
     let model = ApiModel::new(&input, attr.clone());
     if model.database.is_none() {
         return quote! {}.into();
     }
 
-    let fields = &data.fields;
-
-    let attrs = parse_sql_model(attr);
-    let table_name = if let Some(SqlModel::Table(ref table_name)) = attrs.get(&SqlModelKey::Table) {
-        table_name.to_string()
-    } else {
-        format!("{}s", name.to_string().to_case(Case::Lower))
-    };
-
-    let rename = if let SqlModel::Rename(rename) = attrs
-        .get(&SqlModelKey::Rename)
-        .unwrap_or(&SqlModel::Rename(Case::Snake))
-    {
-        rename
-    } else {
-        todo!()
-    };
-
-    let create_table_function = create_table_tokens(&table_name, rename.clone(), &fields);
-    let drop_table_query = syn::LitStr::new(
-        &format!("DROP TABLE IF EXISTS {};", table_name),
-        proc_macro2::Span::call_site(),
-    );
+    let create_table_function = model.queries();
+    let drop_table_function = model.drop_function();
     let insert = model.insert_function();
     let find_one = model.find_one_function();
     let find = model.find_function();
@@ -65,17 +40,10 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             #create_table_function
+            #drop_table_function
             #insert
             #find_one
             #find
-
-            pub async fn drop_table(&self) -> std::result::Result<(), sqlx::Error> {
-                sqlx::query(#drop_table_query)
-                    .execute(&self.pool)
-                    .await?;
-
-                Ok(())
-            }
         }
     };
 
@@ -93,6 +61,8 @@ pub enum SqlAttributeKey {
     OneToMany,
     Unique,
     Auto,
+    Version,
+    Nullable,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -123,6 +93,8 @@ pub enum SqlAttribute {
     },
     Unique,
     Auto(Vec<AutoOperation>),
+    Version(String),
+    Nullable,
 }
 
 #[derive(Debug)]
@@ -136,287 +108,12 @@ enum OpenedOffset {
     ForeignKey,
     ForeignKeyType,
     Auto,
+    Version,
 }
 
 #[derive(Debug)]
 pub struct SqlAttributes {
     pub attrs: HashMap<SqlAttributeKey, SqlAttribute>,
-}
-
-impl SqlAttributes {
-    fn is_primary_key(&self) -> bool {
-        self.attrs.contains_key(&SqlAttributeKey::PrimaryKey)
-    }
-
-    fn to_primary_type(&self, var_type: &syn::Type) -> Option<String> {
-        match var_type {
-            syn::Type::Path(ref type_path) => {
-                let type_ident = type_path.path.segments.last().unwrap().ident.to_string();
-                let type_str = if let Some(SqlAttribute::SqlType(type_str)) =
-                    self.attrs.get(&SqlAttributeKey::SqlType)
-                {
-                    type_str.to_string()
-                } else {
-                    match type_ident.as_str() {
-                        "u64" | "i64" => "BIGINT".to_string(),
-                        "String" => "TEXT".to_string(),
-                        "bool" => "BOOLEAN".to_string(),
-                        "i32" => "INTEGER".to_string(),
-                        "f64" => "DOUBLE PRECISION".to_string(),
-
-                        _ => return None,
-                    }
-                };
-
-                let type_str = if self.attrs.contains_key(&SqlAttributeKey::PrimaryKey) {
-                    format!("{} PRIMARY KEY", type_str)
-                } else {
-                    type_str
-                };
-
-                Some(type_str)
-            }
-            _ => {
-                tracing::debug!("field type: {:?}", var_type);
-                None
-            }
-        }
-    }
-
-    fn to_field_name(&self, var_name: &str, case: Case) -> String {
-        format!("{}", var_name.to_case(case))
-    }
-
-    fn to_field_type(&self, var_type: &syn::Type) -> Option<String> {
-        if self.attrs.contains_key(&SqlAttributeKey::ManyToMany)
-            || self.attrs.contains_key(&SqlAttributeKey::ManyToOne)
-        {
-            return None;
-        }
-
-        match var_type {
-            syn::Type::Path(ref type_path) => {
-                let type_ident = type_path.path.segments.last().unwrap().ident.to_string();
-                let type_str = if let Some(SqlAttribute::SqlType(type_str)) =
-                    self.attrs.get(&SqlAttributeKey::SqlType)
-                {
-                    type_str.to_string()
-                } else if self.attrs.contains_key(&SqlAttributeKey::PrimaryKey) {
-                    "BIGINT".to_string()
-                } else {
-                    match type_ident.as_str() {
-                        "u64" | "i64" => "BIGINT NOT NULL".to_string(),
-                        "String" => "TEXT NOT NULL".to_string(),
-                        "bool" => "BOOLEAN NOT NULL".to_string(),
-                        "u32" | "i32" => "INTEGER NOT NULL".to_string(),
-                        "f64" => "DOUBLE PRECISION NOT NULL".to_string(),
-                        "Option<u64>" | "Option<i64>" => "BIGINT".to_string(),
-                        "Option<String>" => "TEXT".to_string(),
-                        "Option<bool>" => "BOOLEAN".to_string(),
-                        "Option<i32>" => "INTEGER".to_string(),
-                        "Option<f64>" => "DOUBLE PRECISION".to_string(),
-
-                        _ => return None,
-                    }
-                };
-
-                let type_str = if self.attrs.contains_key(&SqlAttributeKey::PrimaryKey) {
-                    if self.attrs.contains_key(&SqlAttributeKey::SqlType) {
-                        format!("{} PRIMARY KEY", type_str)
-                    } else {
-                        format!("{} PRIMARY KEY  GENERATED ALWAYS AS IDENTITY", type_str)
-                    }
-                } else {
-                    type_str
-                };
-
-                let type_str = if self.attrs.contains_key(&SqlAttributeKey::Unique) {
-                    format!("{} UNIQUE", type_str)
-                } else {
-                    type_str
-                };
-
-                Some(type_str)
-            }
-            _ => {
-                tracing::debug!("field type: {:?}", var_type);
-                None
-            }
-        }
-    }
-
-    fn get_field_query(&self, var_name: &str, case: Case, var_type: &syn::Type) -> Option<String> {
-        let name = self.to_field_name(var_name, case);
-
-        if let Some(SqlAttribute::ManyToOne {
-            table_name,
-            foreign_key,
-            foreign_key_type,
-        }) = self.attrs.get(&SqlAttributeKey::ManyToOne)
-        {
-            Some(format!(
-                "{} {} NOT NULL, FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE",
-                // Foreign field
-                name,
-                foreign_key_type,
-                // Foreign key
-                name,
-                table_name,
-                foreign_key.to_case(case),
-            ))
-        } else if let Some(SqlAttribute::OneToMany { .. }) =
-            self.attrs.get(&SqlAttributeKey::OneToMany)
-        {
-            None
-        } else {
-            self.to_field_type(var_type)
-                .map(|field_type| format!("{} {}", name, field_type))
-        }
-    }
-
-    fn to_relation_field_type(&self, var_type: &syn::Type) -> Option<String> {
-        match var_type {
-            syn::Type::Path(ref type_path) => {
-                let type_ident = type_path.path.segments.last().unwrap().ident.to_string();
-                let type_str = if let Some(SqlAttribute::SqlType(type_str)) =
-                    self.attrs.get(&SqlAttributeKey::SqlType)
-                {
-                    type_str.to_string()
-                } else {
-                    match type_ident.as_str() {
-                        "u64" | "i64" => "BIGINT NOT NULL".to_string(),
-                        "String" => "TEXT NOT NULL".to_string(),
-                        "bool" => "BOOLEAN NOT NULL".to_string(),
-                        "i32" => "INTEGER NOT NULL".to_string(),
-                        "f64" => "DOUBLE PRECISION NOT NULL".to_string(),
-                        "Option<u64>" | "Option<i64>" => "BIGINT".to_string(),
-                        "Option<String>" => "TEXT".to_string(),
-                        "Option<bool>" => "BOOLEAN".to_string(),
-                        "Option<i32>" => "INTEGER".to_string(),
-                        "Option<f64>" => "DOUBLE PRECISION".to_string(),
-
-                        _ => return None,
-                    }
-                };
-
-                Some(type_str)
-            }
-            _ => {
-                tracing::debug!("field type: {:?}", var_type);
-                None
-            }
-        }
-    }
-
-    fn get_additional_query(
-        &self,
-        this_table_name: &str,
-        this_primary_key_name: &str,
-        this_primary_key_type: &str,
-        var_name: &str,
-        var_type: &syn::Type,
-        case: Case,
-    ) -> Vec<String> {
-        tracing::debug!("additional query for {var_name}");
-        let mut query = vec![];
-        tracing::debug!("attrs {:?}", self.attrs);
-
-        let this_primary_key_type = this_primary_key_type.replace("PRIMARY KEY", "");
-
-        if let Some(SqlAttribute::ManyToMany {
-            table_name,
-            foreign_table_name,
-            foreign_key: foreign_primary_key,
-            foreign_key_type,
-        }) = self.attrs.get(&SqlAttributeKey::ManyToMany)
-        {
-            tracing::debug!("additional query for many to many relation: {var_name}");
-            let this_key = format!("{}_{}", this_table_name, this_primary_key_name).to_case(case);
-            let foreign_pk =
-                format!("{}_{}", foreign_table_name, foreign_primary_key).to_case(case);
-
-            query.push(format!(
-                "CREATE TABLE IF NOT EXISTS {} ({} {} NOT NULL, {} {} NOT NULL, {} PRIMARY KEY ({}, {}), FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE, FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({}); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({});",
-                // Table name for many to many relation
-                table_name,
-                // key for this table
-                this_key,
-                this_primary_key_type,
-                // key for other table
-                foreign_pk,
-                foreign_key_type,
-                // Additionaly fields
-                match self.to_relation_field_type(var_type) {
-                    Some(field_type) =>
-                        format!("{} {},", self.to_field_name(var_name, case), &field_type),
-                    None => "".to_string(),
-                },
-                // Composited primary key
-                this_key,
-                foreign_pk,
-                // Foreign key for this table key
-                this_key,
-                this_table_name,
-                this_primary_key_name.to_case(case),
-                // Foreign key for other table
-                foreign_pk,
-                foreign_table_name,
-                foreign_primary_key.to_case(case),
-                // Index for this table key
-                table_name,
-                this_key.to_case(Case::Snake),
-                table_name,
-                this_key,
-                // Index for foreign table key
-                table_name,
-                foreign_pk.to_case(Case::Snake),
-                table_name,
-                foreign_pk
-            ));
-        }
-
-        if let Some(SqlAttribute::ManyToOne {
-            table_name: foreign_table,
-            foreign_key,
-            ..
-        }) = self.attrs.get(&SqlAttributeKey::ManyToOne)
-        {
-            tracing::debug!("additional query for many to one relation: {var_name}");
-            query.push(format!(
-                "CREATE INDEX idx_{}_{} ON {}({});",
-                // index name
-                foreign_table,
-                foreign_key.to_case(Case::Snake),
-                // indexing field
-                foreign_table,
-                foreign_key.to_case(case),
-            ));
-        }
-
-        if let Some(SqlAttribute::Auto(v)) = self.attrs.get(&SqlAttributeKey::Auto) {
-            tracing::debug!("additional query for auto: {var_name}");
-            if v.contains(&AutoOperation::Update) {
-                query.push(format!(
-                    r#"DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_trigger
-        WHERE tgname = 'trigger_{}_set_timestamps'
-        AND tgrelid = '{}'::regclass
-    ) THEN
-        CREATE TRIGGER trigger_{}_set_timestamps
-        BEFORE INSERT OR UPDATE ON {}
-        FOR EACH ROW
-        EXECUTE FUNCTION set_timestamps();
-    END IF;
-END $$"#,
-                    this_table_name, this_table_name, this_table_name, this_table_name,
-                ));
-            }
-        }
-        query
-    }
 }
 
 pub fn parse_field_attr(field: &Field) -> SqlAttributes {
@@ -441,6 +138,10 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             "primary_key" => {
                                 field_attrs
                                     .insert(SqlAttributeKey::PrimaryKey, SqlAttribute::PrimaryKey);
+                            }
+                            "nullable" => {
+                                field_attrs
+                                    .insert(SqlAttributeKey::Nullable, SqlAttribute::Nullable);
                             }
                             "unique" => {
                                 field_attrs.insert(SqlAttributeKey::Unique, SqlAttribute::Unique);
@@ -469,7 +170,16 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             "auto" => {
                                 opened = OpenedOffset::Auto;
                             }
+                            "version" => {
+                                opened = OpenedOffset::Version;
+                            }
                             _ => match opened {
+                                OpenedOffset::Version => {
+                                    field_attrs.insert(
+                                        SqlAttributeKey::Version,
+                                        SqlAttribute::Version(id),
+                                    );
+                                }
                                 OpenedOffset::Type => {
                                     field_attrs.insert(
                                         SqlAttributeKey::SqlType,
@@ -669,79 +379,6 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
     }
 
     SqlAttributes { attrs: field_attrs }
-}
-
-fn create_table_tokens(table_name: &str, case: Case, fields: &Fields) -> proc_macro2::TokenStream {
-    let mut create_query_fields = vec![];
-    let mut additional_queries = vec![];
-
-    let fields = if let Fields::Named(named_fields) = fields {
-        named_fields.named.clone()
-    } else {
-        return quote! {};
-    };
-    let mut primary_key_name = "id".to_string().to_case(case);
-    let mut primary_key_type = "TEXT".to_string();
-
-    for field in fields {
-        let field = field.clone();
-        let attrs = parse_field_attr(&field);
-
-        let field_name = field.ident.unwrap();
-        let field_type = field.ty;
-
-        if attrs.is_primary_key() {
-            primary_key_name = field_name.to_string().to_case(case);
-            primary_key_type = attrs
-                .to_primary_type(&field_type)
-                .unwrap_or_else(|| "TEXT".to_string());
-        }
-
-        match attrs.get_field_query(&field_name.to_string(), case, &field_type) {
-            Some(query) => {
-                create_query_fields.push(query);
-            }
-            None => {}
-        }
-
-        additional_queries.extend(attrs.get_additional_query(
-            table_name,
-            &primary_key_name,
-            &primary_key_type,
-            &field_name.to_string(),
-            &field_type,
-            case,
-        ));
-    }
-
-    // let additional_queries = additional_queries.join("####");
-    // let queries = syn::LitStr::new(&additional_queries, proc_macro2::Span::call_site());
-    let queries: Vec<syn::LitStr> = additional_queries
-        .iter()
-        .map(|item| syn::LitStr::new(item, proc_macro2::Span::call_site()))
-        .collect();
-
-    let q = format!(
-        "CREATE TABLE IF NOT EXISTS {} ({});",
-        table_name,
-        create_query_fields.join(","),
-    );
-    let create_query_output = syn::LitStr::new(&q, proc_macro2::Span::call_site());
-    tracing::debug!("create table query: {}", q);
-
-    quote! {
-        pub async fn create_table(&self) -> std::result::Result<(), sqlx::Error> {
-            sqlx::query(#create_query_output).execute(&self.pool).await?;
-
-            for query in [#(#queries),*] {
-                tracing::debug!("Execute queries: {}", query);
-                sqlx::query(query).execute(&self.pool).await?;
-            }
-
-            Ok(())
-        }
-
-    }
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]

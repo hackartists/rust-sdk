@@ -423,13 +423,14 @@ checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
 name = "by-axum"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "aide",
  "axum 0.8.1",
  "by-types",
  "dioxus-aws",
  "http",
+ "jsonwebtoken",
  "lambda_http",
  "lambda_runtime",
  "rest-api",
@@ -449,8 +450,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "by-components"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "tracing",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "by-macros"
-version = "0.6.2"
+version = "0.6.4"
 dependencies = [
  "by-axum",
  "by-types",
@@ -473,7 +485,7 @@ dependencies = [
 
 [[package]]
 name = "by-types"
-version = "0.3.2"
+version = "0.3.5"
 dependencies = [
  "aide",
  "axum 0.8.1",
@@ -481,6 +493,7 @@ dependencies = [
  "schemars",
  "serde",
  "sqlx",
+ "tracing",
  "validator",
 ]
 
@@ -2278,6 +2291,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonwebtoken"
+version = "9.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9ae10193d25051e74945f1ea2d0b42e03cc3b890f7e4cc5faa44997d808193f"
+dependencies = [
+ "base64 0.21.7",
+ "js-sys",
+ "pem",
+ "ring",
+ "serde",
+ "serde_json",
+ "simple_asn1",
+]
+
+[[package]]
 name = "keyboard-types"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2777,6 +2805,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "pem"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e459365e590736a54c3fa561947c84837534b8e9af6fc5bf781307e82658fae"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+]
+
+[[package]]
 name = "pem-rfc7468"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3092,7 +3130,7 @@ dependencies = [
 
 [[package]]
 name = "rest-api"
-version = "0.1.4"
+version = "0.1.6"
 dependencies = [
  "base64 0.22.1",
  "candid",
