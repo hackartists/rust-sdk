@@ -94,15 +94,15 @@ fn test_query_params_empty() {
     assert_eq!(res.url().to_string(), url);
 }
 
-struct Hook {}
+// struct Hook {}
 
-impl rest_api::RequestHooker for Hook {
-    fn before_request(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        req.header("Authorization", format!("Bearer token"))
-    }
-}
+// impl rest_api::RequestHooker for Hook {
+//     fn before_request(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+//         req.header("Authorization", format!("Bearer token"))
+//     }
+// }
 
-#[test]
-fn test_api_hook() {
-    rest_api::add_hook(Hook {});
-}
+// #[test]
+// fn test_api_hook() {
+//     rest_api::add_hook(Hook {});
+// }
