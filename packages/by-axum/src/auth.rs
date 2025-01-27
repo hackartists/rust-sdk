@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr, time::SystemTime};
+use std::{str::FromStr, time::SystemTime};
 
 use crate::axum::{
     body::Body,
@@ -20,6 +20,7 @@ pub fn set_auth_config(secret: AuthConfig) {
 }
 
 pub fn get_auth_config() -> &'static AuthConfig {
+    #[allow(static_mut_refs)]
     unsafe {
         AUTH_CONFIG
             .as_ref()
