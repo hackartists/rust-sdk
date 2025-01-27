@@ -153,7 +153,7 @@ pub fn load_headers(mut req: RequestBuilder) -> RequestBuilder {
 }
 
 pub async fn send(req: RequestBuilder) -> reqwest::Result<reqwest::Response> {
-    let req = run_hooks(req);
+    // let req = run_hooks(req);
     let req = sign_request(req);
     let req = load_headers(req);
     let res = req.send().await;
