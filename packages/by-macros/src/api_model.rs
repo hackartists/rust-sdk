@@ -281,11 +281,19 @@ fn generate_read_struct(
                     }
                     let convert = match to_string(&field_type).as_str() {
                         "String" => quote! {},
-                        ty => {
+                        _ => {
                             let fname = syn::Ident::new(
                                 &format!(
                                     "parse_{}_of_{}_read",
-                                    ty,
+                                    field_name.clone().unwrap().to_string().to_case(Case::Snake),
+                                    struct_name.to_string().to_case(Case::Snake)
+                                ),
+                                struct_name.span(),
+                            );
+                            let fname_str = syn::LitStr::new(
+                                &format!(
+                                    "parse_{}_of_{}_read",
+                                    field_name.clone().unwrap().to_string().to_case(Case::Snake),
                                     struct_name.to_string().to_case(Case::Snake)
                                 ),
                                 struct_name.span(),
@@ -310,7 +318,7 @@ fn generate_read_struct(
                                 }
                             });
                             quote! {
-                                #[serde(deserialize_with = "#fname")]
+                                #[serde(deserialize_with = #fname_str)]
                             }
                         }
                     };
@@ -805,11 +813,20 @@ fn generate_query_struct(
 
         let convert = match to_string(&field_type).as_str() {
             "String" => quote! {},
-            ty => {
+            _ => {
                 let fname = syn::Ident::new(
                     &format!(
                         "parse_{}_of_{}_query",
-                        ty,
+                        field_name.clone().unwrap().to_string().to_case(Case::Snake),
+                        struct_name.to_string().to_case(Case::Snake)
+                    ),
+                    struct_name.span(),
+                );
+
+                let fname_str = syn::LitStr::new(
+                    &format!(
+                        "parse_{}_of_{}_query",
+                        field_name.clone().unwrap().to_string().to_case(Case::Snake),
                         struct_name.to_string().to_case(Case::Snake)
                     ),
                     struct_name.span(),
@@ -834,7 +851,7 @@ fn generate_query_struct(
                     }
                 });
                 quote! {
-                    #[serde(deserialize_with = "#fname")]
+                    #[serde(deserialize_with = #fname_str)]
                 }
             }
         };
@@ -881,11 +898,19 @@ fn generate_query_struct(
 
                     let convert = match to_string(&field_type).as_str() {
                         "String" => quote! {},
-                        ty => {
+                        _ => {
                             let fname = syn::Ident::new(
                                 &format!(
                                     "parse_{}_of_{}_query",
-                                    ty,
+                                    field_name.clone().unwrap().to_string().to_case(Case::Snake),
+                                    struct_name.to_string().to_case(Case::Snake)
+                                ),
+                                struct_name.span(),
+                            );
+                            let fname_str = syn::LitStr::new(
+                                &format!(
+                                    "parse_{}_of_{}_query",
+                                    field_name.clone().unwrap().to_string().to_case(Case::Snake),
                                     struct_name.to_string().to_case(Case::Snake)
                                 ),
                                 struct_name.span(),
@@ -910,7 +935,7 @@ fn generate_query_struct(
                                 }
                             });
                             quote! {
-                                #[serde(deserialize_with = "#fname")]
+                                #[serde(deserialize_with = #fname_str)]
                             }
                         }
                     };

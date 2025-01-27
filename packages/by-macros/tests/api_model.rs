@@ -6,9 +6,22 @@ use by_macros::api_model;
 
 pub type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+pub struct QueryResponse<T> {
+    pub items: Vec<T>,
+    pub total_count: i64,
+}
+
+impl<T> From<(Vec<T>, i64)> for QueryResponse<T> {
+    fn from((items, total_count): (Vec<T>, i64)) -> Self {
+        QueryResponse { items, total_count }
+    }
+}
+
 #[cfg(not(feature = "server"))]
 #[derive(Eq, PartialEq)]
-#[api_model(base = "/topics/v1", iter_type=Vec, table = topics)] // rename is supported but usually use default(snake_case)
+#[api_model(base = "/topics/v1", iter_type=QueryResponse, table = topics)] // rename is supported but usually use default(snake_case)
 pub struct Topic {
     #[api_model(summary, primary_key)]
     pub id: String,
@@ -40,7 +53,7 @@ pub struct Topic {
 
 #[cfg(not(feature = "server"))]
 #[derive(Eq, PartialEq)]
-#[api_model(base = "/topics/v1/:topic-id/comments", iter_type=Vec)]
+#[api_model(base = "/topics/v1/:topic-id/comments", iter_type=QueryResponse)]
 pub struct Comment {
     pub id: String,
     #[api_model(action = comment, related = String, read_action = search_by)]
@@ -181,7 +194,7 @@ mod server_tests {
     use super::*;
 
     #[derive(validator::Validate)]
-    #[api_model(base = "/users/v1", read_action = user_info, table = test_users, iter_type=Vec)]
+    #[api_model(base = "/users/v1", read_action = user_info, table = test_users, iter_type=QueryResponse)]
     pub struct User {
         #[api_model(primary_key)]
         pub id: String,
