@@ -176,7 +176,7 @@ mod server_tests {
     use super::*;
 
     #[derive(validator::Validate)]
-    #[api_model(base = "/users/v1", read_action = user_info, table = users, iter_type=Vec)]
+    #[api_model(base = "/users/v1", read_action = user_info, table = test_users, iter_type=Vec)]
     pub struct User {
         #[api_model(primary_key)]
         pub id: String,

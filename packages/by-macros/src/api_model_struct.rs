@@ -321,7 +321,7 @@ impl ApiModel<'_> {
         let (ref primary_key_name, ref primary_key_type) = self.primary_key;
 
         for (sql_field_name, field) in self.fields.iter() {
-            match field.get_field_query_line() {
+            match field.create_field_query_line() {
                 Some(query) => {
                     create_query_fields.push(query);
                 }
@@ -514,19 +514,28 @@ impl ApiModel<'_> {
 
         let call_map = self.call_map();
 
-        let output = quote! {
-            pub async fn find_one(&self, param: &#read_action) -> Result<#name> {
-                use sqlx::Row;
-                let mut i = 0;
+        let for_where = if fields.len() > 0 {
+            quote! {
                 let mut where_clause = vec![];
                 #(#where_clause)*
-
                 let where_clause_str = where_clause.join(" AND ");
                 let query = if where_clause.len() > 0 {
                     format!("{} WHERE {}", #q, where_clause_str)
                 } else {
                     format!("{}", #q)
                 };
+            }
+        } else {
+            quote! {
+                let query = format!("{}", #q);
+            }
+        };
+
+        let output = quote! {
+            pub async fn find_one(&self, param: &#read_action) -> Result<#name> {
+                use sqlx::Row;
+                let mut i = 0;
+                #for_where
                 tracing::debug!("{} query {}", #fmt_str, query);
 
                 let mut q = sqlx::query(&query);
@@ -1106,6 +1115,7 @@ pub struct ApiField {
     pub unique: bool,
     pub auto: Vec<AutoOperation>,
     pub nullable: bool,
+    pub skip: bool,
     pub omitted: bool,
     pub rust_type: String,
 
@@ -1243,7 +1253,11 @@ END $$;
         vec![q]
     }
 
-    fn get_field_query_line(&self) -> Option<String> {
+    fn create_field_query_line(&self) -> Option<String> {
+        if self.skip {
+            return None;
+        }
+
         let name = self.name.to_case(self.rename);
 
         let mut line = match &self.relation {
@@ -1267,6 +1281,11 @@ END $$;
             _ => format!("{} {}", name, self.r#type),
         };
 
+        if self.primary_key && self.r#type == "BIGINT" {
+            line = format!("{} PRIMARY KEY GENERATED ALWAYS AS IDENTITY", line);
+            return Some(line);
+        }
+
         if self.nullable {
             line = format!("{} NULL", line);
         } else {
@@ -1275,10 +1294,6 @@ END $$;
 
         if self.unique {
             line = format!("{} UNIQUE", line);
-        }
-
-        if self.primary_key && self.r#type == "BIGINT" {
-            line = format!("{} PRIMARY KEY GENERATED ALWAYS AS IDENTITY", line);
         }
 
         Some(line)
@@ -1503,12 +1518,15 @@ impl ApiField {
             _ => vec![],
         };
 
+        let skip = f.attrs.contains_key(&SqlAttributeKey::Skip);
+
         let omitted = failed_type_inference
             || match relation {
                 Some(Relation::OneToMany { .. }) => true,
                 _ => false,
             }
             || primary_key
+            || skip
             || !auto.is_empty();
 
         let unique = f.attrs.contains_key(&SqlAttributeKey::Unique);
@@ -1521,6 +1539,7 @@ impl ApiField {
             unique,
             auto,
             nullable,
+            skip,
             omitted,
             rust_type,
             summary,
