@@ -46,7 +46,7 @@ pub struct IconColorTheme {
 impl Default for IconColorTheme {
     fn default() -> Self {
         IconColorTheme {
-            primary: "#B0BEC5".to_string(),
+            primary: "#8588AB".to_string(),
         }
     }
 }
