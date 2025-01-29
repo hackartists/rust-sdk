@@ -53,6 +53,7 @@ fn main() {
     }
 }
 
+#[allow(dead_code)]
 fn App() -> Element {
     rsx! {
         Router::<Route> {}
@@ -73,12 +74,7 @@ fn Home() -> Element {
     let mut text = use_signal(|| String::from("..."));
 
     rsx! {
-        Link {
-            to: Route::Blog {
-                id: count()
-            },
-            "Go to blog"
-        }
+        Link { to: Route::Blog { id: count() }, "Go to blog" }
         div {
             h1 { "High-Five counter: {count}" }
             button { onclick: move |_| count += 1, "Up high!" }
@@ -93,7 +89,7 @@ fn Home() -> Element {
                 },
                 "Get Server Data"
             }
-            p { "Server data: {text}"}
+            p { "Server data: {text}" }
         }
     }
 }

@@ -5,7 +5,7 @@ edition = "2021"
 description = "Library for deploying Dioxus apps to AWS Serverless (AWS Lambda, S3, CloudFront, Route53)."
 license = "MIT"
 keywords = ["dioxus", "fullstack", "aws", "serverless"]
-repository = "https://github.com/hackartists/dioxus-aws.git"
+repository = "https://github.com/biyard/rust-sdk/tree/main/packages/dioxus-aws.git"
 
 [dependencies]
 dioxus = { workspace = true,  features = ["router"] }
