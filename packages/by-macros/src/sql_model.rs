@@ -196,7 +196,7 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                             table_name: id,
                                             foreign_table_name: "".to_string(),
                                             foreign_key: "id".to_string(),
-                                            foreign_key_type: "TEXT".to_string(),
+                                            foreign_key_type: "BIGINT".to_string(),
                                         },
                                     );
                                     relation = Some(SqlAttributeKey::ManyToMany);
@@ -208,7 +208,7 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                         SqlAttribute::ManyToOne {
                                             table_name: id,
                                             foreign_key: "id".to_string(),
-                                            foreign_key_type: "TEXT".to_string(),
+                                            foreign_key_type: "BIGINT".to_string(),
                                         },
                                     );
                                     relation = Some(SqlAttributeKey::ManyToOne);

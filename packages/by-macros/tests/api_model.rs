@@ -336,7 +336,10 @@ mod server_tests {
         assert_eq!(user.principal, principal);
         assert_eq!(user.email, email);
 
-        let (users_1, total) = match repo.find(&UserQuery::new(5).with_page(1)).await {
+        let QueryResponse {
+            items: users_1,
+            total_count: total,
+        } = match repo.find(&UserQuery::new(5).with_page(1)).await {
             Ok(v) => v,
             Err(e) => {
                 assert!(false, "Failed to fetch {e}");
@@ -349,7 +352,10 @@ mod server_tests {
             "incorrect length"
         );
 
-        let (users_2, total2) = match repo.find(&UserQuery::new(2).with_page(1)).await {
+        let QueryResponse {
+            items: users_2,
+            total_count: total2,
+        } = match repo.find(&UserQuery::new(2).with_page(1)).await {
             Ok(v) => v,
             Err(e) => {
                 assert!(false, "Failed to fetch {e}");
