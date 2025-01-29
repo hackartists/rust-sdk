@@ -12,6 +12,22 @@ use tower::{Layer, Service};
 
 use crate::docs::docs_routes;
 
+macro_rules! open_api_path {
+    ($path:expr) => {{
+        $path
+            .split("/")
+            .map(|s| {
+                if s.starts_with(":") {
+                    format!("{{{}}}", &s[1..]) // `:`를 제거하고 `{}`로 감싸기
+                } else {
+                    s.to_string()
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("/")
+    }};
+}
+
 pub struct BiyardRouter<S = ()> {
     pub open_api: OpenApi,
     pub inner: ApiRouter<S>,
@@ -48,17 +64,7 @@ where
     }
 
     pub fn route(self, path: &str, method_router: ApiMethodRouter<S>) -> Self {
-        let path = path
-            .split("/")
-            .map(|s| {
-                if s.starts_with(":") {
-                    format!("{{{}}}", s.replace(":", ""))
-                } else {
-                    s.to_string()
-                }
-            })
-            .collect::<Vec<String>>()
-            .join("/");
+        let path = open_api_path!(path);
 
         Self {
             inner: self.inner.api_route(&path, method_router),
@@ -72,8 +78,10 @@ where
         T::Response: IntoResponse,
         T::Future: Send + 'static,
     {
+        let path = open_api_path!(path);
+
         Self {
-            inner: self.inner.route_service(path, service),
+            inner: self.inner.route_service(&path, service),
             ..self
         }
     }
@@ -82,8 +90,9 @@ where
     where
         R: Into<BiyardRouter<S>>,
     {
+        let path = open_api_path!(path);
         Self {
-            inner: self.inner.nest(path, router.into().inner),
+            inner: self.inner.nest(&path, router.into().inner),
             ..self
         }
     }
@@ -94,8 +103,9 @@ where
         T::Response: IntoResponse,
         T::Future: Send + 'static,
     {
+        let path = open_api_path!(path);
         Self {
-            inner: self.inner.nest_service(path, service),
+            inner: self.inner.nest_service(&path, service),
             ..self
         }
     }
