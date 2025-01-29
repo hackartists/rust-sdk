@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+use by_components::theme::ColorTheme;
 use dioxus::prelude::*;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -81,6 +82,7 @@ pub fn default() -> Element {
 pub fn PopupZone() -> Element {
     let mut popup: PopupService = use_context();
     let mut hover_close = use_signal(|| false);
+    let color_theme = try_use_context::<ColorTheme>().unwrap_or_default();
 
     rsx! {
         div {
@@ -98,16 +100,15 @@ pub fn PopupZone() -> Element {
             },
             if popup.is_opened() {
                 div {
-                    class: "relative bg-[#424563] rounded-[12px] border-[#292B3C] border-[1px] p-[25px] min-w-[350px]",
+                    class: "relative rounded-[12px] border-[#292B3C] border-[1px] p-[25px] min-w-[350px]",
+                    background: "{color_theme.popup.background}",
                     onclick: move |e| {
                         e.stop_propagation();
                     },
                     if (popup.close)() {
-                        div {
-                            class: format!(
-                                "absolute top-[25px] right-[25px] rounded-[4px] cursor-pointer {}",
-                                if hover_close() { "bg-[{theme.background}]" } else { "" },
-                            ),
+                        button {
+                            class: "absolute top-[25px] right-[25px] rounded-[4px] cursor-pointer",
+                            background: if hover_close() { "{color_theme.button.primary}" } else { "transparent" },
                             onclick: move |_| {
                                 popup.close();
                             },
@@ -117,7 +118,7 @@ pub fn PopupZone() -> Element {
                             onmouseleave: move |_| {
                                 hover_close.set(false);
                             },
-                            Close { color: if hover_close() { "#74789E" } else { "white" } }
+                            Close { color: if hover_close() { "{color_theme.text.secondary}" } else { "{color_theme.text.primary}" } }
                         }
                     }
                     div {
