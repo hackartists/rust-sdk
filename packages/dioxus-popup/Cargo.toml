@@ -9,3 +9,4 @@ repository = "https://github.com/biyard/rust-sdk/tree/main/packages/dioxus-popup
 
 [dependencies]
 dioxus.workspace = true
+by-components.workspace = true

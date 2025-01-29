@@ -8,6 +8,7 @@ edition = "2021"
 license = "Apache-2.0"
 
 [workspace.dependencies]
+by-components = { path = "packages/by-components", version = "0.1.*" }
 by-axum = { path = "packages/by-axum", version = "0.2.*" }
 by-types = { path = "packages/by-types", version = "0.3.*" }
 rest-api = { path = "packages/rest-api", version = "0.1.*" }
