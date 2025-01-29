@@ -1,5 +1,23 @@
 [workspace]
-members = ["packages/by-axum","examples/basic-api", "packages/rest-api", "packages/by-types", "packages/by-macros", "packages/dioxus-popup", "packages/google-wallet", "packages/dioxus-oauth", "examples/oauth", "packages/dioxus-translate-macro", "packages/dioxus-translate", "packages/dioxus-translate-types", "packages/by-components"]
+members = [
+  "examples/basic-api",
+  "examples/oauth",
+  "examples/auth",
+  "examples/basic",
+
+  "packages/by-axum",
+  "packages/rest-api",
+  "packages/by-types",
+  "packages/by-macros",
+  "packages/dioxus-popup",
+  "packages/google-wallet",
+  "packages/dioxus-oauth",
+  "packages/dioxus-translate-macro",
+  "packages/dioxus-translate",
+  "packages/dioxus-translate-types",
+  "packages/by-components",
+  "packages/dioxus-aws",
+]
 resolver = "2"
 
 [workspace.package]
@@ -12,12 +30,16 @@ by-components = { path = "packages/by-components", version = "0.1.*" }
 by-axum = { path = "packages/by-axum", version = "0.2.*" }
 by-types = { path = "packages/by-types", version = "0.3.*" }
 rest-api = { path = "packages/rest-api", version = "0.1.*" }
+dioxus-popup = { path = "packages/dioxus-popup", version = "0.1.*" }
+dioxus-aws = { path = "packages/dioxus-aws" }
 
 aide = { version = "0.14.0", features = ["axum", "axum-query", "axum-extra", "axum-extra-headers", "axum-extra-query", "axum-json", "swagger", "redoc", "scalar", "macros"] }
 axum = "0.8.1"
 schemars = { version = "0.8.10", features = ["uuid1"] }
-dioxus = { version = "0.6.*" }
-dioxus-popup = { path = "./packages/dioxus-popup", version = "0.1.*" }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.133"
 reqwest = { version = "0.12.5", features = ["blocking", "json", "multipart"] }
+
+dioxus = { version = "0.6.*" }
+dioxus-fullstack = { version = "0.6.*" }
+dioxus-cli-config = { version = "0.6.*" }

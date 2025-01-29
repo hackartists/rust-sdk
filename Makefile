@@ -1,4 +1,4 @@
-PACKAGES=by-types by-macros rest-api  by-axum by-components dioxus-oauth dioxus-popup dioxus-translate-types dioxus-translate-macro dioxus-translate google-wallet
+PACKAGES=by-types by-macros rest-api dioxus-aws by-axum by-components dioxus-oauth dioxus-popup dioxus-translate-types dioxus-translate-macro dioxus-translate google-wallet
 
 .PHONY: publish
 publish: $(patsubst %,publish.%,$(PACKAGES))
