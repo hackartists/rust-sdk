@@ -166,7 +166,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-dynamodb",
  "dioxus",
- "dioxus-aws 0.6.14",
+ "dioxus-aws 0.6.16",
  "dioxus-logger 0.5.1",
  "serde",
  "tokio",
@@ -717,7 +717,7 @@ name = "basic"
 version = "0.1.0"
 dependencies = [
  "dioxus",
- "dioxus-aws 0.6.14",
+ "dioxus-aws 0.6.16",
  "dioxus-logger 0.5.1",
  "serde",
 ]
@@ -1270,7 +1270,18 @@ dependencies = [
 
 [[package]]
 name = "dioxus-aws"
-version = "0.6.14"
+version = "0.6.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f12e9247901d92db78a4e007b91e979bc45b6b09c30804115012ac6a3b6fa358"
+dependencies = [
+ "dioxus",
+ "dioxus-fullstack",
+ "tracing",
+]
+
+[[package]]
+name = "dioxus-aws"
+version = "0.6.16"
 dependencies = [
  "axum 0.7.9",
  "axum-core 0.4.5",
@@ -1284,17 +1295,6 @@ dependencies = [
  "tower 0.4.13",
  "tower-layer",
  "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "dioxus-aws"
-version = "0.6.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f12e9247901d92db78a4e007b91e979bc45b6b09c30804115012ac6a3b6fa358"
-dependencies = [
- "dioxus",
- "dioxus-fullstack",
  "tracing",
 ]
 
