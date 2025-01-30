@@ -1078,6 +1078,7 @@ impl<'a> ApiModel<'a> {
 }
 
 #[cfg(feature = "server")]
+#[derive(Debug)]
 pub enum Relation {
     ManyToMany {
         table_name: String,
@@ -1253,16 +1254,18 @@ END $$;
                 table_name,
                 foreign_key,
                 foreign_key_type,
-            }) => format!(
-                "{} {} NOT NULL, FOREIGN KEY ({}) REFERENCES {}({}) ON DELETE CASCADE",
-                // Foreign field
-                name,
-                foreign_key_type,
-                // Foreign key
-                name,
-                table_name,
-                foreign_key.to_case(self.rename),
-            ),
+            }) => {
+                return Some(format!(
+                    "{} {} NOT NULL, FOREIGN KEY ({}) REFERENCES {}({}) ON DELETE CASCADE",
+                    // Foreign field
+                    name,
+                    foreign_key_type,
+                    // Foreign key
+                    name,
+                    table_name,
+                    foreign_key.to_case(self.rename),
+                ));
+            }
             Some(Relation::OneToMany { .. }) => return None,
             // NOTE: ManyToMany will be handled in the additional query.
             //       ManyToMany field not yet tested.
@@ -1271,8 +1274,7 @@ END $$;
 
         if self.primary_key && self.r#type == "BIGINT" {
             line = format!("{} PRIMARY KEY GENERATED ALWAYS AS IDENTITY", line);
-            return Some(line);
-        }
+        };
 
         if self.nullable {
             line = format!("{} NULL", line);
@@ -1283,6 +1285,8 @@ END $$;
         if self.unique {
             line = format!("{} UNIQUE", line);
         }
+
+        tracing::debug!("field creation query for {}: {}", name, line);
 
         Some(line)
     }
@@ -1490,7 +1494,7 @@ impl ApiField {
             _ => None,
         };
 
-        let relation = match f.attrs.get(&SqlAttributeKey::ManyToMany) {
+        let relation = match f.attrs.get(&SqlAttributeKey::Relation) {
             Some(SqlAttribute::ManyToMany {
                 table_name,
                 foreign_table_name,
@@ -1521,8 +1525,13 @@ impl ApiField {
                 foreign_key: foreign_key.to_string(),
             }),
 
-            _ => None,
+            rel => {
+                tracing::debug!("no relation for {:?}", rel);
+                None
+            }
         };
+
+        tracing::debug!("relation: {:?}", relation);
 
         let ((mut r#type, mut nullable), mut failed_type_inference) = match to_type(&field.ty) {
             Some(t) => (t, false),
@@ -1535,17 +1544,20 @@ impl ApiField {
             name
         );
 
-        match &relation {
+        match relation {
             Some(Relation::ManyToOne {
                 ref foreign_key_type,
                 ..
             }) => {
+                tracing::debug!("many to one realtion: {}", foreign_key_type);
                 failed_type_inference = false;
                 r#type = foreign_key_type.to_string();
             }
             Some(Relation::ManyToMany {
-                foreign_key_type, ..
+                ref foreign_key_type,
+                ..
             }) => {
+                tracing::debug!("many to many realtion: {}", foreign_key_type);
                 failed_type_inference = false;
                 r#type = foreign_key_type.to_string();
             }
@@ -1554,6 +1566,7 @@ impl ApiField {
 
         match f.attrs.get(&SqlAttributeKey::SqlType) {
             Some(SqlAttribute::SqlType(t)) => {
+                tracing::debug!("sql type: {}", t);
                 failed_type_inference = false;
                 r#type = t.to_string();
             }
@@ -1561,10 +1574,12 @@ impl ApiField {
         };
 
         if f.attrs.contains_key(&SqlAttributeKey::Nullable) {
+            tracing::debug!("nullable: true");
             nullable = true;
         };
 
         if primary_key {
+            tracing::debug!("primary key: true");
             r#type = "BIGINT".to_string();
         }
 
@@ -1581,8 +1596,12 @@ impl ApiField {
             || primary_key
             || !auto.is_empty();
 
-        let unique = f.attrs.contains_key(&SqlAttributeKey::Unique);
+        tracing::debug!("omitted: {}", omitted);
 
+        let unique = f.attrs.contains_key(&SqlAttributeKey::Unique);
+        tracing::debug!("unique: {}", unique);
+
+        tracing::debug!("ended new for {}:{}", name, rust_type);
         Self {
             name,
             primary_key,

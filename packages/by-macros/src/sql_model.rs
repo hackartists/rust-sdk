@@ -59,9 +59,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 pub enum SqlAttributeKey {
     PrimaryKey,
     SqlType,
-    ManyToMany,
-    ManyToOne,
-    OneToMany,
+    Relation,
     Unique,
     Auto,
     Version,
@@ -132,7 +130,6 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
         if let Meta::List(meta_list) = attr.meta.clone() {
             if meta_list.path.is_ident("api_model") {
                 let mut opened = OpenedOffset::None;
-                let mut relation = None;
 
                 for nested in meta_list.tokens.clone() {
                     if let proc_macro2::TokenTree::Ident(iden) = nested {
@@ -191,7 +188,7 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                 }
                                 OpenedOffset::ManyToMany => {
                                     field_attrs.insert(
-                                        SqlAttributeKey::ManyToMany,
+                                        SqlAttributeKey::Relation,
                                         SqlAttribute::ManyToMany {
                                             table_name: id,
                                             foreign_table_name: "".to_string(),
@@ -199,125 +196,80 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                             foreign_key_type: "BIGINT".to_string(),
                                         },
                                     );
-                                    relation = Some(SqlAttributeKey::ManyToMany);
                                     tracing::debug!("many_to_many: {name}");
                                 }
                                 OpenedOffset::ManyToOne => {
                                     field_attrs.insert(
-                                        SqlAttributeKey::ManyToOne,
+                                        SqlAttributeKey::Relation,
                                         SqlAttribute::ManyToOne {
                                             table_name: id,
                                             foreign_key: "id".to_string(),
                                             foreign_key_type: "BIGINT".to_string(),
                                         },
                                     );
-                                    relation = Some(SqlAttributeKey::ManyToOne);
                                     tracing::debug!("many_to_one: {name}");
                                 }
                                 OpenedOffset::OneToMany => {
                                     field_attrs.insert(
-                                        SqlAttributeKey::OneToMany,
+                                        SqlAttributeKey::Relation,
                                         SqlAttribute::OneToMany {
                                             table_name: id,
                                             foreign_key: "id".to_string(),
                                         },
                                     );
-                                    relation = Some(SqlAttributeKey::OneToMany);
                                     tracing::debug!("one_to_many: {name}");
                                 }
-                                OpenedOffset::ForeignKey => match relation {
-                                    Some(SqlAttributeKey::ManyToOne) => {
-                                        field_attrs.get_mut(&SqlAttributeKey::ManyToOne).map(
-                                            |attr| {
-                                                if let SqlAttribute::ManyToOne {
-                                                    ref mut foreign_key,
-                                                    ..
-                                                } = attr
-                                                {
-                                                    *foreign_key = id
-                                                }
-                                            },
-                                        );
-                                    }
-                                    Some(SqlAttributeKey::ManyToMany) => {
-                                        field_attrs.get_mut(&SqlAttributeKey::ManyToMany).map(
-                                            |attr| {
-                                                if let SqlAttribute::ManyToMany {
-                                                    foreign_key: ref mut foreign_primary_key,
-                                                    ..
-                                                } = attr
-                                                {
-                                                    *foreign_primary_key = id
-                                                }
-                                            },
-                                        );
-                                    }
-                                    Some(SqlAttributeKey::OneToMany) => {
-                                        field_attrs.get_mut(&SqlAttributeKey::OneToMany).map(
-                                            |attr| {
-                                                if let SqlAttribute::OneToMany {
-                                                    ref mut foreign_key,
-                                                    ..
-                                                } = attr
-                                                {
-                                                    *foreign_key = id
-                                                }
-                                            },
-                                        );
-                                    }
-                                    _ => {
-                                        tracing::error!("foreign_key must be defined after many_to_many, one_to_many: {name}");
-                                    }
-                                },
-                                OpenedOffset::ForeignTableName => match relation {
-                                    Some(SqlAttributeKey::ManyToMany) => {
-                                        field_attrs.get_mut(&SqlAttributeKey::ManyToMany).map(
-                                            |attr| {
-                                                if let SqlAttribute::ManyToMany {
-                                                    ref mut foreign_table_name,
-                                                    ..
-                                                } = attr
-                                                {
-                                                    *foreign_table_name = id
-                                                }
-                                            },
-                                        );
-                                    }
-                                    _ => {
-                                        tracing::error!("foreign_table_name must be defined after many_to_many: {name}");
-                                    }
-                                },
-                                OpenedOffset::ForeignKeyType => match relation {
-                                    Some(SqlAttributeKey::ManyToOne) => {
-                                        field_attrs.get_mut(&SqlAttributeKey::ManyToOne).map(
-                                            |attr| {
-                                                if let SqlAttribute::ManyToOne {
-                                                    ref mut foreign_key_type,
-                                                    ..
-                                                } = attr
-                                                {
-                                                    *foreign_key_type = id
-                                                }
-                                            },
-                                        );
-                                    }
-                                    Some(SqlAttributeKey::ManyToMany) => {
-                                        field_attrs.get_mut(&SqlAttributeKey::ManyToMany).map(
-                                            |attr| {
-                                                if let SqlAttribute::ManyToMany {
-                                                    ref mut foreign_key_type,
-                                                    ..
-                                                } = attr
-                                                {
-                                                    *foreign_key_type = id
-                                                }
-                                            },
-                                        );
-                                    }
-                                    _ => {
-                                        tracing::error!("foreign_key_type must be defined after many_to_many, many_to_one: {name}");
-                                    }
-                                },
+                                OpenedOffset::ForeignKey => {
+                                    field_attrs.get_mut(&SqlAttributeKey::Relation).map(|attr| {
+                                        if let SqlAttribute::ManyToOne {
+                                            ref mut foreign_key,
+                                            ..
+                                        } = attr
+                                        {
+                                            *foreign_key = id
+                                        } else if let SqlAttribute::ManyToMany {
+                                            foreign_key: ref mut foreign_primary_key,
+                                            ..
+                                        } = attr
+                                        {
+                                            *foreign_primary_key = id
+                                        } else if let SqlAttribute::OneToMany {
+                                            ref mut foreign_key,
+                                            ..
+                                        } = attr
+                                        {
+                                            *foreign_key = id
+                                        }
+                                    });
+                                }
+                                OpenedOffset::ForeignTableName => {
+                                    field_attrs.get_mut(&SqlAttributeKey::Relation).map(|attr| {
+                                        if let SqlAttribute::ManyToMany {
+                                            ref mut foreign_table_name,
+                                            ..
+                                        } = attr
+                                        {
+                                            *foreign_table_name = id
+                                        }
+                                    });
+                                }
+                                OpenedOffset::ForeignKeyType => {
+                                    field_attrs.get_mut(&SqlAttributeKey::Relation).map(|attr| {
+                                        if let SqlAttribute::ManyToOne {
+                                            ref mut foreign_key_type,
+                                            ..
+                                        } = attr
+                                        {
+                                            *foreign_key_type = id
+                                        } else if let SqlAttribute::ManyToMany {
+                                            ref mut foreign_key_type,
+                                            ..
+                                        } = attr
+                                        {
+                                            *foreign_key_type = id
+                                        }
+                                    });
+                                }
                                 OpenedOffset::Auto => {
                                     let auto = match id.as_str() {
                                         "insert" => AutoOperation::Insert,
