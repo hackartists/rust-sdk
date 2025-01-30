@@ -401,7 +401,7 @@ impl ApiModel<'_> {
         );
 
         for f in fields.iter() {
-            let fname = syn::Ident::new(&f.to_string(), proc_macro2::Span::call_site());
+            let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
 
             binds.push(quote! {
                 if let Some(#f) = &param.#f {
@@ -493,7 +493,7 @@ impl ApiModel<'_> {
         );
 
         for f in fields.iter() {
-            let fname = syn::Ident::new(&f.to_string(), proc_macro2::Span::call_site());
+            let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
 
             binds.push(quote! {
                 if let Some(#f) = &param.#f {

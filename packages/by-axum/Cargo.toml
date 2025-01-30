@@ -1,6 +1,6 @@
 [package]
 name = "by-axum"
-version = "0.2.11"
+version = "0.2.12"
 edition = "2021"
 description = "Library satisfying Biyard API convention"
 license = "Apache-2.0"
@@ -8,7 +8,7 @@ keywords = ["axum", "lambda", "api", "serverless"]
 repository = "https://github.com/biyard/rust-sdk/tree/main/packages/by-axum"
 
 [dependencies]
-dioxus-aws = { version = "0.6.4", optional = true }
+dioxus-aws = { workspace = true, optional = true }
 http = { version = "1.1.0", optional = true }
 lambda_http = { version = "0.13.0", optional = true }
 lambda_runtime = { version = "0.13.0", optional = true }
