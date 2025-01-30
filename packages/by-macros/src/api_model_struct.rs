@@ -734,9 +734,7 @@ impl ApiModel<'_> {
             }
 
             args.push(field.arg_token());
-            binds.push(quote! {
-                .bind(#n)
-            });
+            binds.push(field.bind());
 
             insert_fields.push(field_name.clone());
             insert_values.push(format!("${}", i));
@@ -1394,16 +1392,70 @@ pub fn to_string(ty: &syn::Type) -> String {
 }
 
 #[cfg(feature = "server")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConsistentLevel {
-    Same,
-    Soft,
-    Hard,
-    Conflict,
-}
-
-#[cfg(feature = "server")]
 impl ApiField {
+    pub fn bind(&self) -> proc_macro2::TokenStream {
+        let n = self.field_name_token();
+        let sql_field_name = syn::LitStr::new(
+            &self.name.to_case(self.rename),
+            proc_macro2::Span::call_site(),
+        );
+
+        match (self.rust_type.as_str(), self.r#type.as_str()) {
+            (rust_type, "TEXT") if rust_type != "String" => {
+                quote! {
+                    .bind(#n.to_string())
+                }
+            }
+            ("String", "BIGINT") => {
+                quote! {
+                    .bind(#n.parse::<i64>().unwrap())
+                }
+            }
+            ("String", "INTEGER") => {
+                quote! {
+                    .bind(#n.parse::<i32>().unwrap())
+                }
+            }
+            ("u32", "INTEGER") => {
+                quote! {
+                    .bind(#n as i32)
+                }
+            }
+            ("u64", "BIGINT") => {
+                quote! {
+                    .bind(#n as i64)
+                }
+            }
+            _ => {
+                quote! {
+                    .bind(#n)
+                }
+            }
+        }
+
+        // if &self.rust_type == "String" && &self.r#type != "TEXT" {
+        //     return quote! {
+        //         .bind(#n.to_string())
+        //     };
+        // } else if (&self.rust_type == "u64" || &self.rust_type == "u32") {
+        //     let ty = syn::Ident::new(&self.rust_type, proc_macro2::Span::call_site());
+
+        //     if &self.r#type == "BIGINT" {
+        //         return quote! {
+        //             .bind(#n as i64)
+        //         };
+        //     } else if &self.r#type == "INTEGER" {
+        //         return quote! {
+        //             .bind(#n as i32)
+        //         };
+        //     }
+        // }
+
+        // quote! {
+        //     .bind(#n)
+        // }
+    }
+
     pub fn call_map(&self) -> proc_macro2::TokenStream {
         let field_name = self.name.to_case(self.rename);
         let n = self.field_name_token();
