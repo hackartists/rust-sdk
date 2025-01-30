@@ -1432,28 +1432,6 @@ impl ApiField {
                 }
             }
         }
-
-        // if &self.rust_type == "String" && &self.r#type != "TEXT" {
-        //     return quote! {
-        //         .bind(#n.to_string())
-        //     };
-        // } else if (&self.rust_type == "u64" || &self.rust_type == "u32") {
-        //     let ty = syn::Ident::new(&self.rust_type, proc_macro2::Span::call_site());
-
-        //     if &self.r#type == "BIGINT" {
-        //         return quote! {
-        //             .bind(#n as i64)
-        //         };
-        //     } else if &self.r#type == "INTEGER" {
-        //         return quote! {
-        //             .bind(#n as i32)
-        //         };
-        //     }
-        // }
-
-        // quote! {
-        //     .bind(#n)
-        // }
     }
 
     pub fn call_map(&self) -> proc_macro2::TokenStream {
