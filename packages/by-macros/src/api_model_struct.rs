@@ -4,9 +4,10 @@ use crate::api_model::*;
 use convert_case::{Case, Casing};
 use indexmap::IndexMap;
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use std::{collections::HashSet, convert::From};
 use syn::*;
+use tracing::instrument;
 
 #[cfg(feature = "server")]
 use crate::sql_model::{AutoOperation, SqlAttribute, SqlAttributeKey, SqlModel, SqlModelKey};
@@ -1126,7 +1127,7 @@ pub struct ApiField {
 impl ApiField {
     pub fn arg_token(&self) -> proc_macro2::TokenStream {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
-        let rust_type = syn::Ident::new(&self.rust_type, proc_macro2::Span::call_site());
+        let rust_type: proc_macro2::TokenStream = self.rust_type.parse().unwrap();
 
         let output = quote! {
             #name: #rust_type
@@ -1226,6 +1227,7 @@ BEGIN
         FROM information_schema.columns
         WHERE table_name = '{}'
           AND column_name = '{}'
+          AND data_type = '{}'
     ) THEN
         ALTER TABLE {} ADD COLUMN {} {};
     END IF;
@@ -1234,6 +1236,7 @@ END $$;
             // SELECT
             self.table,
             self.name.to_case(self.rename),
+            self.r#type.to_lowercase(),
             // ALTER
             self.table,
             self.name.to_case(self.rename),
@@ -1440,12 +1443,9 @@ impl ApiField {
 
     fn new(field: &Field, table: String, rename: Case) -> Self {
         let name = field.clone().ident.unwrap().to_string();
-        let rust_type = match &field.ty {
-            syn::Type::Path(ref type_path) => {
-                type_path.path.segments.last().unwrap().ident.to_string()
-            }
-            _ => "".to_string(),
-        };
+        let rust_type = field.ty.to_token_stream().to_string();
+
+        tracing::debug!("new for {}:{}", name, rust_type);
 
         let mut summary = false;
         let mut queryable = false;
@@ -1526,11 +1526,14 @@ impl ApiField {
 
         let ((mut r#type, mut nullable), mut failed_type_inference) = match to_type(&field.ty) {
             Some(t) => (t, false),
-            None => {
-                tracing::debug!("field type: {:?}", field.ty);
-                (("TEXT".to_string(), false), true)
-            }
+            None => (("TEXT".to_string(), false), true),
         };
+        tracing::debug!(
+            "inference type: {} {} for {}",
+            r#type,
+            if nullable { "NULL" } else { "NOT NULL" },
+            name
+        );
 
         match &relation {
             Some(Relation::ManyToOne {
@@ -1612,6 +1615,7 @@ fn to_type(var_type: &syn::Type) -> Option<(String, bool)> {
     let name = match var_type {
         syn::Type::Path(ref type_path) => {
             let type_ident = type_path.path.segments.last().unwrap().ident.to_string();
+            tracing::debug!("field type: {:?}", type_ident.as_str());
             match type_ident.as_str() {
                 "u64" | "i64" => "BIGINT".to_string(),
                 "String" => "TEXT".to_string(),
@@ -1619,34 +1623,30 @@ fn to_type(var_type: &syn::Type) -> Option<(String, bool)> {
                 "i32" => "INTEGER".to_string(),
                 "f64" => "DOUBLE PRECISION".to_string(),
 
-                "Option<u64>" | "Option<i64>" => {
+                "Option" => {
                     nullable = true;
-                    "BIGINT".to_string()
-                }
-                "Option<String>" => {
-                    nullable = true;
-                    "TEXT".to_string()
-                }
-                "Option<bool>" => {
-                    nullable = true;
-                    "BOOLEAN".to_string()
-                }
-                "Option<i32>" => {
-                    nullable = true;
-                    "INTEGER".to_string()
-                }
-                "Option<f64>" => {
-                    nullable = true;
-                    "DOUBLE PRECISION".to_string()
+                    tracing::debug!("option field type: {:?}", type_path.path);
+                    if let PathArguments::AngleBracketed(ref args) =
+                        type_path.path.segments.last().unwrap().arguments
+                    {
+                        if let Some(syn::GenericArgument::Type(ref ty)) = args.args.first() {
+                            if let Some((t, _)) = to_type(ty) {
+                                t
+                            } else {
+                                return None;
+                            }
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
                 }
 
                 _ => return None,
             }
         }
-        _ => {
-            tracing::debug!("field type: {:?}", var_type);
-            return None;
-        }
+        _ => return None,
     };
 
     Some((name, nullable))
