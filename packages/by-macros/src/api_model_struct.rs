@@ -1367,20 +1367,14 @@ END $$;
                     foreign_pk
                 ));
             }
-            Some(Relation::ManyToOne {
-                table_name,
-                foreign_key,
-                foreign_key_type,
-            }) => {
+            Some(Relation::ManyToOne { .. }) => {
                 tracing::debug!("additional query for many to one relation: {var_name}");
+
+                // NOTE: Usually foreign key is the primary key of the other table in many-to-one relation.
+                let index_name = format!("idx_{}_{}", self.table, self.name);
                 query.push(format!(
-                    "CREATE INDEX idx_{}_{} ON {}({});",
-                    // index name
-                    table_name,
-                    foreign_key.to_case(Case::Snake),
-                    // indexing field
-                    table_name,
-                    foreign_key.to_case(case),
+                    "CREATE INDEX IF NOT EXISTS {} ON {}({});",
+                    index_name, self.table, var_name,
                 ));
             }
             _ => {}
