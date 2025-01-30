@@ -14,18 +14,36 @@ use query_display::query_display_impl;
 
 #[proc_macro_derive(QueryDisplay)]
 pub fn query_display_derive(input: TokenStream) -> TokenStream {
-    let _ = tracing_subscriber::fmt::try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_file(true)
+        .with_line_number(true)
+        .with_thread_ids(true)
+        .with_target(false)
+        .try_init();
     query_display_impl(input)
 }
 
 #[proc_macro_attribute]
 pub fn api_model(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let _ = tracing_subscriber::fmt::try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_file(true)
+        .with_line_number(true)
+        .with_thread_ids(true)
+        .with_target(false)
+        .try_init();
     api_model_impl(attr.into(), item.into()).into()
 }
 
 #[proc_macro_derive(EnumProp)]
 pub fn enum_prop_derive(input: TokenStream) -> TokenStream {
-    let _ = tracing_subscriber::fmt::try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_file(true)
+        .with_line_number(true)
+        .with_thread_ids(true)
+        .with_target(false)
+        .try_init();
     enum_prop_impl(input)
 }

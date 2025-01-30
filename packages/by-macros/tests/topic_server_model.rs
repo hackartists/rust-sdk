@@ -20,7 +20,6 @@ pub type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 mod server_tests {
     use by_macros::api_model;
     use std::time::SystemTime;
-    use validator::Validate;
 
     use super::*;
 
@@ -69,7 +68,7 @@ mod server_tests {
             .as_secs();
 
         let email = format!("test-{}@test.com", now);
-        let principal = format!("{}-principal", now);
+        let _principal = format!("{}-principal", now);
 
         let pool: sqlx::Pool<Postgres> = PgPoolOptions::new()
             .max_connections(5)

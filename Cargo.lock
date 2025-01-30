@@ -781,7 +781,7 @@ checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
 name = "by-axum"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "aide",
  "axum 0.8.1",
@@ -820,7 +820,7 @@ dependencies = [
 
 [[package]]
 name = "by-macros"
-version = "0.6.4"
+version = "0.6.6"
 dependencies = [
  "by-axum",
  "by-types",

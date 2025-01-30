@@ -4,9 +4,10 @@ use crate::api_model::*;
 use convert_case::{Case, Casing};
 use indexmap::IndexMap;
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use std::{collections::HashSet, convert::From};
 use syn::*;
+use tracing::instrument;
 
 #[cfg(feature = "server")]
 use crate::sql_model::{AutoOperation, SqlAttribute, SqlAttributeKey, SqlModel, SqlModelKey};
@@ -400,7 +401,7 @@ impl ApiModel<'_> {
         );
 
         for f in fields.iter() {
-            let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
+            let fname = syn::Ident::new(&f.to_string(), proc_macro2::Span::call_site());
 
             binds.push(quote! {
                 if let Some(#f) = &param.#f {
@@ -456,8 +457,6 @@ impl ApiModel<'_> {
 
         let output = quote! {
             pub async fn find(&self, param: &#query_struct) -> Result<#name> {
-                use sqlx::Row;
-
                 #declare_where_clause
                 #(#where_clause)*
 
@@ -494,7 +493,7 @@ impl ApiModel<'_> {
         );
 
         for f in fields.iter() {
-            let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
+            let fname = syn::Ident::new(&f.to_string(), proc_macro2::Span::call_site());
 
             binds.push(quote! {
                 if let Some(#f) = &param.#f {
@@ -532,7 +531,6 @@ impl ApiModel<'_> {
 
         let output = quote! {
             pub async fn find_one(&self, param: &#read_action) -> Result<#name> {
-                use sqlx::Row;
                 let mut i = 0;
                 #for_where
                 tracing::debug!("{} query {}", #fmt_str, query);
@@ -608,6 +606,8 @@ impl ApiModel<'_> {
 
         let output = quote! {
             .map(|row: sqlx::postgres::PgRow| {
+                use sqlx::Row;
+
                 total = row.get("total_count");
                 #(#type_bridges)*
                 #name {
@@ -659,6 +659,8 @@ impl ApiModel<'_> {
 
         let output = quote! {
             .map(|row: sqlx::postgres::PgRow| {
+                use sqlx::Row;
+
                 total = row.get("total_count");
 
                 #(#type_bridges)*
@@ -684,46 +686,15 @@ impl ApiModel<'_> {
 
     pub fn from_pg_row_inner(&self) -> proc_macro2::TokenStream {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
-        let mut type_bridges = vec![];
         let mut return_bounds = vec![];
 
         for (field_name, field) in self.fields.iter() {
-            let sql_field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
-            let n = field.field_name_token();
-            let rust_type = &field.rust_type;
-
-            if field.primary_key {
-                type_bridges.push(quote! {
-                    let #n: i64 = row.get(#sql_field_name);
-                });
-                return_bounds.push(quote! {
-                    #n: format!("{}",  #n)
-                });
-            } else {
-                if rust_type == "u64" || rust_type == "u32" {
-                    let bridge_type = syn::Ident::new(
-                        &rust_type.replace("u", "i"),
-                        proc_macro2::Span::call_site(),
-                    );
-                    let real_type = syn::Ident::new(rust_type, proc_macro2::Span::call_site());
-                    type_bridges.push(quote! {
-                        let #n: #bridge_type = row.get(#sql_field_name);
-                    });
-                    return_bounds.push(quote! {
-                        #n: #n as #real_type
-                    });
-                } else {
-                    return_bounds.push(quote! {
-                        #n: row.get(#sql_field_name)
-                    });
-                }
-            }
+            return_bounds.push(field.call_map());
         }
 
         quote! {
             use sqlx::Row;
 
-            #(#type_bridges)*
             #name {
                 #(#return_bounds),*
             }
@@ -788,8 +759,6 @@ impl ApiModel<'_> {
 
         let output = quote! {
             pub async fn insert(&self, #(#args),*) -> Result<#name> {
-                use sqlx::Row;
-
                 let row = sqlx::query(#q)
                     #(#binds)*
                 #call_map
@@ -1109,6 +1078,7 @@ impl<'a> ApiModel<'a> {
 }
 
 #[cfg(feature = "server")]
+#[derive(Debug)]
 pub enum Relation {
     ManyToMany {
         table_name: String,
@@ -1158,7 +1128,7 @@ pub struct ApiField {
 impl ApiField {
     pub fn arg_token(&self) -> proc_macro2::TokenStream {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
-        let rust_type = syn::Ident::new(&self.rust_type, proc_macro2::Span::call_site());
+        let rust_type: proc_macro2::TokenStream = self.rust_type.parse().unwrap();
 
         let output = quote! {
             #name: #rust_type
@@ -1258,6 +1228,7 @@ BEGIN
         FROM information_schema.columns
         WHERE table_name = '{}'
           AND column_name = '{}'
+          AND data_type = '{}'
     ) THEN
         ALTER TABLE {} ADD COLUMN {} {};
     END IF;
@@ -1266,6 +1237,7 @@ END $$;
             // SELECT
             self.table,
             self.name.to_case(self.rename),
+            self.r#type.to_lowercase(),
             // ALTER
             self.table,
             self.name.to_case(self.rename),
@@ -1282,16 +1254,18 @@ END $$;
                 table_name,
                 foreign_key,
                 foreign_key_type,
-            }) => format!(
-                "{} {} NOT NULL, FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE",
-                // Foreign field
-                name,
-                foreign_key_type,
-                // Foreign key
-                name,
-                table_name,
-                foreign_key.to_case(self.rename),
-            ),
+            }) => {
+                return Some(format!(
+                    "{} {} NOT NULL, FOREIGN KEY ({}) REFERENCES {}({}) ON DELETE CASCADE",
+                    // Foreign field
+                    name,
+                    foreign_key_type,
+                    // Foreign key
+                    name,
+                    table_name,
+                    foreign_key.to_case(self.rename),
+                ));
+            }
             Some(Relation::OneToMany { .. }) => return None,
             // NOTE: ManyToMany will be handled in the additional query.
             //       ManyToMany field not yet tested.
@@ -1300,8 +1274,7 @@ END $$;
 
         if self.primary_key && self.r#type == "BIGINT" {
             line = format!("{} PRIMARY KEY GENERATED ALWAYS AS IDENTITY", line);
-            return Some(line);
-        }
+        };
 
         if self.nullable {
             line = format!("{} NULL", line);
@@ -1312,6 +1285,8 @@ END $$;
         if self.unique {
             line = format!("{} UNIQUE", line);
         }
+
+        tracing::debug!("field creation query for {}: {}", name, line);
 
         Some(line)
     }
@@ -1392,20 +1367,14 @@ END $$;
                     foreign_pk
                 ));
             }
-            Some(Relation::ManyToOne {
-                table_name,
-                foreign_key,
-                foreign_key_type,
-            }) => {
+            Some(Relation::ManyToOne { .. }) => {
                 tracing::debug!("additional query for many to one relation: {var_name}");
+
+                // NOTE: Usually foreign key is the primary key of the other table in many-to-one relation.
+                let index_name = format!("idx_{}_{}", self.table, self.name);
                 query.push(format!(
-                    "CREATE INDEX idx_{}_{} ON {}({});",
-                    // index name
-                    table_name,
-                    foreign_key.to_case(Case::Snake),
-                    // indexing field
-                    table_name,
-                    foreign_key.to_case(case),
+                    "CREATE INDEX IF NOT EXISTS {} ON {}({});",
+                    index_name, self.table, var_name,
                 ));
             }
             _ => {}
@@ -1425,15 +1394,56 @@ pub fn to_string(ty: &syn::Type) -> String {
 }
 
 #[cfg(feature = "server")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsistentLevel {
+    Same,
+    Soft,
+    Hard,
+    Conflict,
+}
+
+#[cfg(feature = "server")]
 impl ApiField {
+    pub fn call_map(&self) -> proc_macro2::TokenStream {
+        let field_name = self.name.to_case(self.rename);
+        let n = self.field_name_token();
+
+        let sql_field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
+
+        if &self.rust_type == "String" && &self.r#type != "TEXT" {
+            if &self.r#type == "BIGINT" {
+                return quote! {
+                    #n: row.get::<i64, _>(#sql_field_name).to_string()
+                };
+            } else if &self.r#type == "INTEGER" {
+                return quote! {
+                    #n: row.get::<i32, _>(#sql_field_name).to_string()
+                };
+            }
+        } else if (&self.rust_type == "u64" || &self.rust_type == "u32") {
+            let ty = syn::Ident::new(&self.rust_type, proc_macro2::Span::call_site());
+
+            if &self.r#type == "BIGINT" {
+                return quote! {
+                    #n: row.get::<i64, _>(#sql_field_name) as #ty
+                };
+            } else if &self.r#type == "INTEGER" {
+                return quote! {
+                    #n: row.get::<i32, _>(#sql_field_name) as #ty
+                };
+            }
+        }
+
+        quote! {
+            #n: row.get(#sql_field_name)
+        }
+    }
+
     fn new(field: &Field, table: String, rename: Case) -> Self {
         let name = field.clone().ident.unwrap().to_string();
-        let rust_type = match &field.ty {
-            syn::Type::Path(ref type_path) => {
-                type_path.path.segments.last().unwrap().ident.to_string()
-            }
-            _ => "".to_string(),
-        };
+        let rust_type = field.ty.to_token_stream().to_string();
+
+        tracing::debug!("new for {}:{}", name, rust_type);
 
         let mut summary = false;
         let mut queryable = false;
@@ -1478,7 +1488,7 @@ impl ApiField {
             _ => None,
         };
 
-        let relation = match f.attrs.get(&SqlAttributeKey::ManyToMany) {
+        let relation = match f.attrs.get(&SqlAttributeKey::Relation) {
             Some(SqlAttribute::ManyToMany {
                 table_name,
                 foreign_table_name,
@@ -1509,19 +1519,48 @@ impl ApiField {
                 foreign_key: foreign_key.to_string(),
             }),
 
-            _ => None,
-        };
-
-        let ((mut r#type, mut nullable), mut failed_type_inference) = match to_type(&field.ty) {
-            Some(t) => (t, false),
-            None => {
-                tracing::debug!("field type: {:?}", field.ty);
-                (("TEXT".to_string(), false), true)
+            rel => {
+                tracing::debug!("no relation for {:?}", rel);
+                None
             }
         };
 
+        tracing::debug!("relation: {:?}", relation);
+
+        let ((mut r#type, mut nullable), mut failed_type_inference) = match to_type(&field.ty) {
+            Some(t) => (t, false),
+            None => (("TEXT".to_string(), false), true),
+        };
+        tracing::debug!(
+            "inference type: {} {} for {}",
+            r#type,
+            if nullable { "NULL" } else { "NOT NULL" },
+            name
+        );
+
+        match relation {
+            Some(Relation::ManyToOne {
+                ref foreign_key_type,
+                ..
+            }) => {
+                tracing::debug!("many to one realtion: {}", foreign_key_type);
+                failed_type_inference = false;
+                r#type = foreign_key_type.to_string();
+            }
+            Some(Relation::ManyToMany {
+                ref foreign_key_type,
+                ..
+            }) => {
+                tracing::debug!("many to many realtion: {}", foreign_key_type);
+                failed_type_inference = false;
+                r#type = foreign_key_type.to_string();
+            }
+            _ => {}
+        }
+
         match f.attrs.get(&SqlAttributeKey::SqlType) {
             Some(SqlAttribute::SqlType(t)) => {
+                tracing::debug!("sql type: {}", t);
                 failed_type_inference = false;
                 r#type = t.to_string();
             }
@@ -1529,10 +1568,12 @@ impl ApiField {
         };
 
         if f.attrs.contains_key(&SqlAttributeKey::Nullable) {
+            tracing::debug!("nullable: true");
             nullable = true;
         };
 
         if primary_key {
+            tracing::debug!("primary key: true");
             r#type = "BIGINT".to_string();
         }
 
@@ -1549,8 +1590,12 @@ impl ApiField {
             || primary_key
             || !auto.is_empty();
 
-        let unique = f.attrs.contains_key(&SqlAttributeKey::Unique);
+        tracing::debug!("omitted: {}", omitted);
 
+        let unique = f.attrs.contains_key(&SqlAttributeKey::Unique);
+        tracing::debug!("unique: {}", unique);
+
+        tracing::debug!("ended new for {}:{}", name, rust_type);
         Self {
             name,
             primary_key,
@@ -1583,6 +1628,7 @@ fn to_type(var_type: &syn::Type) -> Option<(String, bool)> {
     let name = match var_type {
         syn::Type::Path(ref type_path) => {
             let type_ident = type_path.path.segments.last().unwrap().ident.to_string();
+            tracing::debug!("field type: {:?}", type_ident.as_str());
             match type_ident.as_str() {
                 "u64" | "i64" => "BIGINT".to_string(),
                 "String" => "TEXT".to_string(),
@@ -1590,34 +1636,30 @@ fn to_type(var_type: &syn::Type) -> Option<(String, bool)> {
                 "i32" => "INTEGER".to_string(),
                 "f64" => "DOUBLE PRECISION".to_string(),
 
-                "Option<u64>" | "Option<i64>" => {
+                "Option" => {
                     nullable = true;
-                    "BIGINT".to_string()
-                }
-                "Option<String>" => {
-                    nullable = true;
-                    "TEXT".to_string()
-                }
-                "Option<bool>" => {
-                    nullable = true;
-                    "BOOLEAN".to_string()
-                }
-                "Option<i32>" => {
-                    nullable = true;
-                    "INTEGER".to_string()
-                }
-                "Option<f64>" => {
-                    nullable = true;
-                    "DOUBLE PRECISION".to_string()
+                    tracing::debug!("option field type: {:?}", type_path.path);
+                    if let PathArguments::AngleBracketed(ref args) =
+                        type_path.path.segments.last().unwrap().arguments
+                    {
+                        if let Some(syn::GenericArgument::Type(ref ty)) = args.args.first() {
+                            if let Some((t, _)) = to_type(ty) {
+                                t
+                            } else {
+                                return None;
+                            }
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
                 }
 
                 _ => return None,
             }
         }
-        _ => {
-            tracing::debug!("field type: {:?}", var_type);
-            return None;
-        }
+        _ => return None,
     };
 
     Some((name, nullable))
