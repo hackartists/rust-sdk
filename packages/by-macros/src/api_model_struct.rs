@@ -10,7 +10,7 @@ use syn::*;
 use tracing::instrument;
 
 #[cfg(feature = "server")]
-use crate::sql_model::{AutoOperation, SqlAttribute, SqlAttributeKey, SqlModel, SqlModelKey};
+use crate::sql_model::*;
 
 pub enum Database {
     Postgres,
@@ -475,15 +475,65 @@ impl ApiModel<'_> {
         output.into()
     }
 
+    pub fn impl_functions(&self) -> proc_macro2::TokenStream {
+        let name = self.name_id;
+        let base_sql_function = self.base_sql_function();
+
+        quote! {
+            impl #name {
+                #base_sql_function
+            }
+        }
+    }
+
+    pub fn base_sql_function(&self) -> proc_macro2::TokenStream {
+        let name = self.name_id;
+
+        let mut aggregates = vec![];
+        let mut aggregated_fields = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            if let Some(query) = field.aggregate_query(&field_name) {
+                aggregates.push(query);
+                aggregated_fields.push(format!(
+                    "COALESCE({}.value, 0) AS {}",
+                    field_name, field_name
+                ));
+            }
+        }
+
+        let call_map = self.call_map();
+
+        let q = if aggregated_fields.len() > 0 {
+            syn::LitStr::new(
+                &format!(
+                    "SELECT p.*, {} FROM {} p {}",
+                    aggregated_fields.join(", "),
+                    self.table_name,
+                    aggregates.join(" "),
+                ),
+                proc_macro2::Span::call_site(),
+            )
+        } else {
+            syn::LitStr::new(
+                &format!("SELECT * FROM {}", self.table_name),
+                proc_macro2::Span::call_site(),
+            )
+        };
+
+        let output = quote! {
+            pub fn base_sql() -> &'static str {
+                #q
+            }
+        };
+
+        output.into()
+    }
+
     pub fn find_one_function(&self) -> proc_macro2::TokenStream {
         let name = self.name_id;
         let read_action = self.read_action_struct_name();
         let fields = self.read_action_fields();
-
-        let q = syn::LitStr::new(
-            &format!("SELECT * FROM {}", self.table_name),
-            proc_macro2::Span::call_site(),
-        );
 
         let mut binds = vec![];
         let mut where_clause = vec![];
@@ -491,6 +541,9 @@ impl ApiModel<'_> {
             &format!("{}Repository::find_one", self.name),
             proc_macro2::Span::call_site(),
         );
+
+        let mut aggregates = vec![];
+        let mut aggregated_fields = vec![];
 
         for f in fields.iter() {
             let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
@@ -508,12 +561,44 @@ impl ApiModel<'_> {
                     where_clause.push(format!("{} = ${}", #fname, i));
                 }
             });
+
+            let field_name = f.to_string().to_case(self.rename);
+            if let Some(query) = self
+                .fields
+                .get(&field_name)
+                .unwrap()
+                .aggregate_query(&field_name)
+            {
+                aggregates.push(query);
+                aggregated_fields.push(format!(
+                    "COALESCE({}.value, 0) AS {}",
+                    field_name, field_name
+                ));
+            }
         }
 
         let call_map = self.call_map();
 
-        let for_where = if fields.len() > 0 {
+        let q = if aggregated_fields.len() > 0 {
+            syn::LitStr::new(
+                &format!(
+                    "SELECT p.*, {} FROM {} p {}",
+                    aggregated_fields.join(", "),
+                    self.table_name,
+                    aggregates.join(" "),
+                ),
+                proc_macro2::Span::call_site(),
+            )
+        } else {
+            syn::LitStr::new(
+                &format!("SELECT * FROM {}", self.table_name),
+                proc_macro2::Span::call_site(),
+            )
+        };
+
+        let for_where = if where_clause.len() > 0 {
             quote! {
+                let mut i = 0;
                 let mut where_clause = vec![];
                 #(#where_clause)*
                 let where_clause_str = where_clause.join(" AND ");
@@ -531,7 +616,6 @@ impl ApiModel<'_> {
 
         let output = quote! {
             pub async fn find_one(&self, param: &#read_action) -> Result<#name> {
-                let mut i = 0;
                 #for_where
                 tracing::debug!("{} query {}", #fmt_str, query);
 
@@ -729,7 +813,7 @@ impl ApiModel<'_> {
             returning.push(field_name.clone());
             let n = field.field_name_token();
 
-            if field.omitted {
+            if field.should_skip_inserting() {
                 continue;
             }
 
@@ -1117,6 +1201,8 @@ pub struct ApiField {
     pub related: Option<String>,
     pub version: Option<String>,
 
+    pub aggregator: Option<Aggregator>,
+
     // depends on struct derive
     pub rename: Case,
     pub table: String,
@@ -1124,6 +1210,52 @@ pub struct ApiField {
 
 #[cfg(feature = "server")]
 impl ApiField {
+    pub fn sql_field_name(&self) -> String {
+        self.name.to_case(self.rename)
+    }
+
+    /// It will be bound {bound_name.value}.
+    pub fn aggregate_query(&self, bound_name: &str) -> Option<String> {
+        let (table_name, foreign_key) = match self.relation {
+            Some(Relation::OneToMany {
+                ref table_name,
+                ref foreign_key,
+            }) => (table_name, foreign_key),
+            _ => return None,
+        };
+
+        let aggregate = match self.aggregator {
+            Some(Aggregator::Count) => "COUNT(id)".to_string(),
+            Some(Aggregator::Sum(ref field_name)) => format!("SUM({})", field_name),
+            Some(Aggregator::Avg(ref field_name)) => format!("AVG({})", field_name),
+            Some(Aggregator::Max(ref field_name)) => format!("MAX({})", field_name),
+            Some(Aggregator::Min(ref field_name)) => format!("MIN({})", field_name),
+            _ => return None,
+        };
+
+        // NOTE: currently only support for the first bound field. Usually, we can expect to bind the primary key of this table.
+        let mut query = format!(
+            r#"
+LEFT JOIN (
+    SELECT {}, {} AS value
+    FROM {}
+    GROUP BY {}
+) {} ON p.id = {}.{}
+"#,
+            foreign_key, aggregate, table_name, foreign_key, bound_name, bound_name, foreign_key,
+        );
+
+        Some(query)
+    }
+    pub fn should_skip_inserting(&self) -> bool {
+        self.omitted
+            || self.auto.len() > 0
+            || match self.relation {
+                Some(Relation::OneToMany { .. }) => true,
+                _ => false,
+            }
+    }
+
     pub fn arg_token(&self) -> proc_macro2::TokenStream {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let rust_type: proc_macro2::TokenStream = self.rust_type.parse().unwrap();
@@ -1626,6 +1758,14 @@ impl ApiField {
         tracing::debug!("unique: {}", unique);
 
         tracing::debug!("ended new for {}:{}", name, rust_type);
+
+        let aggregator = match f.attrs.get(&SqlAttributeKey::Aggregator) {
+            Some(SqlAttribute::Aggregator(aggregator)) => Some(aggregator.clone()),
+            _ => None,
+        };
+
+        tracing::debug!("aggregator: {:?}", aggregator);
+
         Self {
             name,
             primary_key,
@@ -1644,6 +1784,7 @@ impl ApiField {
             read_action_names,
             related,
             version,
+            aggregator,
 
             table,
             rename,

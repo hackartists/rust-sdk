@@ -22,6 +22,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let find_one = model.find_one_function();
     let find = model.find_function();
     let from_trait = model.from_pg_row_trait();
+    let impl_functions = model.impl_functions();
 
     let output = quote! {
         impl #name {
@@ -29,6 +30,8 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #repo_name::new(pool)
             }
         }
+
+        #impl_functions
 
         #[derive(Debug, Clone)]
         pub struct #repo_name {
@@ -64,12 +67,22 @@ pub enum SqlAttributeKey {
     Auto,
     Version,
     Nullable,
+    Aggregator,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum AutoOperation {
     Insert,
     Update,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum Aggregator {
+    Count,
+    Sum(String),
+    Avg(String),
+    Max(String),
+    Min(String),
 }
 
 #[derive(Debug)]
@@ -96,6 +109,7 @@ pub enum SqlAttribute {
     Auto(Vec<AutoOperation>),
     Version(String),
     Nullable,
+    Aggregator(Aggregator),
 }
 
 #[derive(Debug)]
@@ -110,6 +124,7 @@ enum OpenedOffset {
     ForeignKeyType,
     Auto,
     Version,
+    Aggregator,
 }
 
 #[derive(Debug)]
@@ -173,7 +188,53 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             "version" => {
                                 opened = OpenedOffset::Version;
                             }
+                            "aggregator" => {
+                                opened = OpenedOffset::Aggregator;
+                            }
                             _ => match opened {
+                                OpenedOffset::Aggregator => match id.as_str() {
+                                    "count" => {
+                                        field_attrs.insert(
+                                            SqlAttributeKey::Aggregator,
+                                            SqlAttribute::Aggregator(Aggregator::Count),
+                                        );
+                                    }
+                                    "sum" => {
+                                        field_attrs.insert(
+                                            SqlAttributeKey::Aggregator,
+                                            SqlAttribute::Aggregator(Aggregator::Sum(
+                                                "".to_string(),
+                                            )),
+                                        );
+                                    }
+                                    "avg" => {
+                                        field_attrs.insert(
+                                            SqlAttributeKey::Aggregator,
+                                            SqlAttribute::Aggregator(Aggregator::Avg(
+                                                "".to_string(),
+                                            )),
+                                        );
+                                    }
+                                    "max" => {
+                                        field_attrs.insert(
+                                            SqlAttributeKey::Aggregator,
+                                            SqlAttribute::Aggregator(Aggregator::Max(
+                                                "".to_string(),
+                                            )),
+                                        );
+                                    }
+                                    "min" => {
+                                        field_attrs.insert(
+                                            SqlAttributeKey::Aggregator,
+                                            SqlAttribute::Aggregator(Aggregator::Min(
+                                                "".to_string(),
+                                            )),
+                                        );
+                                    }
+                                    _ => {
+                                        tracing::error!("invalid aggregator: {id}");
+                                    }
+                                },
                                 OpenedOffset::Version => {
                                     field_attrs.insert(
                                         SqlAttributeKey::Version,
@@ -316,6 +377,37 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                                 }
                                             });
                                         }
+                                    }
+                                }
+
+                                opened = OpenedOffset::None;
+                            }
+                            OpenedOffset::Aggregator => {
+                                for nested in group.stream() {
+                                    if let proc_macro2::TokenTree::Ident(iden) = nested {
+                                        let id = iden.to_string();
+
+                                        field_attrs.get_mut(&SqlAttributeKey::Aggregator).map(
+                                            |attr| {
+                                                if let SqlAttribute::Aggregator(aggregator) = attr {
+                                                    match aggregator {
+                                                        Aggregator::Sum(ref mut field) => {
+                                                            *field = id;
+                                                        }
+                                                        Aggregator::Avg(ref mut field) => {
+                                                            *field = id;
+                                                        }
+                                                        Aggregator::Max(ref mut field) => {
+                                                            *field = id;
+                                                        }
+                                                        Aggregator::Min(ref mut field) => {
+                                                            *field = id;
+                                                        }
+                                                        _ => {}
+                                                    }
+                                                }
+                                            },
+                                        );
                                     }
                                 }
 
