@@ -1823,6 +1823,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d6ef0072f8a535281e4876be788938b528e9a1d43900b82c2569af7da799125"
 
 [[package]]
+name = "easy-dynamodb"
+version = "0.1.8"
+dependencies = [
+ "aws-config",
+ "aws-credential-types",
+ "aws-sdk-dynamodb",
+ "chrono",
+ "serde",
+ "serde_dynamo",
+ "serde_json",
+ "slog",
+ "tokio",
+]
+
+[[package]]
 name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4018,6 +4033,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.96",
+]
+
+[[package]]
+name = "serde_dynamo"
+version = "4.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e36c1b1792cfd9de29eb373ee6a4b74650369c096f55db7198ceb7b8921d1f7f"
+dependencies = [
+ "aws-sdk-dynamodb",
+ "base64 0.21.7",
+ "serde",
 ]
 
 [[package]]

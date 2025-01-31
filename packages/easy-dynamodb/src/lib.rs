@@ -1,3 +1,4 @@
+#![allow(static_mut_refs)]
 pub mod error;
 
 use aws_config::retry::RetryConfig;
