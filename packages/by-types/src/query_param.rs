@@ -1,4 +1,5 @@
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 pub enum QueryParam<T> {
     #[default]
     None,

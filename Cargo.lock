@@ -857,7 +857,7 @@ dependencies = [
 
 [[package]]
 name = "by-types"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "aide",
  "axum 0.8.1",
