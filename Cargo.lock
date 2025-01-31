@@ -822,7 +822,7 @@ dependencies = [
 
 [[package]]
 name = "by-components"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "dioxus",
  "tracing",

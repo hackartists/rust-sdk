@@ -41,12 +41,14 @@ impl Default for ServiceColorTheme {
 #[derive(Debug, Clone)]
 pub struct IconColorTheme {
     pub primary: String,
+    pub secondary: String,
 }
 
 impl Default for IconColorTheme {
     fn default() -> Self {
         IconColorTheme {
             primary: "#8588AB".to_string(),
+            secondary: "#666C6E".to_string(),
         }
     }
 }
