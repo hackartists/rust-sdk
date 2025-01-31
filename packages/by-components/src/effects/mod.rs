@@ -49,8 +49,14 @@ pub fn HoverEffects() -> Element {
                                 .collect::<Vec<&str>>()
                                 .contains(&"hover-effect")
                         {
-                            let x = event.client_x();
-                            let y = event.client_y();
+                            let x = js_sys::Reflect::get(&event, &JsValue::from_str("pageX"))
+                                .unwrap()
+                                .as_f64()
+                                .unwrap_or(0.0) as i32;
+                            let y = js_sys::Reflect::get(&event, &JsValue::from_str("pageY"))
+                                .unwrap()
+                                .as_f64()
+                                .unwrap_or(0.0) as i32;
 
                             shadow
                                 .set_attribute("style", &format!("left: {}px; top: {}px; position: absolute; width: 50px; height: 50px; background: radial-gradient(circle, rgba(100, 100, 100, 0.5), rgba(0, 0, 0, 0)); border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%); mix-blend-mode: screen; opacity: 0.7; filter: blur(15px); z-index: 9999; ", x, y))
