@@ -495,10 +495,10 @@ impl ApiModel<'_> {
         for (field_name, field) in self.fields.iter() {
             if let Some(query) = field.aggregate_query(&field_name) {
                 aggregates.push(query);
-                aggregated_fields.push(format!(
-                    "COALESCE({}.value, 0) AS {}",
-                    field_name, field_name
-                ));
+            }
+
+            if let Some(q) = field.aggregate_expose_query(&field_name) {
+                aggregated_fields.push(q);
             }
         }
 
@@ -563,17 +563,13 @@ impl ApiModel<'_> {
             });
 
             let field_name = f.to_string().to_case(self.rename);
-            if let Some(query) = self
-                .fields
-                .get(&field_name)
-                .unwrap()
-                .aggregate_query(&field_name)
-            {
+            let ff = self.fields.get(&field_name).unwrap();
+            if let Some(query) = ff.aggregate_query(&field_name) {
                 aggregates.push(query);
-                aggregated_fields.push(format!(
-                    "COALESCE({}.value, 0) AS {}",
-                    field_name, field_name
-                ));
+            }
+
+            if let Some(q) = ff.aggregate_expose_query(&field_name) {
+                aggregated_fields.push(q);
             }
         }
 
@@ -1163,10 +1159,18 @@ impl<'a> ApiModel<'a> {
 #[derive(Debug)]
 pub enum Relation {
     ManyToMany {
+        // Table name of the join table
         table_name: String,
+        // Foreign table name
         foreign_table_name: String,
+        // Primary key in the foreign table (default: id)
         foreign_key: String,
+        // Type of the primary key in the foreign table (default: BIGINT)
         foreign_key_type: String,
+        // Reference key of foreign table in the join table
+        foreign_primary_key: String,
+        // Reference key of the current table in the join table
+        foreign_reference_key: String,
     },
     ManyToOne {
         table_name: String,
@@ -1210,8 +1214,31 @@ pub struct ApiField {
 
 #[cfg(feature = "server")]
 impl ApiField {
+    pub fn rust_type_id(&self) -> syn::Ident {
+        syn::Ident::new(&self.rust_type, proc_macro2::Span::call_site())
+    }
+
     pub fn sql_field_name(&self) -> String {
         self.name.to_case(self.rename)
+    }
+
+    pub fn aggregate_expose_query(&self, bound_name: &str) -> Option<String> {
+        match self.aggregator {
+            Some(Aggregator::Exist) => Some(format!(
+                r#"
+CASE
+    WHEN COALESCE({}.value, 0) > 0 THEN true
+    ELSE false
+END AS {}"#,
+                bound_name, bound_name
+            )),
+            Some(_) => Some(format!(
+                "COALESCE({}.value, 0) AS {}",
+                bound_name, bound_name
+            )),
+
+            _ => None,
+        }
     }
 
     /// It will be bound {bound_name.value}.
@@ -1221,8 +1248,16 @@ impl ApiField {
                 ref table_name,
                 ref foreign_key,
             }) => (table_name, foreign_key),
+            Some(Relation::ManyToMany {
+                ref table_name,
+                ref foreign_reference_key,
+                ..
+            }) => (table_name, foreign_reference_key),
+
             _ => return None,
         };
+
+        let mut where_clause = "".to_string();
 
         let aggregate = match self.aggregator {
             Some(Aggregator::Count) => "COUNT(id)".to_string(),
@@ -1230,7 +1265,20 @@ impl ApiField {
             Some(Aggregator::Avg(ref field_name)) => format!("AVG({})", field_name),
             Some(Aggregator::Max(ref field_name)) => format!("MAX({})", field_name),
             Some(Aggregator::Min(ref field_name)) => format!("MIN({})", field_name),
-            _ => return None,
+            Some(Aggregator::Exist) => {
+                let (foreign_primary_key, foreign_reference_key) = match self.relation {
+                    Some(Relation::ManyToMany {
+                        ref foreign_primary_key,
+                        ..
+                    }) => (foreign_key, "id"),
+                    _ => return None,
+                };
+
+                where_clause = format!("WHERE {foreign_primary_key} = $1");
+
+                format!("COUNT({})", foreign_primary_key,)
+            }
+            None => return None,
         };
 
         // NOTE: currently only support for the first bound field. Usually, we can expect to bind the primary key of this table.
@@ -1238,11 +1286,20 @@ impl ApiField {
             r#"
 LEFT JOIN (
     SELECT {}, {} AS value
-    FROM {}
+    FROM {} {}
     GROUP BY {}
 ) {} ON p.id = {}.{}
 "#,
-            foreign_key, aggregate, table_name, foreign_key, bound_name, bound_name, foreign_key,
+            // select
+            foreign_key,
+            aggregate,
+            table_name,
+            where_clause,
+            foreign_key,
+            // join
+            bound_name,
+            bound_name,
+            foreign_key,
         );
 
         Some(query)
@@ -1449,53 +1506,24 @@ END $$;
         match &self.relation {
             Some(Relation::ManyToMany {
                 table_name,
-                foreign_table_name,
-                foreign_key,
-                foreign_key_type,
+                foreign_primary_key,
+                foreign_reference_key,
+                ..
             }) => {
                 tracing::debug!("additional query for many to many relation: {var_name}");
-                let this_key =
-                    format!("{}_{}", this_table_name, this_primary_key_name).to_case(case);
-                let foreign_pk = format!("{}_{}", foreign_table_name, foreign_key).to_case(case);
 
-                query.push(format!(
-                    "CREATE TABLE IF NOT EXISTS {} ({} {} NOT NULL, {} {} NOT NULL, {} PRIMARY KEY ({}, {}), FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE, FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({}); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({});",
-                    // Table name for many to many relation
-                    table_name,
-                    // key for this table
-                    this_key,
-                    this_primary_key_type,
-                    // key for other table
-                    foreign_pk,
-                    foreign_key_type,
-                    // Additionaly fields
-                    match self.get_sql_field_type() {
-                        Some(field_type) =>
-                            format!("{},", field_type),
-                        None => "".to_string(),
-                    },
-                    // Composited primary key
-                    this_key,
-                    foreign_pk,
-                    // Foreign key for this table key
-                    this_key,
-                    this_table_name,
-                    this_primary_key_name.to_case(case),
-                    // Foreign key for other table
-                    foreign_pk,
-                    foreign_table_name,
-                    foreign_key.to_case(case),
-                    // Index for this table key
-                    table_name,
-                    this_key.to_case(Case::Snake),
-                    table_name,
-                    this_key,
-                    // Index for foreign table key
-                    table_name,
-                    foreign_pk.to_case(Case::Snake),
-                    table_name,
-                    foreign_pk
-                ));
+                if self.unique {
+                    let mut keys = [
+                        foreign_primary_key.to_string(),
+                        foreign_reference_key.to_string(),
+                    ];
+                    keys.sort();
+                    let idx_name = format!("idx_{}_{}", table_name, keys.join("_"));
+                    query.push(format!(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} ({}, {});",
+                        idx_name, table_name, keys[0], keys[1]
+                    ));
+                }
             }
             Some(Relation::ManyToOne { .. }) => {
                 tracing::debug!("additional query for many to one relation: {var_name}");
@@ -1571,6 +1599,20 @@ impl ApiField {
         let n = self.field_name_token();
 
         let sql_field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
+
+        match self.aggregator {
+            Some(Aggregator::Sum(_))
+            | Some(Aggregator::Avg(_))
+            | Some(Aggregator::Max(_))
+            | Some(Aggregator::Min(_)) => {
+                let rust_type = self.rust_type_id();
+
+                return quote! {
+                    #n: row.get::<bigdecimal::BigDecimal, _>(#sql_field_name).to_string().parse::<#rust_type>().unwrap()
+                };
+            }
+            _ => {}
+        };
 
         if &self.rust_type == "String" && &self.r#type != "TEXT" {
             if &self.r#type == "BIGINT" {
@@ -1656,11 +1698,15 @@ impl ApiField {
                 foreign_table_name,
                 foreign_key,
                 foreign_key_type,
+                foreign_primary_key,
+                foreign_reference_key,
             }) => Some(Relation::ManyToMany {
                 table_name: table_name.to_string(),
                 foreign_table_name: foreign_table_name.to_string(),
                 foreign_key: foreign_key.to_string(),
                 foreign_key_type: foreign_key_type.to_string(),
+                foreign_primary_key: foreign_primary_key.to_string(),
+                foreign_reference_key: foreign_reference_key.to_string(),
             }),
 
             Some(SqlAttribute::ManyToOne {
@@ -1715,7 +1761,6 @@ impl ApiField {
             }) => {
                 tracing::debug!("many to many realtion: {}", foreign_key_type);
                 failed_type_inference = false;
-                r#type = foreign_key_type.to_string();
             }
             _ => {}
         }
@@ -1747,6 +1792,7 @@ impl ApiField {
         let omitted = failed_type_inference
             || match relation {
                 Some(Relation::OneToMany { .. }) => true,
+                Some(Relation::ManyToMany { .. }) => true,
                 _ => false,
             }
             || primary_key
