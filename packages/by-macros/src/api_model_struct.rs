@@ -10,7 +10,7 @@ use syn::*;
 use tracing::instrument;
 
 #[cfg(feature = "server")]
-use crate::sql_model::{AutoOperation, SqlAttribute, SqlAttributeKey, SqlModel, SqlModelKey};
+use crate::sql_model::*;
 
 pub enum Database {
     Postgres,
@@ -401,7 +401,7 @@ impl ApiModel<'_> {
         );
 
         for f in fields.iter() {
-            let fname = syn::Ident::new(&f.to_string(), proc_macro2::Span::call_site());
+            let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
 
             binds.push(quote! {
                 if let Some(#f) = &param.#f {
@@ -475,15 +475,75 @@ impl ApiModel<'_> {
         output.into()
     }
 
+    pub fn impl_functions(&self) -> proc_macro2::TokenStream {
+        let name = self.name_id;
+        let base_sql_function = self.base_sql_function();
+
+        quote! {
+            impl #name {
+                #base_sql_function
+            }
+        }
+    }
+
+    pub fn base_sql_function(&self) -> proc_macro2::TokenStream {
+        let name = self.name_id;
+
+        let mut aggregates = vec![];
+        let mut aggregated_fields = vec![];
+        let mut aggregate_args = vec![];
+        let mut arg_names = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            if let Some(query) = field.aggregate_query(&field_name) {
+                aggregates.push(query)
+            }
+
+            if let Some(q) = field.aggregate_expose_query(&field_name) {
+                aggregated_fields.push(q);
+            }
+
+            if let Some(q) = field.aggregate_arg() {
+                aggregate_args.push(q);
+            }
+
+            if let Some(q) = field.aggregate_arg_name() {
+                arg_names.push(q);
+            }
+        }
+
+        let call_map = self.call_map();
+
+        let q = if aggregated_fields.len() > 0 {
+            syn::LitStr::new(
+                &format!(
+                    "SELECT p.*, {} FROM {} p {}",
+                    aggregated_fields.join(", "),
+                    self.table_name,
+                    aggregates.join(" "),
+                ),
+                proc_macro2::Span::call_site(),
+            )
+        } else {
+            syn::LitStr::new(
+                &format!("SELECT * FROM {}", self.table_name),
+                proc_macro2::Span::call_site(),
+            )
+        };
+
+        let output = quote! {
+            pub fn base_sql(#(#aggregate_args),*) -> String {
+                format!(#q, #(#arg_names),*)
+            }
+        };
+
+        output.into()
+    }
+
     pub fn find_one_function(&self) -> proc_macro2::TokenStream {
         let name = self.name_id;
         let read_action = self.read_action_struct_name();
         let fields = self.read_action_fields();
-
-        let q = syn::LitStr::new(
-            &format!("SELECT * FROM {}", self.table_name),
-            proc_macro2::Span::call_site(),
-        );
 
         let mut binds = vec![];
         let mut where_clause = vec![];
@@ -492,8 +552,23 @@ impl ApiModel<'_> {
             proc_macro2::Span::call_site(),
         );
 
+        let mut aggregate_args = vec![];
+        let mut arg_names = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            if let Some(q) = field.aggregate_arg() {
+                aggregate_args.push(quote! {
+                    #q,
+                });
+            }
+
+            if let Some(q) = field.aggregate_arg_name() {
+                arg_names.push(q);
+            }
+        }
+
         for f in fields.iter() {
-            let fname = syn::Ident::new(&f.to_string(), proc_macro2::Span::call_site());
+            let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
 
             binds.push(quote! {
                 if let Some(#f) = &param.#f {
@@ -512,26 +587,26 @@ impl ApiModel<'_> {
 
         let call_map = self.call_map();
 
-        let for_where = if fields.len() > 0 {
+        let for_where = if where_clause.len() > 0 {
             quote! {
+                let mut i = 0;
                 let mut where_clause = vec![];
                 #(#where_clause)*
                 let where_clause_str = where_clause.join(" AND ");
                 let query = if where_clause.len() > 0 {
-                    format!("{} WHERE {}", #q, where_clause_str)
+                    format!("{} WHERE {}", #name::base_sql(#(#arg_names),*), where_clause_str)
                 } else {
-                    format!("{}", #q)
+                    format!("{}", #name::base_sql(#(#arg_names),*))
                 };
             }
         } else {
             quote! {
-                let query = format!("{}", #q);
+                let query = format!("{}", #name::base_sql(#(#arg_names),*));
             }
         };
 
         let output = quote! {
-            pub async fn find_one(&self, param: &#read_action) -> Result<#name> {
-                let mut i = 0;
+            pub async fn find_one(&self, #(#aggregate_args)* param: &#read_action) -> Result<#name> {
                 #for_where
                 tracing::debug!("{} query {}", #fmt_str, query);
 
@@ -729,14 +804,12 @@ impl ApiModel<'_> {
             returning.push(field_name.clone());
             let n = field.field_name_token();
 
-            if field.omitted {
+            if field.should_skip_inserting() {
                 continue;
             }
 
             args.push(field.arg_token());
-            binds.push(quote! {
-                .bind(#n)
-            });
+            binds.push(field.bind());
 
             insert_fields.push(field_name.clone());
             insert_values.push(format!("${}", i));
@@ -1081,10 +1154,18 @@ impl<'a> ApiModel<'a> {
 #[derive(Debug)]
 pub enum Relation {
     ManyToMany {
+        // Table name of the join table
         table_name: String,
+        // Foreign table name
         foreign_table_name: String,
+        // Primary key in the foreign table (default: id)
         foreign_key: String,
+        // Type of the primary key in the foreign table (default: BIGINT)
         foreign_key_type: String,
+        // Reference key of foreign table in the join table
+        foreign_primary_key: String,
+        // Reference key of the current table in the join table
+        foreign_reference_key: String,
     },
     ManyToOne {
         table_name: String,
@@ -1119,6 +1200,8 @@ pub struct ApiField {
     pub related: Option<String>,
     pub version: Option<String>,
 
+    pub aggregator: Option<Aggregator>,
+
     // depends on struct derive
     pub rename: Case,
     pub table: String,
@@ -1126,6 +1209,189 @@ pub struct ApiField {
 
 #[cfg(feature = "server")]
 impl ApiField {
+    pub fn rust_type_id(&self) -> syn::Ident {
+        syn::Ident::new(&self.rust_type, proc_macro2::Span::call_site())
+    }
+
+    pub fn sql_field_name(&self) -> String {
+        self.name.to_case(self.rename)
+    }
+
+    pub fn aggregate_expose_query(&self, bound_name: &str) -> Option<String> {
+        match self.aggregator {
+            Some(Aggregator::Exist) => Some(format!(
+                r#"
+CASE
+    WHEN COALESCE({}.value, 0) > 0 THEN true
+    ELSE false
+END AS {}"#,
+                bound_name, bound_name
+            )),
+            Some(_) => Some(format!(
+                "COALESCE({}.value, 0) AS {}",
+                bound_name, bound_name
+            )),
+
+            _ => None,
+        }
+    }
+
+    pub fn aggregate_arg_name(&self) -> Option<proc_macro2::TokenStream> {
+        match (&self.aggregator, &self.relation) {
+            (
+                Some(Aggregator::Exist),
+                Some(Relation::ManyToMany {
+                    ref foreign_primary_key,
+                    ..
+                }),
+            ) => {
+                let arg_name =
+                    syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
+
+                Some(quote! { #arg_name })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn aggregate_replace(&self, idx: usize) -> Option<proc_macro2::TokenStream> {
+        match (&self.aggregator, &self.relation) {
+            (
+                Some(Aggregator::Exist),
+                Some(Relation::ManyToMany {
+                    ref foreign_primary_key,
+                    ..
+                }),
+            ) => {
+                let arg_name =
+                    syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
+                let idx = syn::LitStr::new(&format!("${}", idx), proc_macro2::Span::call_site());
+
+                Some(quote! { .replace(#idx, #arg_name.to_string().as_str()) })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn aggregate_bind(&self) -> Option<proc_macro2::TokenStream> {
+        match (&self.aggregator, &self.relation) {
+            (
+                Some(Aggregator::Exist),
+                Some(Relation::ManyToMany {
+                    ref foreign_primary_key,
+                    ..
+                }),
+            ) => {
+                let arg_name =
+                    syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
+
+                Some(quote! { .bind(#arg_name) })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn aggregate_arg(&self) -> Option<proc_macro2::TokenStream> {
+        match (&self.aggregator, &self.relation) {
+            (
+                Some(Aggregator::Exist),
+                Some(Relation::ManyToMany {
+                    ref foreign_primary_key,
+                    ref foreign_key_type,
+                    ..
+                }),
+            ) => {
+                let arg_name =
+                    syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
+                let arg_type = syn::Ident::new(
+                    match foreign_key_type.as_str() {
+                        "BIGINT" => "i64",
+                        "INTEGER" => "i32",
+                        "BOOLEAN" => "bool",
+                        "TEXT" => "String",
+                        _ => "i64",
+                    },
+                    proc_macro2::Span::call_site(),
+                );
+
+                Some(quote! { #arg_name: #arg_type})
+            }
+            _ => None,
+        }
+    }
+
+    /// It will be bound {bound_name.value}.
+    pub fn aggregate_query(&self, bound_name: &str) -> Option<String> {
+        let (table_name, foreign_key) = match self.relation {
+            Some(Relation::OneToMany {
+                ref table_name,
+                ref foreign_key,
+            }) => (table_name, foreign_key),
+            Some(Relation::ManyToMany {
+                ref table_name,
+                ref foreign_reference_key,
+                ..
+            }) => (table_name, foreign_reference_key),
+
+            _ => return None,
+        };
+
+        let mut where_clause = "".to_string();
+
+        let aggregate = match self.aggregator {
+            Some(Aggregator::Count) => "COUNT(id)".to_string(),
+            Some(Aggregator::Sum(ref field_name)) => format!("SUM({})", field_name),
+            Some(Aggregator::Avg(ref field_name)) => format!("AVG({})", field_name),
+            Some(Aggregator::Max(ref field_name)) => format!("MAX({})", field_name),
+            Some(Aggregator::Min(ref field_name)) => format!("MIN({})", field_name),
+            Some(Aggregator::Exist) => {
+                let foreign_primary_key = match self.relation {
+                    Some(Relation::ManyToMany {
+                        ref foreign_primary_key,
+                        ..
+                    }) => foreign_primary_key,
+                    _ => return None,
+                };
+
+                where_clause = format!("WHERE {foreign_primary_key} = {{}}");
+
+                format!("COUNT({})", foreign_primary_key,)
+            }
+            None => return None,
+        };
+
+        // NOTE: currently only support for the first bound field. Usually, we can expect to bind the primary key of this table.
+        let mut query = format!(
+            r#"
+LEFT JOIN (
+    SELECT {}, {} AS value
+    FROM {} {}
+    GROUP BY {}
+) {} ON p.id = {}.{}
+"#,
+            // select
+            foreign_key,
+            aggregate,
+            table_name,
+            where_clause,
+            foreign_key,
+            // join
+            bound_name,
+            bound_name,
+            foreign_key,
+        );
+
+        Some(query)
+    }
+    pub fn should_skip_inserting(&self) -> bool {
+        self.omitted
+            || self.auto.len() > 0
+            || match self.relation {
+                Some(Relation::OneToMany { .. }) => true,
+                _ => false,
+            }
+    }
+
     pub fn arg_token(&self) -> proc_macro2::TokenStream {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let rust_type: proc_macro2::TokenStream = self.rust_type.parse().unwrap();
@@ -1319,53 +1585,24 @@ END $$;
         match &self.relation {
             Some(Relation::ManyToMany {
                 table_name,
-                foreign_table_name,
-                foreign_key,
-                foreign_key_type,
+                foreign_primary_key,
+                foreign_reference_key,
+                ..
             }) => {
                 tracing::debug!("additional query for many to many relation: {var_name}");
-                let this_key =
-                    format!("{}_{}", this_table_name, this_primary_key_name).to_case(case);
-                let foreign_pk = format!("{}_{}", foreign_table_name, foreign_key).to_case(case);
 
-                query.push(format!(
-                    "CREATE TABLE IF NOT EXISTS {} ({} {} NOT NULL, {} {} NOT NULL, {} PRIMARY KEY ({}, {}), FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE, FOREIGN KEY ({}) REFERENCES {} ({}) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({}); CREATE INDEX IF NOT EXISTS idx_{}_{} ON {}({});",
-                    // Table name for many to many relation
-                    table_name,
-                    // key for this table
-                    this_key,
-                    this_primary_key_type,
-                    // key for other table
-                    foreign_pk,
-                    foreign_key_type,
-                    // Additionaly fields
-                    match self.get_sql_field_type() {
-                        Some(field_type) =>
-                            format!("{},", field_type),
-                        None => "".to_string(),
-                    },
-                    // Composited primary key
-                    this_key,
-                    foreign_pk,
-                    // Foreign key for this table key
-                    this_key,
-                    this_table_name,
-                    this_primary_key_name.to_case(case),
-                    // Foreign key for other table
-                    foreign_pk,
-                    foreign_table_name,
-                    foreign_key.to_case(case),
-                    // Index for this table key
-                    table_name,
-                    this_key.to_case(Case::Snake),
-                    table_name,
-                    this_key,
-                    // Index for foreign table key
-                    table_name,
-                    foreign_pk.to_case(Case::Snake),
-                    table_name,
-                    foreign_pk
-                ));
+                if self.unique {
+                    let mut keys = [
+                        foreign_primary_key.to_string(),
+                        foreign_reference_key.to_string(),
+                    ];
+                    keys.sort();
+                    let idx_name = format!("idx_{}_{}", table_name, keys.join("_"));
+                    query.push(format!(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} ({}, {});",
+                        idx_name, table_name, keys[0], keys[1]
+                    ));
+                }
             }
             Some(Relation::ManyToOne { .. }) => {
                 tracing::debug!("additional query for many to one relation: {var_name}");
@@ -1394,21 +1631,67 @@ pub fn to_string(ty: &syn::Type) -> String {
 }
 
 #[cfg(feature = "server")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConsistentLevel {
-    Same,
-    Soft,
-    Hard,
-    Conflict,
-}
-
-#[cfg(feature = "server")]
 impl ApiField {
+    pub fn bind(&self) -> proc_macro2::TokenStream {
+        let n = self.field_name_token();
+        let sql_field_name = syn::LitStr::new(
+            &self.name.to_case(self.rename),
+            proc_macro2::Span::call_site(),
+        );
+
+        match (self.rust_type.as_str(), self.r#type.as_str()) {
+            (rust_type, "TEXT") if rust_type != "String" => {
+                quote! {
+                    .bind(#n.to_string())
+                }
+            }
+            ("String", "BIGINT") => {
+                quote! {
+                    .bind(#n.parse::<i64>().unwrap())
+                }
+            }
+            ("String", "INTEGER") => {
+                quote! {
+                    .bind(#n.parse::<i32>().unwrap())
+                }
+            }
+            ("u32", "INTEGER") => {
+                quote! {
+                    .bind(#n as i32)
+                }
+            }
+            ("u64", "BIGINT") => {
+                quote! {
+                    .bind(#n as i64)
+                }
+            }
+            _ => {
+                quote! {
+                    .bind(#n)
+                }
+            }
+        }
+    }
+
     pub fn call_map(&self) -> proc_macro2::TokenStream {
         let field_name = self.name.to_case(self.rename);
         let n = self.field_name_token();
 
         let sql_field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
+
+        match self.aggregator {
+            Some(Aggregator::Sum(_))
+            | Some(Aggregator::Avg(_))
+            | Some(Aggregator::Max(_))
+            | Some(Aggregator::Min(_)) => {
+                let rust_type = self.rust_type_id();
+
+                return quote! {
+                    #n: row.get::<bigdecimal::BigDecimal, _>(#sql_field_name).to_string().parse::<#rust_type>().unwrap()
+                };
+            }
+            _ => {}
+        };
 
         if &self.rust_type == "String" && &self.r#type != "TEXT" {
             if &self.r#type == "BIGINT" {
@@ -1494,11 +1777,15 @@ impl ApiField {
                 foreign_table_name,
                 foreign_key,
                 foreign_key_type,
+                foreign_primary_key,
+                foreign_reference_key,
             }) => Some(Relation::ManyToMany {
                 table_name: table_name.to_string(),
                 foreign_table_name: foreign_table_name.to_string(),
                 foreign_key: foreign_key.to_string(),
                 foreign_key_type: foreign_key_type.to_string(),
+                foreign_primary_key: foreign_primary_key.to_string(),
+                foreign_reference_key: foreign_reference_key.to_string(),
             }),
 
             Some(SqlAttribute::ManyToOne {
@@ -1553,7 +1840,6 @@ impl ApiField {
             }) => {
                 tracing::debug!("many to many realtion: {}", foreign_key_type);
                 failed_type_inference = false;
-                r#type = foreign_key_type.to_string();
             }
             _ => {}
         }
@@ -1585,6 +1871,7 @@ impl ApiField {
         let omitted = failed_type_inference
             || match relation {
                 Some(Relation::OneToMany { .. }) => true,
+                Some(Relation::ManyToMany { .. }) => true,
                 _ => false,
             }
             || primary_key
@@ -1596,6 +1883,14 @@ impl ApiField {
         tracing::debug!("unique: {}", unique);
 
         tracing::debug!("ended new for {}:{}", name, rust_type);
+
+        let aggregator = match f.attrs.get(&SqlAttributeKey::Aggregator) {
+            Some(SqlAttribute::Aggregator(aggregator)) => Some(aggregator.clone()),
+            _ => None,
+        };
+
+        tracing::debug!("aggregator: {:?}", aggregator);
+
         Self {
             name,
             primary_key,
@@ -1614,6 +1909,7 @@ impl ApiField {
             read_action_names,
             related,
             version,
+            aggregator,
 
             table,
             rename,

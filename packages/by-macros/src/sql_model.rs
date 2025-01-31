@@ -22,6 +22,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let find_one = model.find_one_function();
     let find = model.find_function();
     let from_trait = model.from_pg_row_trait();
+    let impl_functions = model.impl_functions();
 
     let output = quote! {
         impl #name {
@@ -29,6 +30,8 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #repo_name::new(pool)
             }
         }
+
+        #impl_functions
 
         #[derive(Debug, Clone)]
         pub struct #repo_name {
@@ -64,6 +67,7 @@ pub enum SqlAttributeKey {
     Auto,
     Version,
     Nullable,
+    Aggregator,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -72,15 +76,33 @@ pub enum AutoOperation {
     Update,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum Aggregator {
+    Count,
+    Exist,
+    Sum(String),
+    Avg(String),
+    Max(String),
+    Min(String),
+}
+
 #[derive(Debug)]
 pub enum SqlAttribute {
     PrimaryKey,
     SqlType(String),
     ManyToMany {
+        // Table name of the join table
         table_name: String,
+        // Foreign table name
         foreign_table_name: String,
+        // Primary key in the foreign table (default: id)
         foreign_key: String,
+        // Type of the primary key in the foreign table (default: BIGINT)
         foreign_key_type: String,
+        // Reference key of foreign table in the join table
+        foreign_primary_key: String,
+        // Reference key of the current table in the join table
+        foreign_reference_key: String,
     },
     ManyToOne {
         table_name: String,
@@ -96,6 +118,7 @@ pub enum SqlAttribute {
     Auto(Vec<AutoOperation>),
     Version(String),
     Nullable,
+    Aggregator(Aggregator),
 }
 
 #[derive(Debug)]
@@ -108,8 +131,11 @@ enum OpenedOffset {
     ForeignTableName,
     ForeignKey,
     ForeignKeyType,
+    ForeignPrimaryKey,
+    ForeignReferenceKey,
     Auto,
     Version,
+    Aggregator,
 }
 
 #[derive(Debug)]
@@ -167,13 +193,71 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             "foreign_key_type" => {
                                 opened = OpenedOffset::ForeignKeyType;
                             }
+                            "foreign_primary_key" => {
+                                opened = OpenedOffset::ForeignPrimaryKey;
+                            }
+                            "foreign_reference_key" => {
+                                opened = OpenedOffset::ForeignReferenceKey;
+                            }
                             "auto" => {
                                 opened = OpenedOffset::Auto;
                             }
                             "version" => {
                                 opened = OpenedOffset::Version;
                             }
+                            "aggregator" => {
+                                opened = OpenedOffset::Aggregator;
+                            }
                             _ => match opened {
+                                OpenedOffset::Aggregator => match id.as_str() {
+                                    "count" => {
+                                        field_attrs.insert(
+                                            SqlAttributeKey::Aggregator,
+                                            SqlAttribute::Aggregator(Aggregator::Count),
+                                        );
+                                    }
+                                    "sum" => {
+                                        field_attrs.insert(
+                                            SqlAttributeKey::Aggregator,
+                                            SqlAttribute::Aggregator(Aggregator::Sum(
+                                                "".to_string(),
+                                            )),
+                                        );
+                                    }
+                                    "avg" => {
+                                        field_attrs.insert(
+                                            SqlAttributeKey::Aggregator,
+                                            SqlAttribute::Aggregator(Aggregator::Avg(
+                                                "".to_string(),
+                                            )),
+                                        );
+                                    }
+                                    "max" => {
+                                        field_attrs.insert(
+                                            SqlAttributeKey::Aggregator,
+                                            SqlAttribute::Aggregator(Aggregator::Max(
+                                                "".to_string(),
+                                            )),
+                                        );
+                                    }
+                                    "min" => {
+                                        field_attrs.insert(
+                                            SqlAttributeKey::Aggregator,
+                                            SqlAttribute::Aggregator(Aggregator::Min(
+                                                "".to_string(),
+                                            )),
+                                        );
+                                    }
+                                    "exist" => {
+                                        field_attrs.insert(
+                                            SqlAttributeKey::Aggregator,
+                                            SqlAttribute::Aggregator(Aggregator::Exist),
+                                        );
+                                    }
+                                    _ => {
+                                        tracing::error!("invalid aggregator: {id}");
+                                    }
+                                },
                                 OpenedOffset::Version => {
                                     field_attrs.insert(
                                         SqlAttributeKey::Version,
@@ -194,6 +278,8 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                             foreign_table_name: "".to_string(),
                                             foreign_key: "id".to_string(),
                                             foreign_key_type: "BIGINT".to_string(),
+                                            foreign_primary_key: "".to_string(),
+                                            foreign_reference_key: "".to_string(),
                                         },
                                     );
                                     tracing::debug!("many_to_many: {name}");
@@ -228,11 +314,11 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                         {
                                             *foreign_key = id
                                         } else if let SqlAttribute::ManyToMany {
-                                            foreign_key: ref mut foreign_primary_key,
+                                            ref mut foreign_key,
                                             ..
                                         } = attr
                                         {
-                                            *foreign_primary_key = id
+                                            *foreign_key = id
                                         } else if let SqlAttribute::OneToMany {
                                             ref mut foreign_key,
                                             ..
@@ -267,6 +353,28 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                         } = attr
                                         {
                                             *foreign_key_type = id
+                                        }
+                                    });
+                                }
+                                OpenedOffset::ForeignPrimaryKey => {
+                                    field_attrs.get_mut(&SqlAttributeKey::Relation).map(|attr| {
+                                        if let SqlAttribute::ManyToMany {
+                                            ref mut foreign_primary_key,
+                                            ..
+                                        } = attr
+                                        {
+                                            *foreign_primary_key = id
+                                        }
+                                    });
+                                }
+                                OpenedOffset::ForeignReferenceKey => {
+                                    field_attrs.get_mut(&SqlAttributeKey::Relation).map(|attr| {
+                                        if let SqlAttribute::ManyToMany {
+                                            ref mut foreign_reference_key,
+                                            ..
+                                        } = attr
+                                        {
+                                            *foreign_reference_key = id
                                         }
                                     });
                                 }
@@ -316,6 +424,37 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                                 }
                                             });
                                         }
+                                    }
+                                }
+
+                                opened = OpenedOffset::None;
+                            }
+                            OpenedOffset::Aggregator => {
+                                for nested in group.stream() {
+                                    if let proc_macro2::TokenTree::Ident(iden) = nested {
+                                        let id = iden.to_string();
+
+                                        field_attrs.get_mut(&SqlAttributeKey::Aggregator).map(
+                                            |attr| {
+                                                if let SqlAttribute::Aggregator(aggregator) = attr {
+                                                    match aggregator {
+                                                        Aggregator::Sum(ref mut field) => {
+                                                            *field = id;
+                                                        }
+                                                        Aggregator::Avg(ref mut field) => {
+                                                            *field = id;
+                                                        }
+                                                        Aggregator::Max(ref mut field) => {
+                                                            *field = id;
+                                                        }
+                                                        Aggregator::Min(ref mut field) => {
+                                                            *field = id;
+                                                        }
+                                                        _ => {}
+                                                    }
+                                                }
+                                            },
+                                        );
                                     }
                                 }
 

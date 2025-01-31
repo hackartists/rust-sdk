@@ -23,7 +23,7 @@ mod server_tests {
 
     use super::*;
 
-    #[api_model(base = "/topics/v1", table = test_topics, iter_type=QueryResponse)]
+    #[api_model(base = "/topics/v1", read_action = [get_topic] , table = topics, iter_type=QueryResponse)]
     pub struct Topic {
         #[api_model(summary, primary_key)]
         pub id: String,
@@ -32,29 +32,28 @@ mod server_tests {
         #[api_model(summary, auto = [insert, update])]
         pub updated_at: i64,
 
-        #[api_model(summary, action = create)]
+        #[api_model(summary, action = create, action_by_id = update)]
         pub title: String,
-        #[api_model(summary, action = create)]
+        #[api_model(summary, action = create, action_by_id = update)]
         pub content: String,
 
-        #[api_model(summary, action = create)]
+        #[api_model(summary, action = create, action_by_id = update)]
         pub started_at: i64,
         // The end time of the vote
-        #[api_model(summary, action = create)]
+        #[api_model(summary, action = create, action_by_id = update)]
         pub ended_at: i64,
         // The number of required votes
-        #[api_model(summary, action = create)]
+        #[api_model(summary, action = create, action_by_id = update)]
         pub requirement: i64,
         // The number of voters
-        // #[api_model(summary, skip)]
-        // pub voters: i64,
-
+        #[api_model(summary, one_to_many = votes, foreign_key = topic_id, aggregator = count)]
+        pub voters: i64,
         // // Donation amount
-        // #[api_model(summary, skip)]
-        // pub amount: i64,
+        #[api_model(summary, one_to_many = votes, foreign_key = topic_id, aggregator = sum(amount))]
+        pub amount: i64,
 
-        // #[api_model(summary, skip)]
-        // pub voted: bool,
+        #[api_model(summary, many_to_many = votes, foreign_table_name = users, foreign_primary_key = user_id, foreign_reference_key = topic_id, aggregator = exist, unique)]
+        pub voted: bool,
     }
 
     #[tokio::test]
