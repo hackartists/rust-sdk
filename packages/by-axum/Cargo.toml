@@ -1,9 +1,9 @@
 [package]
 name = "by-axum"
 version = "0.2.12"
-edition = "2021"
+edition.workspace = true
 description = "Library satisfying Biyard API convention"
-license = "Apache-2.0"
+license.workspace = true
 keywords = ["axum", "lambda", "api", "serverless"]
 repository = "https://github.com/biyard/rust-sdk/tree/main/packages/by-axum"
 
