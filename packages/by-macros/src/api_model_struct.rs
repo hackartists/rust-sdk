@@ -491,14 +491,24 @@ impl ApiModel<'_> {
 
         let mut aggregates = vec![];
         let mut aggregated_fields = vec![];
+        let mut aggregate_args = vec![];
+        let mut arg_names = vec![];
 
         for (field_name, field) in self.fields.iter() {
             if let Some(query) = field.aggregate_query(&field_name) {
-                aggregates.push(query);
+                aggregates.push(query)
             }
 
             if let Some(q) = field.aggregate_expose_query(&field_name) {
                 aggregated_fields.push(q);
+            }
+
+            if let Some(q) = field.aggregate_arg() {
+                aggregate_args.push(q);
+            }
+
+            if let Some(q) = field.aggregate_arg_name() {
+                arg_names.push(q);
             }
         }
 
@@ -522,8 +532,8 @@ impl ApiModel<'_> {
         };
 
         let output = quote! {
-            pub fn base_sql() -> &'static str {
-                #q
+            pub fn base_sql(#(#aggregate_args),*) -> String {
+                format!(#q, #(#arg_names),*)
             }
         };
 
@@ -542,8 +552,20 @@ impl ApiModel<'_> {
             proc_macro2::Span::call_site(),
         );
 
-        let mut aggregates = vec![];
-        let mut aggregated_fields = vec![];
+        let mut aggregate_args = vec![];
+        let mut arg_names = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            if let Some(q) = field.aggregate_arg() {
+                aggregate_args.push(quote! {
+                    #q,
+                });
+            }
+
+            if let Some(q) = field.aggregate_arg_name() {
+                arg_names.push(q);
+            }
+        }
 
         for f in fields.iter() {
             let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
@@ -561,36 +583,9 @@ impl ApiModel<'_> {
                     where_clause.push(format!("{} = ${}", #fname, i));
                 }
             });
-
-            let field_name = f.to_string().to_case(self.rename);
-            let ff = self.fields.get(&field_name).unwrap();
-            if let Some(query) = ff.aggregate_query(&field_name) {
-                aggregates.push(query);
-            }
-
-            if let Some(q) = ff.aggregate_expose_query(&field_name) {
-                aggregated_fields.push(q);
-            }
         }
 
         let call_map = self.call_map();
-
-        let q = if aggregated_fields.len() > 0 {
-            syn::LitStr::new(
-                &format!(
-                    "SELECT p.*, {} FROM {} p {}",
-                    aggregated_fields.join(", "),
-                    self.table_name,
-                    aggregates.join(" "),
-                ),
-                proc_macro2::Span::call_site(),
-            )
-        } else {
-            syn::LitStr::new(
-                &format!("SELECT * FROM {}", self.table_name),
-                proc_macro2::Span::call_site(),
-            )
-        };
 
         let for_where = if where_clause.len() > 0 {
             quote! {
@@ -599,19 +594,19 @@ impl ApiModel<'_> {
                 #(#where_clause)*
                 let where_clause_str = where_clause.join(" AND ");
                 let query = if where_clause.len() > 0 {
-                    format!("{} WHERE {}", #q, where_clause_str)
+                    format!("{} WHERE {}", #name::base_sql(#(#arg_names),*), where_clause_str)
                 } else {
-                    format!("{}", #q)
+                    format!("{}", #name::base_sql(#(#arg_names),*))
                 };
             }
         } else {
             quote! {
-                let query = format!("{}", #q);
+                let query = format!("{}", #name::base_sql(#(#arg_names),*));
             }
         };
 
         let output = quote! {
-            pub async fn find_one(&self, param: &#read_action) -> Result<#name> {
+            pub async fn find_one(&self, #(#aggregate_args)* param: &#read_action) -> Result<#name> {
                 #for_where
                 tracing::debug!("{} query {}", #fmt_str, query);
 
@@ -1241,6 +1236,90 @@ END AS {}"#,
         }
     }
 
+    pub fn aggregate_arg_name(&self) -> Option<proc_macro2::TokenStream> {
+        match (&self.aggregator, &self.relation) {
+            (
+                Some(Aggregator::Exist),
+                Some(Relation::ManyToMany {
+                    ref foreign_primary_key,
+                    ..
+                }),
+            ) => {
+                let arg_name =
+                    syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
+
+                Some(quote! { #arg_name })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn aggregate_replace(&self, idx: usize) -> Option<proc_macro2::TokenStream> {
+        match (&self.aggregator, &self.relation) {
+            (
+                Some(Aggregator::Exist),
+                Some(Relation::ManyToMany {
+                    ref foreign_primary_key,
+                    ..
+                }),
+            ) => {
+                let arg_name =
+                    syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
+                let idx = syn::LitStr::new(&format!("${}", idx), proc_macro2::Span::call_site());
+
+                Some(quote! { .replace(#idx, #arg_name.to_string().as_str()) })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn aggregate_bind(&self) -> Option<proc_macro2::TokenStream> {
+        match (&self.aggregator, &self.relation) {
+            (
+                Some(Aggregator::Exist),
+                Some(Relation::ManyToMany {
+                    ref foreign_primary_key,
+                    ..
+                }),
+            ) => {
+                let arg_name =
+                    syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
+
+                Some(quote! { .bind(#arg_name) })
+            }
+            _ => None,
+        }
+    }
+
+    pub fn aggregate_arg(&self) -> Option<proc_macro2::TokenStream> {
+        match (&self.aggregator, &self.relation) {
+            (
+                Some(Aggregator::Exist),
+                Some(Relation::ManyToMany {
+                    ref foreign_primary_key,
+                    ref foreign_key_type,
+                    ..
+                }),
+            ) => {
+                let arg_name =
+                    syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
+                let arg_type = syn::Ident::new(
+                    match foreign_key_type.as_str() {
+                        "BIGINT" => "i64",
+                        "INTEGER" => "i32",
+                        "BOOLEAN" => "bool",
+                        "TEXT" => "String",
+                        _ => "i64",
+                    },
+                    proc_macro2::Span::call_site(),
+                );
+
+                Some(quote! { #arg_name: #arg_type})
+            }
+            _ => None,
+        }
+    }
+
     /// It will be bound {bound_name.value}.
     pub fn aggregate_query(&self, bound_name: &str) -> Option<String> {
         let (table_name, foreign_key) = match self.relation {
@@ -1266,15 +1345,15 @@ END AS {}"#,
             Some(Aggregator::Max(ref field_name)) => format!("MAX({})", field_name),
             Some(Aggregator::Min(ref field_name)) => format!("MIN({})", field_name),
             Some(Aggregator::Exist) => {
-                let (foreign_primary_key, foreign_reference_key) = match self.relation {
+                let foreign_primary_key = match self.relation {
                     Some(Relation::ManyToMany {
                         ref foreign_primary_key,
                         ..
-                    }) => (foreign_key, "id"),
+                    }) => foreign_primary_key,
                     _ => return None,
                 };
 
-                where_clause = format!("WHERE {foreign_primary_key} = $1");
+                where_clause = format!("WHERE {foreign_primary_key} = {{}}");
 
                 format!("COUNT({})", foreign_primary_key,)
             }

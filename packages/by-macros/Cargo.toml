@@ -11,6 +11,7 @@ repository = "https://github.com/biyard/rust-sdk/tree/main/packages/by-macros"
 proc-macro = true
 
 [dependencies]
+bigdecimal = "0.4.7"
 convert_case = "0.7.1"
 indexmap = "2.7.1"
 proc-macro2 = "1.0.93"
@@ -30,7 +31,7 @@ reqwest = "0.12.12"
 by-types.workspace = true
 schemars.workspace = true
 tokio = { version = "1.43.0", features = ["full"] }
-sqlx = { version = "0.8.3", features = ["sqlite", "postgres", "runtime-tokio"] }
+sqlx = { version = "0.8.3", features = ["sqlite", "postgres", "runtime-tokio", "bigdecimal"] }
 
 [features]
 server = []
