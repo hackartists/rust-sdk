@@ -1483,6 +1483,27 @@ impl ApiModel<'_> {
         }
     }
 
+    pub fn group_by(&self) -> proc_macro2::TokenStream {
+        let name = self.name_id;
+        let mut group_by = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            if let Some(q) = field.group_by() {
+                group_by.push(q);
+            }
+        }
+
+        let group_by = syn::LitStr::new(&group_by.join(" "), proc_macro2::Span::call_site());
+
+        let output = quote! {
+            pub fn group_by() -> String {
+                #group_by.to_string()
+            }
+        };
+
+        output.into()
+    }
+
     pub fn base_sql_function(&self) -> proc_macro2::TokenStream {
         let name = self.name_id;
 
@@ -1509,8 +1530,6 @@ impl ApiModel<'_> {
             }
         }
 
-        let call_map = self.call_map();
-
         let q = if aggregated_fields.len() > 0 {
             syn::LitStr::new(
                 &format!(
@@ -1528,10 +1547,14 @@ impl ApiModel<'_> {
             )
         };
 
+        let group_by = self.group_by();
+
         let output = quote! {
             pub fn base_sql(#(#aggregate_args),*) -> String {
                 format!(#q, #(#arg_names),*)
             }
+
+            #group_by
         };
 
         output.into()
@@ -1590,7 +1613,7 @@ impl ApiModel<'_> {
                 let mut where_clause = vec![];
                 #(#where_clause)*
                 let where_clause_str = where_clause.join(" AND ");
-                let query = if where_clause.len() > 0 {
+                let mut query = if where_clause.len() > 0 {
                     format!("{} WHERE {}", #name::base_sql(#(#arg_names),*), where_clause_str)
                 } else {
                     format!("{}", #name::base_sql(#(#arg_names),*))
@@ -1598,14 +1621,16 @@ impl ApiModel<'_> {
             }
         } else {
             quote! {
-                let query = format!("{}", #name::base_sql(#(#arg_names),*));
+                let mut query = format!("{}", #name::base_sql(#(#arg_names),*));
             }
         };
 
         let output = quote! {
             pub async fn find_one(&self, #(#aggregate_args)* param: &#read_action) -> Result<#name> {
                 #for_where
-                tracing::debug!("{} query {}", #fmt_str, query);
+                query.push_str(" ");
+                query.push_str(#name::group_by().as_str());
+                tracing::debug!("{} query {}: {:?}", #fmt_str, query, param);
 
                 let mut q = sqlx::query(&query);
 
@@ -1631,7 +1656,6 @@ impl ApiModel<'_> {
 
     pub fn call_map_summary(&self) -> proc_macro2::TokenStream {
         let name = self.summary_struct_name();
-        let mut type_bridges = vec![];
         let mut return_bounds = vec![];
 
         for field in self.summary_fields.iter() {
@@ -1648,32 +1672,7 @@ impl ApiModel<'_> {
             let n = field.field_name_token();
             let rust_type = &field.rust_type;
 
-            if field.primary_key {
-                type_bridges.push(quote! {
-                    let #n: i64 = row.get(#sql_field_name);
-                });
-                return_bounds.push(quote! {
-                    #n: format!("{}",  #n)
-                });
-            } else {
-                if rust_type == "u64" || rust_type == "u32" {
-                    let bridge_type = syn::Ident::new(
-                        &rust_type.replace("u", "i"),
-                        proc_macro2::Span::call_site(),
-                    );
-                    let real_type = syn::Ident::new(rust_type, proc_macro2::Span::call_site());
-                    type_bridges.push(quote! {
-                        let #n: #bridge_type = row.get(#sql_field_name);
-                    });
-                    return_bounds.push(quote! {
-                        #n: #n as #real_type
-                    });
-                } else {
-                    return_bounds.push(quote! {
-                        #n: row.get(#sql_field_name)
-                    });
-                }
-            }
+            return_bounds.push(field.call_map());
         }
 
         let output = quote! {
@@ -1681,7 +1680,6 @@ impl ApiModel<'_> {
                 use sqlx::Row;
 
                 total = row.get("total_count");
-                #(#type_bridges)*
                 #name {
                     #(#return_bounds),*
                 }
@@ -1693,7 +1691,6 @@ impl ApiModel<'_> {
 
     pub fn call_map_iter(&self) -> proc_macro2::TokenStream {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
-        let mut type_bridges = vec![];
         let mut return_bounds = vec![];
 
         for (field_name, field) in self.fields.iter() {
@@ -1701,32 +1698,7 @@ impl ApiModel<'_> {
             let n = field.field_name_token();
             let rust_type = &field.rust_type;
 
-            if field.primary_key {
-                type_bridges.push(quote! {
-                    let #n: i64 = row.get(#sql_field_name);
-                });
-                return_bounds.push(quote! {
-                    #n: format!("{}",  #n)
-                });
-            } else {
-                if rust_type == "u64" || rust_type == "u32" {
-                    let bridge_type = syn::Ident::new(
-                        &rust_type.replace("u", "i"),
-                        proc_macro2::Span::call_site(),
-                    );
-                    let real_type = syn::Ident::new(rust_type, proc_macro2::Span::call_site());
-                    type_bridges.push(quote! {
-                        let #n: #bridge_type = row.get(#sql_field_name);
-                    });
-                    return_bounds.push(quote! {
-                        #n: #n as #real_type
-                    });
-                } else {
-                    return_bounds.push(quote! {
-                        #n: row.get(#sql_field_name)
-                    });
-                }
-            }
+            return_bounds.push(field.call_map());
         }
 
         let output = quote! {
@@ -1735,7 +1707,6 @@ impl ApiModel<'_> {
 
                 total = row.get("total_count");
 
-                #(#type_bridges)*
                 #name {
                     #(#return_bounds),*
                 }
@@ -1764,30 +1735,77 @@ impl ApiModel<'_> {
             return_bounds.push(field.call_map());
         }
 
-        quote! {
+        let out = quote! {
             use sqlx::Row;
 
             #name {
                 #(#return_bounds),*
             }
-        }
-        .into()
+        };
+        tracing::debug!("From pg row inner: {}", out.to_string());
+        out.into()
     }
 
     pub fn from_pg_row_trait(&self) -> proc_macro2::TokenStream {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let inner = self.from_pg_row_inner();
-        quote! {
+        let out = quote! {
             impl From<sqlx::postgres::PgRow> for #name {
                 fn from(row: sqlx::postgres::PgRow) -> Self {
                     #inner
                 }
             }
-        }
-        .into()
+        };
+        tracing::debug!("From pg row trait: {}", out.to_string());
+        out.into()
     }
 
-    pub fn insert_function(&self) -> proc_macro2::TokenStream {
+    pub fn insert_function_for_many_to_many(&self) -> proc_macro2::TokenStream {
+        let name = self.name_id;
+        let mut dep_args = vec![];
+        let mut joined_query = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            if field.aggregator.is_some() {
+                continue;
+            }
+
+            if let Some(Relation::ManyToMany {
+                ref table_name,
+                ref foreign_primary_key,
+                ref foreign_reference_key,
+                ..
+            }) = &field.relation
+            {
+                let foreign_primary_key =
+                    syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
+
+                dep_args.push(quote! {
+                    #foreign_primary_key: i64
+                });
+
+                let q = syn::LitStr::new(
+                    &format!(
+                        "INSERT INTO {} ({}, {}) VALUES ($1, $2)",
+                        table_name, foreign_primary_key, foreign_reference_key
+                    ),
+                    proc_macro2::Span::call_site(),
+                );
+
+                joined_query.push(quote! {
+                    sqlx::query(#q)
+                        .bind(#foreign_primary_key)
+                        .bind(id)
+                        .execute(&mut *tx)
+                        .await?;
+                });
+            }
+        }
+
+        if dep_args.len() == 0 {
+            return quote! {};
+        }
+
         let mut insert_fields = vec![];
         let mut insert_values = vec![];
 
@@ -1816,6 +1834,69 @@ impl ApiModel<'_> {
 
         let q = syn::LitStr::new(
             &format!(
+                "INSERT INTO {} ({}) VALUES ({}) RETURNING id",
+                self.table_name,
+                insert_fields.join(", "),
+                insert_values.join(", "),
+            ),
+            proc_macro2::Span::call_site(),
+        );
+
+        quote! {
+            pub async fn insert_with_dependency(&self, #(#dep_args),*, #(#args),*) -> Result<()> {
+                use sqlx::Row;
+                use sqlx::postgres::PgRow;
+                let mut tx = self.pool.begin().await?;
+
+
+                let row: PgRow = sqlx::query(#q)
+                    #(#binds)*
+                .fetch_one(&mut *tx)
+                    .await?;
+
+                let id: i64 = row.try_get("id")?;
+
+                #(#joined_query)*
+
+                tx.commit().await?;
+                Ok(())
+            }
+        }
+    }
+
+    pub fn insert_function(&self) -> proc_macro2::TokenStream {
+        let mut insert_fields = vec![];
+        let mut insert_values = vec![];
+
+        let mut i = 1;
+
+        let mut returning = vec![];
+        let mut args = vec![];
+        let mut binds = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            if !field.should_return_in_insert() {
+                continue;
+            }
+            returning.push(field_name.clone());
+
+            let n = field.field_name_token();
+
+            if field.should_skip_inserting() {
+                continue;
+            }
+
+            args.push(field.arg_token());
+            binds.push(field.bind());
+
+            insert_fields.push(field_name.clone());
+            insert_values.push(format!("${}", i));
+
+            i += 1;
+        }
+
+        let q = syn::LitStr::new(
+            &format!(
                 "INSERT INTO {} ({}) VALUES ({}) RETURNING {}",
                 self.table_name,
                 insert_fields.join(", "),
@@ -1827,6 +1908,8 @@ impl ApiModel<'_> {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let call_map = self.call_map();
 
+        let insert_with_dep = self.insert_function_for_many_to_many();
+
         let output = quote! {
             pub async fn insert(&self, #(#args),*) -> Result<#name> {
                 let row = sqlx::query(#q)
@@ -1837,6 +1920,8 @@ impl ApiModel<'_> {
 
                 Ok(row)
             }
+
+            #insert_with_dep
         };
         tracing::debug!("insert function output: {}", output);
 
@@ -2235,7 +2320,33 @@ END AS {}"#,
                 bound_name, bound_name
             )),
 
-            _ => None,
+            None => match &self.relation {
+                Some(Relation::ManyToMany {
+                    ref foreign_table_name,
+                    ref foreign_primary_key,
+                    ..
+                }) => {
+                    if self.rust_type.starts_with("Vec") {
+                        Some(format!(
+                            r#"
+COALESCE(
+    json_agg(
+        jsonb_set(
+            to_jsonb(f),
+            '{{{{id}}}}',
+            to_jsonb(f.id::TEXT)
+        )
+    ) FILTER (WHERE f.id IS NOT NULL), '[]'
+) AS {}
+"#,
+                            bound_name
+                        ))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            },
         }
     }
 
@@ -2253,6 +2364,22 @@ END AS {}"#,
 
                 Some(quote! { #arg_name })
             }
+            // (
+            //     None,
+            //     Some(Relation::ManyToMany {
+            //         ref foreign_reference_key,
+            //         ..
+            //     }),
+            // ) => {
+            //     if !self.rust_type.starts_with("Vec") {
+            //         return None;
+            //     }
+
+            //     let arg_name =
+            //         syn::Ident::new(&foreign_reference_key, proc_macro2::Span::call_site());
+
+            //     Some(quote! { #arg_name })
+            // }
             _ => None,
         }
     }
@@ -2319,7 +2446,37 @@ END AS {}"#,
 
                 Some(quote! { #arg_name: #arg_type})
             }
+            // (
+            //     None,
+            //     Some(Relation::ManyToMany {
+            //         ref foreign_reference_key,
+            //         ..
+            //     }),
+            // ) => {
+            //     if !self.rust_type.starts_with("Vec") {
+            //         return None;
+            //     }
+
+            //     let arg_name =
+            //         syn::Ident::new(&foreign_reference_key, proc_macro2::Span::call_site());
+
+            //     Some(quote! { #arg_name: i64})
+            // }
             _ => None,
+        }
+    }
+
+    pub fn group_by(&self) -> Option<String> {
+        if self.aggregator.is_none() && self.rust_type.starts_with("Vec") {
+            match self.relation {
+                Some(Relation::ManyToMany {
+                    ref foreign_primary_key,
+                    ..
+                }) => return Some("GROUP BY p.id".to_string()),
+                _ => None,
+            }
+        } else {
+            None
         }
     }
 
@@ -2332,9 +2489,30 @@ END AS {}"#,
             }) => (table_name, foreign_key),
             Some(Relation::ManyToMany {
                 ref table_name,
+                ref foreign_table_name,
+                ref foreign_primary_key,
                 ref foreign_reference_key,
                 ..
-            }) => (table_name, foreign_reference_key),
+            }) => {
+                if self.aggregator.is_none() {
+                    let query = format!(
+                        r#"
+LEFT JOIN {} j ON p.id = j.{}
+LEFT JOIN {} f ON j.{} = f.id
+"#,
+                        // reference
+                        table_name,
+                        foreign_reference_key,
+                        // foreign
+                        foreign_table_name,
+                        foreign_primary_key,
+                    );
+
+                    return Some(query);
+                }
+
+                (table_name, foreign_reference_key)
+            }
 
             _ => return None,
         };
@@ -2364,7 +2542,7 @@ END AS {}"#,
         };
 
         // NOTE: currently only support for the first bound field. Usually, we can expect to bind the primary key of this table.
-        let mut query = format!(
+        let query = format!(
             r#"
 LEFT JOIN (
     SELECT {}, {} AS value
@@ -2386,6 +2564,14 @@ LEFT JOIN (
 
         Some(query)
     }
+
+    pub fn should_return_in_insert(&self) -> bool {
+        match self.relation {
+            Some(Relation::ManyToOne { .. }) | Some(Relation::ManyToMany { .. }) => false,
+            _ => true,
+        }
+    }
+
     pub fn should_skip_inserting(&self) -> bool {
         self.omitted
             || self.auto.len() > 0
@@ -2484,6 +2670,56 @@ END $$"#,
         query
     }
 
+    pub fn create_functions(&self) -> Vec<String> {
+        let mut query = vec![];
+        query.push(
+            r#"
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_proc
+                WHERE proname = 'set_updated_at'
+                AND pg_catalog.pg_function_is_visible(oid)
+            ) THEN
+                CREATE FUNCTION set_updated_at()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    NEW.updated_at := EXTRACT(EPOCH FROM now()); -- seconds
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+            END IF;
+        END $$;
+    "#
+            .to_string(),
+        );
+
+        query.push(
+            r#"
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_proc
+                WHERE proname = 'set_created_at'
+                AND pg_catalog.pg_function_is_visible(oid)
+            ) THEN
+                CREATE FUNCTION set_created_at()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    NEW.created_at := EXTRACT(EPOCH FROM now()); -- seconds
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+            END IF;
+        END $$;
+    "#
+            .to_string(),
+        );
+
+        query
+    }
     pub fn alter_query(&self) -> Vec<String> {
         if self.version.is_none() {
             return vec![];
@@ -2536,8 +2772,7 @@ END $$;
                 ));
             }
             Some(Relation::OneToMany { .. }) => return None,
-            // NOTE: ManyToMany will be handled in the additional query.
-            //       ManyToMany field not yet tested.
+            Some(Relation::ManyToMany { .. }) => return None,
             _ => format!("{} {}", name, self.r#type),
         };
 
@@ -2590,9 +2825,38 @@ END $$;
                 table_name,
                 foreign_primary_key,
                 foreign_reference_key,
+                foreign_table_name,
                 ..
             }) => {
                 tracing::debug!("additional query for many to many relation: {var_name}");
+                let q = format!(
+                    r#"
+CREATE TABLE IF NOT EXISTS {} (
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    {} BIGINT NOT NULL,
+    {} BIGINT NOT NULL,
+    created_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+
+    CONSTRAINT fk_{}_{} FOREIGN KEY ({}) REFERENCES {}(id) ON DELETE CASCADE,
+    CONSTRAINT fk_{}_{} FOREIGN KEY ({}) REFERENCES {}(id) ON DELETE CASCADE
+);
+"#,
+                    table_name,
+                    foreign_primary_key,
+                    foreign_reference_key,
+                    // constraint 1
+                    this_table_name,
+                    foreign_table_name,
+                    foreign_reference_key,
+                    this_table_name,
+                    // constraint 1
+                    foreign_table_name,
+                    this_table_name,
+                    foreign_primary_key,
+                    foreign_table_name,
+                );
+                tracing::debug!("query: {}", q);
+                query.push(q);
 
                 if self.unique {
                     let mut keys = [
@@ -2696,6 +2960,8 @@ impl ApiField {
             _ => {}
         };
 
+        tracing::debug!("callmap {}: {}", self.name, self.rust_type);
+
         if &self.rust_type == "String" && &self.r#type != "TEXT" {
             if &self.r#type == "BIGINT" {
                 return quote! {
@@ -2720,8 +2986,20 @@ impl ApiField {
             }
         }
 
+        if self.rust_type.starts_with("Vec") {
+            tracing::debug!("vector callmap: {}: {}", self.name, self.rust_type);
+            let field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
+
+            return quote! {
+                #n: match row.try_get::<serde_json::Value, _>(#field_name) {
+                    Ok(v) => serde_json::from_value(v).unwrap(),
+                    _ => vec![]
+                }
+            };
+        }
+
         quote! {
-            #n: row.get(#sql_field_name)
+            #n: row.try_get(#sql_field_name).unwrap_or_default()
         }
     }
 

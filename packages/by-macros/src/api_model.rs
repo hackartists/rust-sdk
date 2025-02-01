@@ -53,8 +53,8 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let output = quote! {
         #db_structs
 
-        #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
-        #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo, sqlx::FromRow))]
+        #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default, Eq, PartialEq)]
+        #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         #stripped_input
 
         #action_struct
@@ -70,7 +70,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         #get_response
     };
 
-    tracing::debug!("Generated code: {}", output.to_string());
+    tracing::info!("Generated code: {}", output.to_string());
 
     output.into()
 }

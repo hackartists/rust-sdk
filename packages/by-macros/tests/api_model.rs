@@ -20,7 +20,6 @@ impl<T> From<(Vec<T>, i64)> for QueryResponse<T> {
 }
 
 #[cfg(not(feature = "server"))]
-#[derive(Eq, PartialEq)]
 #[api_model(base = "/topics/v1", iter_type=QueryResponse, table = topics)] // rename is supported but usually use default(snake_case)
 pub struct Topic {
     #[api_model(summary, primary_key)]
@@ -52,7 +51,6 @@ pub struct Topic {
 }
 
 #[cfg(not(feature = "server"))]
-#[derive(Eq, PartialEq)]
 #[api_model(base = "/topics/v1/:topic-id/comments", iter_type=QueryResponse)]
 pub struct Comment {
     pub id: String,
@@ -188,6 +186,7 @@ mod normal {
 
 #[cfg(feature = "server")]
 mod server_tests {
+    use sqlx::Postgres;
     use std::time::SystemTime;
     use validator::Validate;
 
@@ -212,6 +211,40 @@ mod server_tests {
         pub email: String,
         #[api_model(action = signup)]
         pub profile_url: String,
+    }
+
+    async fn db_setup() {
+        let pool: sqlx::Pool<sqlx::Postgres> = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(5)
+            .connect(
+                option_env!("DATABASE_URL")
+                    .unwrap_or("postgres://postgres:postgres@localhost:5432/test"),
+            )
+            .await
+            .unwrap();
+        let query = r#"
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at := EXTRACT(EPOCH FROM now()); -- seconds
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+    "#;
+
+        sqlx::query(query).execute(&pool).await.unwrap();
+
+        let query = r#"
+CREATE OR REPLACE FUNCTION set_created_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.created_at := EXTRACT(EPOCH FROM now()); -- seconds
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+    "#;
+
+        sqlx::query(query).execute(&pool).await.unwrap();
     }
 
     #[test]
@@ -276,6 +309,7 @@ mod server_tests {
 
     #[tokio::test]
     async fn test_db_create() {
+        db_setup().await;
         use sqlx::{postgres::PgPoolOptions, Postgres};
         let _ = tracing_subscriber::fmt::try_init();
 
@@ -291,7 +325,7 @@ mod server_tests {
             .max_connections(5)
             .connect(
                 option_env!("DATABASE_URL")
-                    .unwrap_or("postgres://postgres:password@localhost:5432/test"),
+                    .unwrap_or("postgres://postgres:postgres@localhost:5432/test"),
             )
             .await
             .unwrap();
@@ -364,6 +398,6 @@ mod server_tests {
         };
 
         assert_eq!(total2 > 0, true);
-        assert!(users_2.len() == 2, "incorrect length; it must be two");
+        assert_eq!(users_2.len(), 2, "incorrect length; it must be two");
     }
 }
