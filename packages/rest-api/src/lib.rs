@@ -38,6 +38,32 @@ static mut HEADERS: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
 //     }
 // }
 
+pub fn get_authz_token() -> Option<String> {
+    unsafe {
+        let headers = HEADERS.read().unwrap();
+        match headers.as_ref() {
+            Some(headers) => headers
+                .get("Authorization")
+                .cloned()
+                .unwrap_or_default()
+                .split(" ")
+                .last()
+                .map(|s| s.to_string()),
+            None => None,
+        }
+    }
+}
+
+pub fn get_header(key: &str) -> Option<String> {
+    unsafe {
+        let headers = HEADERS.read().unwrap();
+        match headers.as_ref() {
+            Some(headers) => headers.get(key).cloned(),
+            None => None,
+        }
+    }
+}
+
 pub fn add_header(key: String, value: String) {
     unsafe {
         let mut headers = HEADERS.write().unwrap();

@@ -857,7 +857,7 @@ dependencies = [
 
 [[package]]
 name = "by-types"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "aide",
  "axum 0.8.1",
@@ -3697,7 +3697,7 @@ dependencies = [
 
 [[package]]
 name = "rest-api"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "base64 0.22.1",
  "candid",
