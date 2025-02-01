@@ -11,6 +11,19 @@ jobs:
   build-deployment:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v3
         with:
@@ -26,13 +39,9 @@ jobs:
       - name: test
         run: cargo test
 
-      # - name: test with server feature
-      #   env:
-      #     DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      #   run: cargo test --features server
+      - name: test with server feature
+        run: cargo test --features server
 
       - name: Building packages
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           make build
