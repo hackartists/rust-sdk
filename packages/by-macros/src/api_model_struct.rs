@@ -1793,7 +1793,7 @@ impl ApiModel<'_> {
         let mut joined_query = vec![];
 
         for (field_name, field) in self.fields.iter() {
-            if field.aggregator.is_none() {
+            if field.aggregator.is_some() {
                 continue;
             }
 
@@ -1820,10 +1820,10 @@ impl ApiModel<'_> {
                 );
 
                 joined_query.push(quote! {
-                    sqlx::query(#1)
+                    sqlx::query(#q)
                         .bind(#foreign_primary_key)
                         .bind(id)
-                        .execute(&mut tx)
+                        .execute(&mut *tx)
                         .await?;
                 });
             }
@@ -1873,14 +1873,14 @@ impl ApiModel<'_> {
 
         quote! {
             pub async fn insert_with_dependency(&self, #(#dep_args),*, #(#args),*) -> Result<()> {
-                use sqlx::{Error, Row};
+                use sqlx::Row;
                 use sqlx::postgres::PgRow;
                 let mut tx = self.pool.begin().await?;
 
 
                 let row: PgRow = sqlx::query(#q)
                     #(#binds)*
-                .fetch_one(&mut tx)
+                .fetch_one(&mut *tx)
                     .await?;
 
                 let id: i64 = row.try_get("id")?;

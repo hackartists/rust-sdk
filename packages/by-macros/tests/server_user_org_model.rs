@@ -51,8 +51,52 @@ mod server_tests {
         #[api_model(many_to_many = uo_user_orgs, foreign_table_name = uo_users, foreign_primary_key = user_id, foreign_reference_key = org_id)]
         pub users: Vec<User>,
     }
-}
 
-mod created {
-    use super::*;
+    #[tokio::test]
+    async fn test_user_org() {
+        use sqlx::{postgres::PgPoolOptions, Postgres};
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let email = format!("test-{}@test.com", now);
+        let password = "password".to_string();
+
+        let pool: sqlx::Pool<Postgres> = PgPoolOptions::new()
+            .max_connections(5)
+            .connect(
+                option_env!("DATABASE_URL")
+                    .unwrap_or("postgres://postgres:password@localhost:5432/test"),
+            )
+            .await
+            .unwrap();
+
+        let u = User::get_repository(pool.clone());
+        u.create_table().await.unwrap();
+
+        let o = Organization::get_repository(pool.clone());
+        o.create_table().await.unwrap();
+
+        let res = u.insert(email.clone(), password.clone()).await;
+        assert!(res.is_ok());
+
+        let res = u
+            .find_one(&UserReadAction::new().get_user(email.clone(), password.clone()))
+            .await;
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert_eq!(res.email, email);
+        assert_eq!(res.password, password);
+        assert_ne!(res.id, "");
+
+        let name = "org".to_string();
+        let res = o
+            .insert_with_dependency(res.id.parse().unwrap(), name.to_string())
+            .await;
+
+        assert!(res.is_ok());
+    }
 }
