@@ -1,5 +1,6 @@
 extern crate proc_macro;
 
+mod action;
 mod api_model;
 mod api_model_struct;
 mod enum_prop;
