@@ -2670,6 +2670,56 @@ END $$"#,
         query
     }
 
+    pub fn create_functions(&self) -> Vec<String> {
+        let mut query = vec![];
+        query.push(
+            r#"
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_proc
+                WHERE proname = 'set_updated_at'
+                AND pg_catalog.pg_function_is_visible(oid)
+            ) THEN
+                CREATE FUNCTION set_updated_at()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    NEW.updated_at := EXTRACT(EPOCH FROM now()); -- seconds
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+            END IF;
+        END $$;
+    "#
+            .to_string(),
+        );
+
+        query.push(
+            r#"
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_proc
+                WHERE proname = 'set_created_at'
+                AND pg_catalog.pg_function_is_visible(oid)
+            ) THEN
+                CREATE FUNCTION set_created_at()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    NEW.created_at := EXTRACT(EPOCH FROM now()); -- seconds
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+            END IF;
+        END $$;
+    "#
+            .to_string(),
+        );
+
+        query
+    }
     pub fn alter_query(&self) -> Vec<String> {
         if self.version.is_none() {
             return vec![];
@@ -2836,6 +2886,7 @@ CREATE TABLE IF NOT EXISTS {} (
 
         query.extend(self.trigger_query());
         query.extend(self.alter_query());
+        query.extend(self.create_functions());
 
         query
     }

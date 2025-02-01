@@ -38,12 +38,12 @@ jobs:
 
       - name: test
         env:
-          RUSTFLAGS: "-Dwarnings"
+          RUSTFLAGS: "-Awarnings"
         run: cargo test
 
       - name: test with server feature
         env:
-          RUSTFLAGS: "-Dwarnings"
+          RUSTFLAGS: "-Awarnings"
         run: cargo test --features server
 
       - name: Building packages
