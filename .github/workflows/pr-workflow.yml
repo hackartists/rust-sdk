@@ -37,9 +37,13 @@ jobs:
           toolchain: stable
 
       - name: test
+        env:
+          RUSTFLAGS: "-Dwarnings"
         run: cargo test
 
       - name: test with server feature
+        env:
+          RUSTFLAGS: "-Dwarnings"
         run: cargo test --features server
 
       - name: Building packages
