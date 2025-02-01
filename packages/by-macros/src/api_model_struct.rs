@@ -1787,6 +1787,112 @@ impl ApiModel<'_> {
         .into()
     }
 
+    pub fn insert_function_for_many_to_many(&self) -> proc_macro2::TokenStream {
+        let name = self.name_id;
+        let mut dep_args = vec![];
+        let mut joined_query = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            if field.aggregator.is_none() {
+                continue;
+            }
+
+            if let Some(Relation::ManyToMany {
+                ref table_name,
+                ref foreign_primary_key,
+                ref foreign_reference_key,
+                ..
+            }) = &field.relation
+            {
+                let foreign_primary_key =
+                    syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
+
+                dep_args.push(quote! {
+                    #foreign_primary_key: i64
+                });
+
+                let q = syn::LitStr::new(
+                    &format!(
+                        "INSERT INTO {} ({}, {}) VALUES ($1, $2)",
+                        table_name, foreign_primary_key, foreign_reference_key
+                    ),
+                    proc_macro2::Span::call_site(),
+                );
+
+                joined_query.push(quote! {
+                    sqlx::query(#1)
+                        .bind(#foreign_primary_key)
+                        .bind(id)
+                        .execute(&mut tx)
+                        .await?;
+                });
+            }
+        }
+
+        if dep_args.len() == 0 {
+            return quote! {};
+        }
+
+        let mut insert_fields = vec![];
+        let mut insert_values = vec![];
+
+        let mut i = 1;
+
+        let mut returning = vec![];
+        let mut args = vec![];
+        let mut binds = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            returning.push(field_name.clone());
+            let n = field.field_name_token();
+
+            if field.should_skip_inserting() {
+                continue;
+            }
+
+            args.push(field.arg_token());
+            binds.push(field.bind());
+
+            insert_fields.push(field_name.clone());
+            insert_values.push(format!("${}", i));
+
+            i += 1;
+        }
+
+        let q = syn::LitStr::new(
+            &format!(
+                "INSERT INTO {} ({}) VALUES ({}) RETURNING {}",
+                self.table_name,
+                insert_fields.join(", "),
+                insert_values.join(", "),
+                returning.join(", "),
+            ),
+            proc_macro2::Span::call_site(),
+        );
+        let call_map = self.call_map();
+
+        quote! {
+            pub async fn insert_with_dependency(&self, #(#dep_args),*, #(#args),*) -> Result<()> {
+                use sqlx::{Error, Row};
+                use sqlx::postgres::PgRow;
+                let mut tx = self.pool.begin().await?;
+
+
+                let row: PgRow = sqlx::query(#q)
+                    #(#binds)*
+                .fetch_one(&mut tx)
+                    .await?;
+
+                let id: i64 = row.try_get("id")?;
+
+                #(#joined_query)*
+
+                tx.commit().await?;
+                Ok(())
+            }
+        }
+    }
+
     pub fn insert_function(&self) -> proc_macro2::TokenStream {
         let mut insert_fields = vec![];
         let mut insert_values = vec![];
@@ -1827,6 +1933,8 @@ impl ApiModel<'_> {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let call_map = self.call_map();
 
+        let insert_with_dep = self.insert_function_for_many_to_many();
+
         let output = quote! {
             pub async fn insert(&self, #(#args),*) -> Result<#name> {
                 let row = sqlx::query(#q)
@@ -1837,6 +1945,8 @@ impl ApiModel<'_> {
 
                 Ok(row)
             }
+
+            #insert_with_dep
         };
         tracing::debug!("insert function output: {}", output);
 
@@ -2536,8 +2646,7 @@ END $$;
                 ));
             }
             Some(Relation::OneToMany { .. }) => return None,
-            // NOTE: ManyToMany will be handled in the additional query.
-            //       ManyToMany field not yet tested.
+            Some(Relation::ManyToMany { .. }) => return None,
             _ => format!("{} {}", name, self.r#type),
         };
 
@@ -2720,8 +2829,14 @@ impl ApiField {
             }
         }
 
+        if self.rust_type.starts_with("Vec") {
+            return quote! {
+                #n: vec![]
+            };
+        }
+
         quote! {
-            #n: row.get(#sql_field_name)
+            #n: row.try_get(#sql_field_name).unwrap_or_default()
         }
     }
 
