@@ -210,6 +210,17 @@ impl ApiModel<'_> {
                     field_names.push(quote! { #field_name, });
                 }
 
+                for field in self.actions.action_by_id.get(k).clone().unwrap_or(&vec![]) {
+                    let field_name = syn::Ident::new(&field.name, struct_name.span());
+                    let field_type = syn::Ident::new(&field.r#type, struct_name.span());
+
+                    fields.push(quote! {
+                        pub #field_name: #field_type,
+                    });
+                    params.push(quote! { #field_name: #field_type, });
+                    field_names.push(quote! { #field_name, });
+                }
+
                 action_requests.push(quote! {
                 #validator_derive
                 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
@@ -418,7 +429,7 @@ impl ApiModel<'_> {
 
             let function_name =
                 syn::Ident::new(&read_action.to_case(Case::Snake), struct_name.span());
-            let function_params = params
+            let mut function_params = params
                 .iter()
                 .map(|(field_name, field_type)| quote! { #field_name: #field_type, });
 
@@ -960,6 +971,17 @@ impl ApiModel<'_> {
 
                     fields.push(quote! {
                         #(#validate_attributes)*
+                        pub #field_name: #field_type,
+                    });
+                    params.push(quote! { #field_name: #field_type, });
+                    field_names.push(quote! { #field_name, });
+                }
+
+                for field in self.actions.actions.get(k).clone().unwrap_or(&vec![]) {
+                    let field_name = syn::Ident::new(&field.name, struct_name.span());
+                    let field_type = syn::Ident::new(&field.r#type, struct_name.span());
+
+                    fields.push(quote! {
                         pub #field_name: #field_type,
                     });
                     params.push(quote! { #field_name: #field_type, });
