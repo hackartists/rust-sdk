@@ -58,11 +58,45 @@ mod server_tests {
         pub users: Vec<User>,
     }
 
+    async fn db_setup() {
+        let pool: sqlx::Pool<sqlx::Postgres> = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(5)
+            .connect(
+                option_env!("DATABASE_URL")
+                    .unwrap_or("postgres://postgres:postgres@localhost:5432/test"),
+            )
+            .await
+            .unwrap();
+        let query = r#"
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at := EXTRACT(EPOCH FROM now()); -- seconds
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+    "#;
+
+        sqlx::query(query).execute(&pool).await.unwrap();
+
+        let query = r#"
+CREATE OR REPLACE FUNCTION set_created_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.created_at := EXTRACT(EPOCH FROM now()); -- seconds
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+    "#;
+
+        sqlx::query(query).execute(&pool).await.unwrap();
+    }
+
     #[tokio::test]
     async fn test_user_org() {
         use sqlx::{postgres::PgPoolOptions, Postgres};
         let _ = tracing_subscriber::fmt::try_init();
-
+        db_setup().await;
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()

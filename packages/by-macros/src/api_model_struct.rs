@@ -2886,7 +2886,6 @@ CREATE TABLE IF NOT EXISTS {} (
 
         query.extend(self.trigger_query());
         query.extend(self.alter_query());
-        query.extend(self.create_functions());
 
         query
     }
