@@ -20,7 +20,6 @@ impl<T> From<(Vec<T>, i64)> for QueryResponse<T> {
 }
 
 #[cfg(not(feature = "server"))]
-#[derive(Eq, PartialEq)]
 #[api_model(base = "/topics/v1", iter_type=QueryResponse, table = topics)] // rename is supported but usually use default(snake_case)
 pub struct Topic {
     #[api_model(summary, primary_key)]
@@ -52,7 +51,6 @@ pub struct Topic {
 }
 
 #[cfg(not(feature = "server"))]
-#[derive(Eq, PartialEq)]
 #[api_model(base = "/topics/v1/:topic-id/comments", iter_type=QueryResponse)]
 pub struct Comment {
     pub id: String,

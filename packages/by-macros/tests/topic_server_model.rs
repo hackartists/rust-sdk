@@ -1,3 +1,4 @@
+#![allow(unused)]
 #[cfg(feature = "server")]
 use by_axum::aide;
 
