@@ -1,6 +1,6 @@
 #![allow(dead_code, unused)]
 
-use crate::api_model::*;
+use crate::{action::Actions, api_model::*};
 use convert_case::{Case, Casing};
 use indexmap::IndexMap;
 use proc_macro::TokenStream;
@@ -31,6 +31,7 @@ pub struct ApiModel<'a> {
 
     pub name: String,
     pub name_id: &'a syn::Ident,
+    pub actions: Actions,
 
     pub has_validator: bool,
     pub iter_type: String,
@@ -537,7 +538,7 @@ impl ApiModel<'_> {
         let struct_name = self.name_id;
         let base_endpoint = &self.base;
         let parent_ids = &self.parent_ids;
-        let read_actions = &self.read_action_names;
+        let read_actions = &self.query_action_names;
         let has_validator = self.has_validator;
         let iter_type = &self.iter_type;
         let queryable_fields = &self.queryable_fields;
@@ -1893,6 +1894,11 @@ impl<'a> ApiModel<'a> {
         let mut parent_ids = Vec::new();
         let mut iter_type = "Vec".to_string();
         let mut read_action_names = IndexMap::<String, ActionField>::new();
+        let actions = attr
+            .to_string()
+            .as_str()
+            .parse::<Actions>()
+            .expect("Parsing failed for actions");
 
         for arg in attr.to_string().split(',') {
             let parts: Vec<&str> = arg.split('=').collect();
@@ -2113,6 +2119,7 @@ impl<'a> ApiModel<'a> {
             base,
             read_action_names,
             parent_ids,
+            actions,
 
             summary_fields,
             queryable_fields,

@@ -1,11 +1,8 @@
-use convert_case::{Case, Casing};
-use indexmap::IndexMap;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::collections::HashSet;
 use syn::*;
 
-use crate::api_model_struct::{to_string, ApiModel};
+use crate::api_model_struct::ApiModel;
 
 #[derive(Debug)]
 pub enum ActionType {
