@@ -54,7 +54,7 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         #db_structs
 
         #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default, Eq, PartialEq)]
-        #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo, sqlx::FromRow))]
+        #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         #stripped_input
 
         #action_struct

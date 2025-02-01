@@ -291,7 +291,7 @@ mod server_tests {
             .max_connections(5)
             .connect(
                 option_env!("DATABASE_URL")
-                    .unwrap_or("postgres://postgres:password@localhost:5432/test"),
+                    .unwrap_or("postgres://postgres:postgres@localhost:5432/test"),
             )
             .await
             .unwrap();
@@ -364,6 +364,6 @@ mod server_tests {
         };
 
         assert_eq!(total2 > 0, true);
-        assert!(users_2.len() == 2, "incorrect length; it must be two");
+        assert_eq!(users_2.len(), 2, "incorrect length; it must be two");
     }
 }

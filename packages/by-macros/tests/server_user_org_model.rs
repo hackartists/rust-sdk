@@ -35,6 +35,10 @@ mod server_tests {
         pub email: String,
         #[api_model(action = [signup, login, reset], read_action = get_user)]
         pub password: String,
+
+        #[api_model(many_to_many = uo_user_orgs, foreign_table_name = uo_organizations, foreign_primary_key = org_id, foreign_reference_key = user_id)]
+        #[serde(default)]
+        pub orgs: Vec<Organization>,
     }
 
     #[api_model(base = "/auth/v1/organizations", table = uo_organizations, iter_type=QueryResponse)]
@@ -49,6 +53,7 @@ mod server_tests {
         #[api_model(summary)]
         pub name: String,
         #[api_model(many_to_many = uo_user_orgs, foreign_table_name = uo_users, foreign_primary_key = user_id, foreign_reference_key = org_id)]
+        #[serde(default)]
         pub users: Vec<User>,
     }
 
@@ -69,7 +74,7 @@ mod server_tests {
             .max_connections(5)
             .connect(
                 option_env!("DATABASE_URL")
-                    .unwrap_or("postgres://postgres:password@localhost:5432/test"),
+                    .unwrap_or("postgres://postgres:postgres@localhost:5432/test"),
             )
             .await
             .unwrap();
@@ -80,23 +85,38 @@ mod server_tests {
         let o = Organization::get_repository(pool.clone());
         o.create_table().await.unwrap();
 
-        let res = u.insert(email.clone(), password.clone()).await;
-        assert!(res.is_ok());
+        let user = u.insert(email.clone(), password.clone()).await;
+        assert!(user.is_ok(), "{:?}", user);
+        let user = user.unwrap();
+
+        let name = "org".to_string();
+        let res = o
+            .insert_with_dependency(user.id.parse().unwrap(), name.to_string())
+            .await;
+
+        assert!(res.is_ok(), "{:?}", res);
 
         let res = u
             .find_one(&UserReadAction::new().get_user(email.clone(), password.clone()))
             .await;
         assert!(res.is_ok());
-        let res = res.unwrap();
-        assert_eq!(res.email, email);
-        assert_eq!(res.password, password);
-        assert_ne!(res.id, "");
+        let found_user = res.unwrap();
+        assert_eq!(found_user.email, email);
+        assert_eq!(found_user.password, password);
+        assert_eq!(found_user.id, user.id);
+        assert_eq!(found_user.orgs.len(), 1);
+        assert_eq!(found_user.orgs[0].name, name);
 
-        let name = "org".to_string();
         let res = o
-            .insert_with_dependency(res.id.parse().unwrap(), name.to_string())
+            .insert_with_dependency(user.id.parse().unwrap(), name.to_string())
             .await;
+        assert!(res.is_ok(), "{:?}", res);
 
+        let res = u
+            .find_one(&UserReadAction::new().get_user(email.clone(), password.clone()))
+            .await;
         assert!(res.is_ok());
+        let found_user = res.unwrap();
+        assert_eq!(found_user.orgs.len(), 2);
     }
 }
