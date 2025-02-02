@@ -368,6 +368,9 @@ export class CdkStack extends cdk.Stack {
     }
 
     if (enableRds) {
+      console.error("creating an individual db cluster for service is not recommended. Instead of it, you manually create a table in `ENV` database cluster.")
+      process.exit(1);
+
       const adminPassword = process.env.RDS_ADMIN_PASSWORD || "";
       if (adminPassword ==="") {
         console.error("RDS_ADMIN_PASSWORD is required");
