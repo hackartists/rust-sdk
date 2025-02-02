@@ -31,7 +31,7 @@ axum.workspace = true
 schemars.workspace = true
 by-types = { workspace = true, features = [ "server" ] }
 serde_json = "1.0.135"
-tracing-subscriber = "0.3.19"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tracing = "0.1.41"
 rest-api.workspace = true
 jsonwebtoken = "9.3.0"

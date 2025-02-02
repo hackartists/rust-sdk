@@ -1342,6 +1342,25 @@ impl ApiModel<'_> {
         tracing::debug!("create table query: {}", q);
 
         quote! {
+            pub fn queries(&self) -> Vec<&'static str> {
+                vec![#create_query_output, #(#queries),*]
+            }
+            pub async fn create_this_table(&self) -> std::result::Result<(), sqlx::Error> {
+                tracing::debug!("Create table: {}", #create_query_output);
+                sqlx::query(#create_query_output).execute(&self.pool).await?;
+
+                Ok(())
+            }
+
+            pub async fn create_related_tables(&self) -> std::result::Result<(), sqlx::Error> {
+                for query in [#(#queries),*] {
+                    tracing::debug!("Execute queries: {}", query);
+                    sqlx::query(query).execute(&self.pool).await?;
+                }
+
+                Ok(())
+            }
+
             pub async fn create_table(&self) -> std::result::Result<(), sqlx::Error> {
                 sqlx::query(#create_query_output).execute(&self.pool).await?;
 
@@ -1873,8 +1892,12 @@ impl ApiModel<'_> {
         let mut returning = vec![];
         let mut args = vec![];
         let mut binds = vec![];
+        let mut has_option_args = false;
+        let mut option_condition = vec![];
+        let mut option_binds = vec![];
 
         for (field_name, field) in self.fields.iter() {
+            tracing::debug!("Field processing(insert): {}", field_name);
             if !field.should_return_in_insert() {
                 continue;
             }
@@ -1887,6 +1910,26 @@ impl ApiModel<'_> {
             }
 
             args.push(field.arg_token());
+
+            if field.is_option() {
+                tracing::debug!("Field is option: {}", field_name);
+                has_option_args = true;
+                let field_name = syn::LitStr::new(field_name, proc_macro2::Span::call_site());
+                option_condition.push(quote! {
+                    if let Some(#n) = &#n {
+                        i += 1;
+                        insert_fields.push(#field_name);
+                        insert_values.push(format!("${}", i));
+                    }
+                });
+                option_binds.push(quote! {
+                    if let Some(#n) = &#n {
+                        q = q.bind(#n);
+                    }
+                });
+                continue;
+            }
+
             binds.push(field.bind());
 
             insert_fields.push(field_name.clone());
@@ -1894,29 +1937,75 @@ impl ApiModel<'_> {
 
             i += 1;
         }
-
-        let q = syn::LitStr::new(
-            &format!(
-                "INSERT INTO {} ({}) VALUES ({}) RETURNING {}",
-                self.table_name,
-                insert_fields.join(", "),
-                insert_values.join(", "),
-                returning.join(", "),
-            ),
-            proc_macro2::Span::call_site(),
-        );
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let call_map = self.call_map();
 
         let insert_with_dep = self.insert_function_for_many_to_many();
+        tracing::debug!("Insert with dep: {}", insert_with_dep.to_string());
+        let start = syn::LitInt::new((i - 1).to_string().as_str(), proc_macro2::Span::call_site());
 
-        let output = quote! {
-            pub async fn insert(&self, #(#args),*) -> Result<#name> {
+        let inner = if has_option_args {
+            tracing::debug!("Has option args");
+            let insert_fields = insert_fields
+                .iter()
+                .map(|f| syn::LitStr::new(f, proc_macro2::Span::call_site()));
+            let insert_values = insert_values
+                .iter()
+                .map(|f| syn::LitStr::new(f, proc_macro2::Span::call_site()));
+            let q = syn::LitStr::new(
+                &format!(
+                    "INSERT INTO {} ({{}}) VALUES ({{}}) RETURNING {}",
+                    self.table_name,
+                    returning.join(", "),
+                ),
+                proc_macro2::Span::call_site(),
+            );
+
+            quote! {
+                let mut i = #start;
+                let mut insert_fields = vec![#(#insert_fields),*];
+                let mut insert_values = vec![#(#insert_values),*].iter().map(|f| f.to_string()).collect::<Vec<String>>();
+                #(#option_condition)*
+                let query = format!(
+                    #q,
+                    insert_fields.join(", "),
+                    insert_values.join(", "),
+                );
+                tracing::debug!("insert query: {}", query);
+                let mut q = sqlx::query(&query)
+                    #(#binds)*;
+                #(#option_binds)*
+                let row = q
+                    #call_map
+                .fetch_one(&self.pool)
+                    .await?;
+            }
+        } else {
+            let q = syn::LitStr::new(
+                &format!(
+                    "INSERT INTO {} ({}) VALUES ({}) RETURNING {}",
+                    self.table_name,
+                    insert_fields.join(", "),
+                    insert_values.join(", "),
+                    returning.join(", "),
+                ),
+                proc_macro2::Span::call_site(),
+            );
+
+            quote! {
+                tracing::debug!("insert query: {}", #q);
                 let row = sqlx::query(#q)
                     #(#binds)*
                 #call_map
                 .fetch_one(&self.pool)
                     .await?;
+
+            }
+        };
+
+        let output = quote! {
+            pub async fn insert(&self, #(#args),*) -> Result<#name> {
+                #inner
 
                 Ok(row)
             }
@@ -2239,7 +2328,7 @@ impl<'a> ApiModel<'a> {
 }
 
 #[cfg(feature = "server")]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Relation {
     ManyToMany {
         // Table name of the join table
@@ -2268,6 +2357,7 @@ pub enum Relation {
 }
 
 #[cfg(feature = "server")]
+#[derive(Debug, Clone)]
 pub struct ApiField {
     pub name: String, // this is a native field name in rust
     pub primary_key: bool,
@@ -2899,6 +2989,10 @@ pub fn to_string(ty: &syn::Type) -> String {
 
 #[cfg(feature = "server")]
 impl ApiField {
+    pub fn is_option(&self) -> bool {
+        self.rust_type.starts_with("Option")
+    }
+
     pub fn bind(&self) -> proc_macro2::TokenStream {
         let n = self.field_name_token();
         let sql_field_name = syn::LitStr::new(
