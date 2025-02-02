@@ -1342,6 +1342,25 @@ impl ApiModel<'_> {
         tracing::debug!("create table query: {}", q);
 
         quote! {
+            pub fn queries(&self) -> Vec<&'static str> {
+                vec![#create_query_output, #(#queries),*]
+            }
+            pub async fn create_this_table(&self) -> std::result::Result<(), sqlx::Error> {
+                tracing::debug!("Create table: {}", #create_query_output);
+                sqlx::query(#create_query_output).execute(&self.pool).await?;
+
+                Ok(())
+            }
+
+            pub async fn create_related_tables(&self) -> std::result::Result<(), sqlx::Error> {
+                for query in [#(#queries),*] {
+                    tracing::debug!("Execute queries: {}", query);
+                    sqlx::query(query).execute(&self.pool).await?;
+                }
+
+                Ok(())
+            }
+
             pub async fn create_table(&self) -> std::result::Result<(), sqlx::Error> {
                 sqlx::query(#create_query_output).execute(&self.pool).await?;
 
