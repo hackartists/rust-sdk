@@ -20,6 +20,8 @@ import * as certificatemanager from "aws-cdk-lib/aws-certificatemanager";
 import * as ecs_patterns from "aws-cdk-lib/aws-ecs-patterns";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import * as event_targets from "aws-cdk-lib/aws-events-targets";
+import * as events from "aws-cdk-lib/aws-events";
 import {
   AwsLogDriver,
   Compatibility,
@@ -62,6 +64,7 @@ export class CdkStack extends cdk.Stack {
     let enableFargate = process.env.ENABLE_FARGATE === "true";
     let enableOpensearch = process.env.ENABLE_OPENSEARCH === "true";
     let enableRds = process.env.ENABLE_RDS === "true";
+    let enableCron = process.env.ENABLE_CRON === "true";
     let opensearchCollections = [
       {
         name: `dagit-${env}`,
@@ -134,6 +137,21 @@ export class CdkStack extends cdk.Stack {
       });
 
       distributionProps.defaultBehavior.origin = new origins.RestApiOrigin(api);
+
+      if (enableCron) {
+        const schedule = process.env.SCHEDULE || "";
+
+        if (schedule === "") {
+          console.error("SCHEDULE is required ex. SCHEDULE='cron(0 15 * * ? *)'");
+          process.exit(1);
+        }
+
+        const rule = new events.Rule(this, "ScheduleRule", {
+          schedule: events.Schedule.expression(schedule), //KST 00:00
+        });
+
+        rule.addTarget(new event_targets.LambdaFunction(func));
+      }
     }
 
     if (enableDyanmo) {
@@ -350,6 +368,9 @@ export class CdkStack extends cdk.Stack {
     }
 
     if (enableRds) {
+      console.error("creating an individual db cluster for service is not recommended. Instead of it, you manually create a table in `ENV` database cluster.")
+      process.exit(1);
+
       const adminPassword = process.env.RDS_ADMIN_PASSWORD || "";
       if (adminPassword ==="") {
         console.error("RDS_ADMIN_PASSWORD is required");
@@ -379,8 +400,8 @@ export class CdkStack extends cdk.Stack {
         vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
         removalPolicy: cdk.RemovalPolicy.RETAIN,
         securityGroups: [securityGroup],
-        defaultDatabaseName: `${project}${env}`,
-        credentials: rds.Credentials.fromPassword(project, cdk.SecretValue.unsafePlainText(adminPassword)),
+        defaultDatabaseName: `${project}${env}`.replace("-", "").replace("_", ""),
+        credentials: rds.Credentials.fromPassword(project.replace("-", "").replace("_", ""), cdk.SecretValue.unsafePlainText(adminPassword)),
         deletionProtection:true,
       });
 
