@@ -164,6 +164,7 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
     };
 
     let mut en_arms = Vec::new();
+    #[allow(unused)]
     let mut ko_arms = Vec::new();
     let mut display_arms = Vec::new();
     let mut from_str_arms = Vec::new();
@@ -206,17 +207,34 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
         en_arms.push(quote! {
             #enum_name::#variant_ident => #en_str,
         });
+        #[cfg(feature = "ko")]
         ko_arms.push(quote! {
             #enum_name::#variant_ident => #ko_str,
         });
+
         display_arms.push(quote! {
             #enum_name::#variant_ident => write!(f, #lower_name),
         });
 
+        #[cfg(not(feature = "ko"))]
+        from_str_arms.push(quote! {
+            #en_str | #lower_name => Ok(#enum_name::#variant_ident),
+        });
+        #[cfg(feature = "ko")]
         from_str_arms.push(quote! {
             #en_str | #ko_str | #lower_name => Ok(#enum_name::#variant_ident),
         });
     }
+
+    let ko_arm = if cfg!(feature = "ko") {
+        quote! {
+            dioxus_translate::Language::Ko => match self {
+                #(#ko_arms)*
+            },
+        }
+    } else {
+        quote! {}
+    };
 
     // Generate the implementation block for `translate`
     let gen = quote! {
@@ -226,9 +244,7 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
                     dioxus_translate::Language::En => match self {
                         #(#en_arms)*
                     },
-                    dioxus_translate::Language::Ko => match self {
-                        #(#ko_arms)*
-                    },
+                    #ko_arm
                 }
             }
         }
