@@ -1,6 +1,6 @@
 use by_macros::ApiModel;
 
-#[derive(ApiModel, Default, Debug)]
+#[derive(ApiModel, Default, Debug, Clone)]
 pub enum ApiModelTest {
     Admin = 0,
     #[default]
