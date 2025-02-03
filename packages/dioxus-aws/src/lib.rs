@@ -69,6 +69,54 @@ pub fn launch(_app: fn() -> Element) {
 }
 
 #[cfg(feature = "server")]
+pub fn launch_with_router(_app: fn() -> Element, router: axum::Router) {
+    #[cfg(feature = "web")]
+    dioxus::launch(_app);
+
+    #[cfg(feature = "server")]
+    {
+        use dioxus_fullstack::prelude::*;
+
+        struct TryIntoResult(Result<ServeConfig, dioxus_fullstack::UnableToLoadIndex>);
+
+        impl TryInto<ServeConfig> for TryIntoResult {
+            type Error = dioxus_fullstack::UnableToLoadIndex;
+
+            fn try_into(self) -> Result<ServeConfig, Self::Error> {
+                self.0
+            }
+        }
+
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async move {
+                let app = router.serve_dioxus_application(
+                    TryIntoResult(ServeConfigBuilder::default().build()),
+                    _app,
+                );
+
+                #[cfg(not(feature = "lambda"))]
+                {
+                    let address = dioxus_cli_config::fullstack_address_or_localhost();
+                    let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+
+                    axum::serve(listener, app.into_make_service())
+                        .await
+                        .unwrap();
+                }
+
+                #[cfg(feature = "lambda")]
+                {
+                    use self::lambda::LambdaAdapter;
+
+                    tracing::info!("Running in lambda mode");
+                    lambda_runtime::run(LambdaAdapter::from(app)).await.unwrap();
+                }
+            });
+    };
+}
+
+#[cfg(feature = "server")]
 pub async fn launch_with_layers<L>(app: fn() -> Element, layers: Vec<L>)
 where
     L: Layer<Route> + Clone + Send + 'static,
