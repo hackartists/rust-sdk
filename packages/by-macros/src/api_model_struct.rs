@@ -3026,6 +3026,11 @@ impl ApiField {
                     .bind(#n as i64)
                 }
             }
+            (_, "JSONB") => {
+                quote! {
+                    .bind(serde_json::to_value(&#n).unwrap())
+                }
+            }
             _ => {
                 quote! {
                     .bind(#n)
@@ -3080,7 +3085,7 @@ impl ApiField {
             }
         }
 
-        if self.rust_type.starts_with("Vec") {
+        if self.rust_type.starts_with("Vec") || self.r#type == "JSONB" {
             tracing::debug!("vector callmap: {}: {}", self.name, self.rust_type);
             let field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
 
