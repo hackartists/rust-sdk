@@ -1727,10 +1727,13 @@ dependencies = [
 name = "dioxus-translate-macro"
 version = "0.1.0"
 dependencies = [
+ "dioxus-translate",
  "dioxus-translate-types",
  "proc-macro2",
  "quote",
  "syn 2.0.96",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

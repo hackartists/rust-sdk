@@ -13,6 +13,7 @@ proc-macro2 = "1.0.92"
 quote = "1.0.38"
 syn = "2.0.95"
 dioxus-translate-types = { path = "../dioxus-translate-types", version = "0.1.0" }
+tracing = "0.1.41"
 
 [lib]
 proc-macro = true
@@ -20,3 +21,7 @@ proc-macro = true
 [features]
 default = []
 ko = []
+
+[dev-dependencies]
+dioxus-translate = { path = "../dioxus-translate", features = ["ko"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

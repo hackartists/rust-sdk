@@ -1,4 +1,4 @@
-pub use dioxus_translate_macro::translate;
+pub use dioxus_translate_macro::*;
 pub use dioxus_translate_types::Translator;
 
 use schemars::JsonSchema;
