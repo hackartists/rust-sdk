@@ -1523,6 +1523,16 @@ impl ApiModel<'_> {
         output.into()
     }
 
+    pub fn has_join_query(&self) -> bool {
+        for (field_name, field) in self.fields.iter() {
+            if let Some(query) = field.aggregate_query(&field_name) {
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub fn base_sql_function(&self) -> proc_macro2::TokenStream {
         let name = self.name_id;
 
@@ -1605,6 +1615,11 @@ impl ApiModel<'_> {
                 arg_names.push(q);
             }
         }
+        let mut parent_variable = syn::LitStr::new("", proc_macro2::Span::call_site());
+
+        if self.has_join_query() {
+            parent_variable = syn::LitStr::new("p.", proc_macro2::Span::call_site());
+        }
 
         for f in fields.iter() {
             let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
@@ -1625,7 +1640,7 @@ impl ApiModel<'_> {
             where_clause.push(quote! {
                 if let Some(#f) = &param.#f {
                     i += 1;
-                    where_clause.push(format!("{} = ${}", #fname, i));
+                    where_clause.push(format!("{}{} = ${}", #parent_variable, #fname, i));
                 }
             });
         }
@@ -2663,7 +2678,7 @@ LEFT JOIN (
 
     pub fn should_return_in_insert(&self) -> bool {
         match self.relation {
-            Some(Relation::ManyToOne { .. }) | Some(Relation::ManyToMany { .. }) => false,
+            Some(Relation::ManyToMany { .. }) => false,
             _ => true,
         }
     }
