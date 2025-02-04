@@ -164,7 +164,7 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
     };
 
     let mut en_arms = Vec::new();
-    #[allow(unused)]
+    #[cfg(feature = "ko")]
     let mut ko_arms = Vec::new();
     let mut display_arms = Vec::new();
     let mut from_str_arms = Vec::new();
@@ -173,6 +173,7 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
         let variant_ident = &variant.ident;
         let default_str = variant_ident.to_string();
         let en_translation = Rc::new(RefCell::new(default_str.clone()));
+        #[cfg(feature = "ko")]
         let ko_translation = Rc::new(RefCell::new(default_str.clone()));
 
         // Process attributes to extract translations
@@ -180,13 +181,17 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
             if let Meta::List(ref meta_list) = attr.meta {
                 if meta_list.path.is_ident("translate") {
                     let en = Rc::clone(&en_translation);
+                    #[cfg(feature = "ko")]
                     let ko = Rc::clone(&ko_translation);
 
                     let _ = meta_list.parse_nested_meta(move |nv| {
                         if nv.path.is_ident("en") {
                             let s: LitStr = nv.value()?.parse()?;
                             *en.borrow_mut() = s.value();
-                        } else if nv.path.is_ident("ko") {
+                        }
+
+                        #[cfg(feature = "ko")]
+                        if nv.path.is_ident("ko") {
                             let s: LitStr = nv.value()?.parse()?;
                             *ko.borrow_mut() = s.value();
                         }
@@ -198,6 +203,7 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
         }
 
         let en_str = syn::LitStr::new(&en_translation.borrow(), proc_macro2::Span::call_site());
+        #[cfg(feature = "ko")]
         let ko_str = syn::LitStr::new(&ko_translation.borrow(), proc_macro2::Span::call_site());
         let lower_name = syn::LitStr::new(
             &variant_ident.to_string().to_lowercase(),
@@ -226,15 +232,14 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
         });
     }
 
-    let ko_arm = if cfg!(feature = "ko") {
-        quote! {
-            dioxus_translate::Language::Ko => match self {
-                #(#ko_arms)*
-            },
-        }
-    } else {
-        quote! {}
+    #[cfg(feature = "ko")]
+    let ko_arm = quote! {
+        dioxus_translate::Language::Ko => match self {
+            #(#ko_arms)*
+        },
     };
+    #[cfg(not(feature = "ko"))]
+    let ko_arm = quote! {};
 
     // Generate the implementation block for `translate`
     let gen = quote! {
