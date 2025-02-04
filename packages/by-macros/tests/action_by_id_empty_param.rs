@@ -1,4 +1,7 @@
 #[cfg(feature = "server")]
+pub type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
+
+#[cfg(feature = "server")]
 mod empty_param_tests {
     #![allow(unused)]
     use std::time::SystemTime;
@@ -19,8 +22,6 @@ mod empty_param_tests {
             QueryResponse { items, total_count }
         }
     }
-
-    pub type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
     #[api_model(base = "/models", table = action_empty_params, iter_type=QueryResponse, action_by_id = delete, action = [no_param, empty])]
     pub struct ActionEmptyParamModel {

@@ -2120,6 +2120,7 @@ impl ApiModel<'_> {
 
             i += 1;
         }
+        tracing::debug!("Insert fields: {:?}", insert_fields);
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let call_map = self.call_map();
 
@@ -2884,8 +2885,18 @@ LEFT JOIN (
     }
 
     pub fn unwrapped_type_token(&self) -> syn::Ident {
+        tracing::debug!(
+            "ApiField::unwrapped_type_token {} -> {}",
+            self.rust_type,
+            self.rust_type
+                .replace(" ", "")
+                .trim_start_matches("Option<")
+                .trim_end_matches(">"),
+        );
+
         syn::Ident::new(
             self.rust_type
+                .replace(" ", "")
                 .trim_start_matches("Option<")
                 .trim_end_matches(">"),
             proc_macro2::Span::call_site(),
