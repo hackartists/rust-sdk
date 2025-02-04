@@ -19,6 +19,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let create_table_function = model.queries();
     let drop_table_function = model.drop_function();
     let insert = model.insert_function();
+    let delete = model.delete_function();
     let find_one = model.find_one_function();
     let find = model.find_function();
     let from_trait = model.from_pg_row_trait();
@@ -46,6 +47,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             #create_table_function
             #drop_table_function
             #insert
+            #delete
             #find_one
             #find
         }

@@ -1911,6 +1911,25 @@ impl ApiModel<'_> {
         }
     }
 
+    pub fn delete_function(&self) -> proc_macro2::TokenStream {
+        let repo_name = self.repository_struct_name();
+        let table_name = syn::LitStr::new(
+            &format!("DELETE FROM {} WHERE id = $1", self.table_name),
+            proc_macro2::Span::call_site(),
+        );
+
+        quote! {
+            pub async fn delete(&self, id: String) -> Result<()> {
+                sqlx::query(#table_name)
+                    .bind(id.parse::<i64>().unwrap())
+                    .execute(&self.pool)
+                    .await?;
+
+                Ok(())
+            }
+        }
+    }
+
     pub fn insert_function(&self) -> proc_macro2::TokenStream {
         let mut insert_fields = vec![];
         let mut insert_values = vec![];
