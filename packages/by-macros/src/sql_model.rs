@@ -20,10 +20,12 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let drop_table_function = model.drop_function();
     let insert = model.insert_function();
     let delete = model.delete_function();
+    let update = model.update_function();
     let find_one = model.find_one_function();
     let find = model.find_function();
     let from_trait = model.from_pg_row_trait();
     let impl_functions = model.impl_functions();
+    let update_req_st = model.repo_update_request();
 
     let output = quote! {
         impl #name {
@@ -39,6 +41,8 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             pool: sqlx::Pool<sqlx::Postgres>,
         }
 
+        #update_req_st
+
         impl #repo_name {
             pub fn new(pool: sqlx::Pool<sqlx::Postgres>) -> Self {
                 Self { pool }
@@ -47,6 +51,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
             #create_table_function
             #drop_table_function
             #insert
+            #update
             #delete
             #find_one
             #find

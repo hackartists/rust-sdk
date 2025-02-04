@@ -1,4 +1,6 @@
 #![allow(unused)]
+use std::time::SystemTime;
+
 #[cfg(feature = "server")]
 use by_axum::aide;
 use by_macros::api_model;
@@ -20,7 +22,7 @@ pub type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
 #[api_model(base = "/models", table = action_empty_params, iter_type=QueryResponse, action_by_id = delete, action = [no_param, empty])]
 pub struct ActionEmptyParamModel {
-    #[api_model(summary, primary_key)]
+    #[api_model(summary, primary_key, read_action = find_by_id)]
     pub id: String,
     #[api_model(summary, auto = [insert])]
     pub created_at: i64,
@@ -47,9 +49,41 @@ async fn test_action_by_id_empty_param() {
         )
         .await
         .unwrap();
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let name = format!("test-{}", now);
 
     let repo = ActionEmptyParamModel::get_repository(pool);
-    repo.delete("0".to_string());
+    repo.create_table().await;
+    let res = repo.insert(name.clone()).await;
+    assert_eq!(res.is_ok(), true, "{:?}", res);
+
+    let res = res.unwrap();
+    assert_eq!(res.name, name.clone());
+
+    let res = repo
+        .update(
+            &res.id,
+            ActionEmptyParamModelRepositoryUpdateRequest {
+                name: Some("test".to_string()),
+            },
+        )
+        .await;
+    assert_eq!(res.is_ok(), true);
+    let res = res.unwrap();
+    assert_eq!(res.name, "test".to_string());
+
+    let id = res.id.clone();
+    let res = repo.delete(&res.id).await;
+    assert_eq!(res.is_ok(), true);
+
+    let res = repo
+        .find_one(&&ActionEmptyParamModelReadAction::new().find_by_id(id))
+        .await;
+    assert_eq!(res.is_err(), true);
 
     let req_by_id = ActionEmptyParamModelByIdAction::Delete(ActionEmptyParamModelDeleteRequest {});
 }

@@ -1911,6 +1911,122 @@ impl ApiModel<'_> {
         }
     }
 
+    pub fn repo_update_request(&self) -> proc_macro2::TokenStream {
+        let name = syn::Ident::new(
+            &format!("{}RepositoryUpdateRequest", self.name),
+            proc_macro2::Span::call_site(),
+        );
+
+        let mut fields = vec![];
+
+        for (_, v) in self.fields.iter() {
+            if v.should_skip_inserting() {
+                continue;
+            }
+            let name = syn::Ident::new(&v.name, proc_macro2::Span::call_site());
+            let ty = v.unwrapped_type_token();
+
+            fields.push(quote! {
+                pub #name: Option<#ty>
+            });
+        }
+
+        // TODO: add with functions
+        quote! {
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+            #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+            pub struct #name {
+                #(#fields),*
+            }
+        }
+    }
+
+    // TODO: impelment update function like find function with optional params
+    // default all insert fields can be updated
+    pub fn update_function(&self) -> proc_macro2::TokenStream {
+        let update_req_st_name = syn::Ident::new(
+            &format!("{}RepositoryUpdateRequest", self.name),
+            proc_macro2::Span::call_site(),
+        );
+
+        let st_var_name = syn::Ident::new(
+            &format!("{}RepositoryUpdateRequest", self.name).to_case(Case::Snake),
+            proc_macro2::Span::call_site(),
+        );
+
+        let mut returning = vec![];
+        let mut option_condition = vec![];
+        let mut option_binds = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            tracing::debug!("Field processing(update): {}", field_name);
+            if !field.should_return_in_insert() {
+                continue;
+            }
+            returning.push(field_name.clone());
+
+            if field.should_skip_inserting() {
+                continue;
+            }
+
+            let n = field.field_name_token();
+            let ty = field.unwrapped_type_token();
+
+            let field_name = syn::LitStr::new(field_name, proc_macro2::Span::call_site());
+            option_condition.push(quote! {
+                if let Some(#n) = &#st_var_name.#n {
+                    i += 1;
+                    update_values.push(format!("{} = ${}", #field_name, i));
+                }
+            });
+            let bind = field.bind();
+            option_binds.push(quote! {
+                if let Some(#n) = &#st_var_name.#n {
+                    q = q #bind;
+                }
+            });
+            continue;
+        }
+
+        let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
+        let call_map = self.call_map();
+
+        let q = syn::LitStr::new(
+            &format!(
+                "UPDATE {} SET {{}} WHERE id = $1 RETURNING {}",
+                self.table_name,
+                returning.join(", "),
+            ),
+            proc_macro2::Span::call_site(),
+        );
+
+        let output = quote! {
+            pub async fn update(&self, id: &str, #st_var_name: #update_req_st_name) -> Result<#name> {
+                let mut i = 1;
+                let mut update_values = vec![];
+
+                #(#option_condition)*
+
+                let query = format!(
+                    #q,
+                    update_values.join(", "),
+                );
+                tracing::debug!("insert query: {}", query);
+                let mut q = sqlx::query(&query)
+                    .bind(id.parse::<i64>().unwrap());
+                #(#option_binds)*
+                let row = q
+                    #call_map
+                .fetch_one(&self.pool)
+                    .await?;
+
+                Ok(row)
+            }
+        };
+
+        output
+    }
+
     pub fn delete_function(&self) -> proc_macro2::TokenStream {
         let repo_name = self.repository_struct_name();
         let query = syn::LitStr::new(
@@ -1919,7 +2035,7 @@ impl ApiModel<'_> {
         );
 
         quote! {
-            pub async fn delete(&self, id: String) -> Result<()> {
+            pub async fn delete(&self, id: &str) -> Result<()> {
                 sqlx::query(#query)
                     .bind(id.parse::<i64>().unwrap())
                     .execute(&self.pool)
@@ -1969,9 +2085,11 @@ impl ApiModel<'_> {
                         insert_values.push(format!("${}", i));
                     }
                 });
+
+                let bind = field.bind();
                 option_binds.push(quote! {
                     if let Some(#n) = &#n {
-                        q = q.bind(#n);
+                        q = q #bind;
                     }
                 });
                 continue;
@@ -2747,6 +2865,15 @@ LEFT JOIN (
         output.into()
     }
 
+    pub fn unwrapped_type_token(&self) -> syn::Ident {
+        syn::Ident::new(
+            self.rust_type
+                .trim_start_matches("Option<")
+                .trim_end_matches(">"),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
     pub fn field_name_token(&self) -> proc_macro2::TokenStream {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
 
@@ -3065,7 +3192,9 @@ impl ApiField {
             proc_macro2::Span::call_site(),
         );
 
-        match (self.rust_type.as_str(), self.r#type.as_str()) {
+        let rust_type = self.unwrapped_type_token().to_string();
+
+        match (rust_type.as_str(), self.r#type.as_str()) {
             (rust_type, "TEXT") if rust_type != "String" => {
                 quote! {
                     .bind(#n.to_string())
