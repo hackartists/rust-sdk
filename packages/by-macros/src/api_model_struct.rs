@@ -2166,18 +2166,18 @@ impl<'a> ApiModel<'a> {
                             .join("/");
                     }
                     "iter_type" => iter_type = value.to_string(),
-                    "read_action" => {
-                        let value = value
-                            .trim_matches('[')
-                            .trim_matches(']')
-                            .split(",")
-                            .collect::<Vec<&str>>();
-                        for v in value {
-                            tracing::debug!("Read action: {}", v);
-                            let v = v.trim();
-                            read_action_names.insert(v.to_string(), ActionField::Fields(vec![]));
-                        }
-                    }
+                    // "read_action" => {
+                    //     let value = value
+                    //         .trim_matches('[')
+                    //         .trim_matches(']')
+                    //         .split(",")
+                    //         .collect::<Vec<&str>>();
+                    //     for v in value {
+                    //         tracing::debug!("Read action: {}", v);
+                    //         let v = v.trim();
+                    //         read_action_names.insert(v.to_string(), ActionField::Fields(vec![]));
+                    //     }
+                    // }
                     #[cfg(feature = "server")]
                     "database" => {
                         if value.contains("skip") {
@@ -2209,6 +2209,24 @@ impl<'a> ApiModel<'a> {
         let mut action_by_id_names = IndexMap::<String, ActionField>::new();
         let mut query_action_names = IndexMap::<String, ActionField>::new();
         let mut primary_key = (String::new(), String::new());
+
+        for (k, v) in actions.read_actions.iter() {
+            read_action_names
+                .entry(k.to_string())
+                .or_insert_with(|| ActionField::Fields(vec![]));
+        }
+
+        for (k, v) in actions.action_by_id.iter() {
+            action_by_id_names
+                .entry(k.to_string())
+                .or_insert_with(|| ActionField::Fields(vec![]));
+        }
+
+        for (k, v) in actions.actions.iter() {
+            action_names
+                .entry(k.to_string())
+                .or_insert_with(|| ActionField::Fields(vec![]));
+        }
 
         #[cfg(feature = "server")]
         for f in data.fields.iter() {
