@@ -4,6 +4,7 @@ pub type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 #[cfg(feature = "server")]
 mod empty_param_tests {
     #![allow(unused)]
+    use super::*;
     use std::time::SystemTime;
 
     #[cfg(feature = "server")]
