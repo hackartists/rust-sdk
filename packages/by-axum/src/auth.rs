@@ -9,7 +9,6 @@ use crate::axum::{
 use by_types::{AuthConfig, Claims};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use rest_api::Signature;
-use tracing::instrument;
 
 static mut AUTH_CONFIG: Option<AuthConfig> = None;
 
@@ -60,7 +59,6 @@ pub enum Authorization {
 ///
 /// * `Response<Body>` - The response
 /// * `StatusCode` - The status code of the response
-#[instrument]
 pub async fn authorization_middleware(
     mut req: Request,
     next: Next,
