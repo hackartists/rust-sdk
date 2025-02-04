@@ -222,13 +222,13 @@ impl ApiModel<'_> {
                 }
 
                 action_requests.push(quote! {
-                #validator_derive
-                #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
-                #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-                pub struct #request_struct_name {
-                    #(#fields)*
-                }
-            });
+                    #validator_derive
+                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+                    #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+                    pub struct #request_struct_name {
+                        #(#fields)*
+                    }
+                });
                 validates.push(quote! {
                     #action_name::#act(req) => req.validate(),
                 });
@@ -237,16 +237,16 @@ impl ApiModel<'_> {
                 let parent_names = parent_names.clone();
 
                 cli_actions.push(quote! {
-                pub async fn #cli_act(&self, #(#parent_params)* id: &str, #(#params)*) -> crate::Result<#struct_name> {
-                    let path = format!(#base_endpoint_lit, #(#parent_names)*);
-                    let endpoint = format!("{}{}/{}", self.endpoint, path, id);
-                    let req = #action_name::#act(#request_struct_name {
-                        #(#field_names)*
-                    });
-                    rest_api::post(&endpoint, req).await
-                }
+                    pub async fn #cli_act(&self, #(#parent_params)* id: &str, #(#params)*) -> crate::Result<#struct_name> {
+                        let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                        let endpoint = format!("{}{}/{}", self.endpoint, path, id);
+                        let req = #action_name::#act(#request_struct_name {
+                            #(#field_names)*
+                        });
+                        rest_api::post(&endpoint, req).await
+                    }
 
-            })
+                })
             } else if let ActionField::Related(st) = v {
                 let parent_params = parent_params.clone();
                 let parent_names = parent_names.clone();
@@ -1913,14 +1913,14 @@ impl ApiModel<'_> {
 
     pub fn delete_function(&self) -> proc_macro2::TokenStream {
         let repo_name = self.repository_struct_name();
-        let table_name = syn::LitStr::new(
+        let query = syn::LitStr::new(
             &format!("DELETE FROM {} WHERE id = $1", self.table_name),
             proc_macro2::Span::call_site(),
         );
 
         quote! {
             pub async fn delete(&self, id: String) -> Result<()> {
-                sqlx::query(#table_name)
+                sqlx::query(#query)
                     .bind(id.parse::<i64>().unwrap())
                     .execute(&self.pool)
                     .await?;
