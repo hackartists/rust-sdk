@@ -3,7 +3,7 @@ pub mod axum;
 mod docs;
 use std::sync::Arc;
 
-use ::axum::{Extension, Json};
+use ::axum::{Extension, Json, Router};
 pub use logger as log;
 use router::BiyardRouter;
 
@@ -27,6 +27,13 @@ pub fn new() -> BiyardRouter {
         .try_init();
 
     BiyardRouter::new()
+}
+
+pub fn finishing(app: BiyardRouter) -> Router {
+    let mut api = app.open_api;
+    app.inner
+        .finish_api(&mut api)
+        .layer(Extension(Arc::new(api)))
 }
 
 pub async fn serve(

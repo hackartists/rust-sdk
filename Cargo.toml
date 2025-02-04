@@ -34,6 +34,9 @@ rest-api = { path = "packages/rest-api", version = "0.1.*" }
 dioxus-popup = { path = "packages/dioxus-popup", version = "0.1.*" }
 dioxus-aws = { path = "packages/dioxus-aws", version = "0.6.*" }
 easy-dynamodb = { path = "packages/easy-dynamodb", version = "0.1.*" }
+dioxus-translate = { path = "packages/dioxus-translate", version = "0.1.*" }
+dioxus-translate-types = { path = "packages/dioxus-translate-types", version = "0.1.*" }
+dioxus-translate-macro = { path = "packages/dioxus-translate-macro", version = "0.1.*" }
 
 aide = { version = "0.14.0", features = ["axum", "axum-query", "axum-extra", "axum-extra-headers", "axum-extra-query", "axum-json", "swagger", "redoc", "scalar", "macros"] }
 axum = "0.8.1"
