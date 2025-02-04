@@ -1918,6 +1918,7 @@ impl ApiModel<'_> {
         );
 
         let mut fields = vec![];
+        let mut functions = vec![];
 
         for (_, v) in self.fields.iter() {
             if v.should_skip_inserting() {
@@ -1929,14 +1930,31 @@ impl ApiModel<'_> {
             fields.push(quote! {
                 pub #name: Option<#ty>
             });
+
+            let fname =
+                syn::Ident::new(&format!("with_{}", v.name), proc_macro2::Span::call_site());
+
+            functions.push(quote! {
+                pub fn #fname(mut self, #name: #ty) -> Self {
+                    self.#name = Some(#name);
+                    self
+                }
+            });
         }
 
-        // TODO: add with functions
         quote! {
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub struct #name {
                 #(#fields),*
+            }
+
+            impl #name {
+                pub fn new() -> Self {
+                    Self::default()
+                }
+
+                #(#functions)*
             }
         }
     }

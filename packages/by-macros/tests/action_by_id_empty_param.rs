@@ -76,6 +76,16 @@ async fn test_action_by_id_empty_param() {
     let res = res.unwrap();
     assert_eq!(res.name, "test".to_string());
 
+    let res = repo
+        .update(
+            &res.id,
+            ActionEmptyParamModelRepositoryUpdateRequest::new().with_name("test-2".to_string()),
+        )
+        .await;
+    assert_eq!(res.is_ok(), true);
+    let res = res.unwrap();
+    assert_eq!(res.name, "test-2".to_string());
+
     let id = res.id.clone();
     let res = repo.delete(&res.id).await;
     assert_eq!(res.is_ok(), true);
