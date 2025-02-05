@@ -115,9 +115,11 @@ $$ LANGUAGE plpgsql;
             .unwrap();
 
         let u = User::get_repository(pool.clone());
-        u.create_table().await.unwrap();
+        u.create_this_table().await.unwrap();
 
         let o = Organization::get_repository(pool.clone());
+        o.create_this_table().await.unwrap();
+        u.create_table().await.unwrap();
         o.create_table().await.unwrap();
 
         let user = u.insert(email.clone(), password.clone()).await;

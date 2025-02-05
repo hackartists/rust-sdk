@@ -386,6 +386,24 @@ $$ LANGUAGE plpgsql;
             "incorrect length"
         );
 
+        repo.insert(
+            "nickname".to_string(),
+            format!("2{}", principal),
+            format!("2{}", email),
+            "profile_url".to_string(),
+        )
+        .await
+        .unwrap();
+
+        repo.insert(
+            "nickname".to_string(),
+            format!("3{}", principal),
+            format!("3{}", email),
+            "profile_url".to_string(),
+        )
+        .await
+        .unwrap();
+
         let QueryResponse {
             items: users_2,
             total_count: total2,
