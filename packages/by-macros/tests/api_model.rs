@@ -319,6 +319,7 @@ $$ LANGUAGE plpgsql;
             .as_secs();
 
         let email = format!("test-{}@test.com", now);
+        let email2 = format!("test2-{}@test.com", now);
         let principal = format!("{}-principal", now);
 
         let pool: sqlx::Pool<Postgres> = PgPoolOptions::new()
@@ -385,6 +386,15 @@ $$ LANGUAGE plpgsql;
             users_1.len() == (total as usize) || users_1.len() == 5,
             "incorrect length"
         );
+
+        repo.insert(
+            "nickname".to_string(),
+            principal.clone(),
+            email2.clone(),
+            "profile_url".to_string(),
+        )
+        .await
+        .unwrap();
 
         let QueryResponse {
             items: users_2,
