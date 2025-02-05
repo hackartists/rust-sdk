@@ -44,6 +44,8 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
       - uses: actions/checkout@v3
@@ -56,11 +58,9 @@ jobs:
           components: clippy, rustfmt
           target: wasm32-unknown-unknown
           toolchain: stable
-
       - name: test with server feature
         env:
           RUSTFLAGS: "-A warnings"
-          DATABASE_URL: postgres://postgres:postgres@postgres:5432/test
         run: cargo test --features server
 
   build:
