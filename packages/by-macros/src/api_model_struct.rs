@@ -140,6 +140,8 @@ impl ApiModel<'_> {
         let parent_ids = &self.parent_ids;
         let actions = &self.action_by_id_names;
         let has_validator = self.has_validator;
+        let repo_update_st = self.repository_update_request_st_name();
+        let mut enum_into_arms = vec![];
 
         if actions.is_empty() {
             return quote! {};
@@ -183,11 +185,15 @@ impl ApiModel<'_> {
             action_fields.push(quote! {
                 #act(#request_struct_name),
             });
+            enum_into_arms.push(quote! {
+                #action_name::#act(req) => req.into(),
+            });
 
             if let ActionField::Fields(v) = v {
                 let mut fields = vec![];
                 let mut params = vec![];
                 let mut field_names = vec![];
+                let mut into_fields = vec![];
 
                 for field in v.iter() {
                     let field_name = &field.ident;
@@ -208,6 +214,7 @@ impl ApiModel<'_> {
                     });
                     params.push(quote! { #field_name: #field_type, });
                     field_names.push(quote! { #field_name, });
+                    into_fields.push(quote! { #field_name: Some(self.#field_name), });
                 }
 
                 for field in self.actions.action_by_id.get(k).clone().unwrap_or(&vec![]) {
@@ -227,6 +234,15 @@ impl ApiModel<'_> {
                     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                     pub struct #request_struct_name {
                         #(#fields)*
+                    }
+
+                    impl Into<#repo_update_st> for #request_struct_name {
+                        fn into(self) -> #repo_update_st {
+                            #repo_update_st {
+                                #(#into_fields)*
+                                ..Default::default()
+                            }
+                        }
                     }
                 });
                 validates.push(quote! {
@@ -285,6 +301,14 @@ impl ApiModel<'_> {
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub enum #action_name {
                 #(#action_fields)*
+            }
+
+            impl Into<#repo_update_st> for #action_name {
+                fn into(self) -> #repo_update_st {
+                    match self {
+                        #(#enum_into_arms)*
+                    }
+                }
             }
 
             #validate_function
@@ -2090,13 +2114,17 @@ impl ApiModel<'_> {
         }
     }
 
+    pub fn repository_update_request_st_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}RepositoryUpdateRequest", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
     // TODO: impelment update function like find function with optional params
     // default all insert fields can be updated
     pub fn update_function(&self) -> proc_macro2::TokenStream {
-        let update_req_st_name = syn::Ident::new(
-            &format!("{}RepositoryUpdateRequest", self.name),
-            proc_macro2::Span::call_site(),
-        );
+        let update_req_st_name = self.repository_update_request_st_name();
 
         let st_var_name = syn::Ident::new(
             &format!("{}RepositoryUpdateRequest", self.name).to_case(Case::Snake),
