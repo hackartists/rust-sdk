@@ -319,9 +319,7 @@ $$ LANGUAGE plpgsql;
             .as_secs();
 
         let email = format!("test-{}@test.com", now);
-        let email2 = format!("test2-{}@test.com", now);
         let principal = format!("{}-principal", now);
-        let principal2 = format!("{}-principal2", now);
 
         let pool: sqlx::Pool<Postgres> = PgPoolOptions::new()
             .max_connections(5)
@@ -390,8 +388,17 @@ $$ LANGUAGE plpgsql;
 
         repo.insert(
             "nickname".to_string(),
-            principal2.clone(),
-            email2.clone(),
+            format!("2{}", principal),
+            format!("2{}", email),
+            "profile_url".to_string(),
+        )
+        .await
+        .unwrap();
+
+        repo.insert(
+            "nickname".to_string(),
+            format!("3{}", principal),
+            format!("3{}", email),
             "profile_url".to_string(),
         )
         .await
