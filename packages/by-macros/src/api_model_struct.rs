@@ -1992,14 +1992,14 @@ impl ApiModel<'_> {
 
             let field_name = syn::LitStr::new(field_name, proc_macro2::Span::call_site());
             option_condition.push(quote! {
-                if let Some(#n) = &#st_var_name.#n {
+                if #st_var_name.#n.is_some() {
                     i += 1;
                     update_values.push(format!("{} = ${}", #field_name, i));
                 }
             });
             let bind = field.bind();
             option_binds.push(quote! {
-                if let Some(#n) = &#st_var_name.#n {
+                if let Some(#n) = #st_var_name.#n {
                     q = q #bind;
                 }
             });
