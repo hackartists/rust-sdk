@@ -38,12 +38,13 @@ jobs:
 
       - name: test
         env:
-          RUSTFLAGS: "-Awarnings"
+          RUSTFLAGS: "-A warnings"
         run: cargo test
 
       - name: test with server feature
         env:
-          RUSTFLAGS: "-Awarnings"
+          RUSTFLAGS: "-A warnings"
+          DATABASE_URL: postgres://postgres:postgres@postgres:5432/test
         run: cargo test --features server
 
       - name: Building packages
