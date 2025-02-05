@@ -26,9 +26,6 @@ authors = ["Biyard"]
 edition = "2021"
 license = "Apache-2.0"
 
-[workspace.package.metadata.cargo-test]
-doctest = false
-
 [workspace.dependencies]
 by-components = { path = "packages/by-components", version = "0.1.*" }
 by-axum = { path = "packages/by-axum", version = "0.2.*" }
