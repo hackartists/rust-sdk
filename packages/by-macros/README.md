@@ -728,4 +728,41 @@ impl CommentClient {
 
 ```
 
+## Troublshooting
+### Panic with parent route
+Assume `Panel` model is a child endpoint of `organizations`.
+It means that `Panel` model has a field mapping to organizations in `many_to_one`.
+At this, `org_id` is the foreign reference key of `id` of `organizations` table.
+And implicitly, `:org-id` in `base` will be `org_id` at the last field.
 
+The below code generates `Client` having all function with the first parent id(`org_id`, which is snake_case of `:org-id`).
+
+If action was described in `org_id` field, it generates `create` function in `Client` structure as `pub fn create(&self, org_id: &str, name: String, user_count: u64, org_id: String)`.
+At this, the first parameter(`org_id: &str`) and the last parameter(`org_id: String`) are conflict.
+
+In order to overcome this issue, there are two options.
+
+- rename `:org-id` to `:organization-id`.
+  - It generate `create` function as `pub fn create(&self, organization_id: &str, name: String, user_count: u64, org_id: String)`
+- However, usually you might not need to make a additional parameter or `org_id` because all `Client` functions have `org-id` as their first argument. And it may indicate the `org_id: String`.
+  - This means usually, `many_to_one` relationship will be expressed as a child endpoint in HTTP API concept.
+
+``` rust
+#[derive(validator::Validate)]
+#[api_model(base = "organizations/v2/:org-id/panels", table = panels, iter_type=QueryResponse)]
+pub struct Panel {
+    #[api_model(summary, primary_key, action = delete, read_action = [get_panel, find_by_id])]
+    pub id: String,
+    #[api_model(summary, auto = insert)]
+    pub created_at: i64,
+    #[api_model(auto = [insert, update])]
+    pub updated_at: i64,
+
+    #[api_model(summary, action = [create], action_by_id = update)]
+    pub name: String,
+    #[api_model(summary, action = [create], action_by_id = update)]
+    pub user_count: u64,
+    #[api_model(summary, many_to_one = organizations, action = [create])]
+    pub org_id: String,
+}
+```

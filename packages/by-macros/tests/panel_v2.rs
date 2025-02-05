@@ -23,8 +23,9 @@ mod empty_param_tests {
             QueryResponse { items, total_count }
         }
     }
+
     #[derive(validator::Validate)]
-    #[api_model(base = "/panels/v2", table = panels, iter_type=QueryResponse)]
+    #[api_model(base = "organizations/v2/:org-id/panels", table = panels, iter_type=QueryResponse)]
     pub struct PanelV2 {
         #[api_model(summary, primary_key, action = delete, read_action = [get_panel, find_by_id])]
         pub id: String,
@@ -32,9 +33,12 @@ mod empty_param_tests {
         pub created_at: i64,
         #[api_model(auto = [insert, update])]
         pub updated_at: i64,
+
         #[api_model(summary, action = [create], action_by_id = update)]
         pub name: String,
         #[api_model(summary, action = [create], action_by_id = update)]
         pub user_count: u64,
+        #[api_model(summary, many_to_one = organizations)]
+        pub org_id: String,
     }
 }
