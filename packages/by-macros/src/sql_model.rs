@@ -24,6 +24,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let find_one = model.find_one_function();
     let find = model.find_function();
     let from_trait = model.from_pg_row_trait();
+    let summary_trait = model.from_pg_row_summary_trait();
     let impl_functions = model.impl_functions();
     let update_req_st = model.repo_update_request();
 
@@ -58,6 +59,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #from_trait
+        #summary_trait
     };
 
     tracing::debug!("Generated code: {}", output.to_string());

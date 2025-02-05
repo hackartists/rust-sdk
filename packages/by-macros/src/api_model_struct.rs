@@ -1703,6 +1703,19 @@ impl ApiModel<'_> {
 
     pub fn call_map_summary(&self) -> proc_macro2::TokenStream {
         let name = self.summary_struct_name();
+        let inner = self.from_pg_row_summary_inner();
+
+        let output = quote! {
+            .map(|row: sqlx::postgres::PgRow| {
+                #inner
+            })
+        };
+
+        output.into()
+    }
+
+    pub fn from_pg_row_summary_inner(&self) -> proc_macro2::TokenStream {
+        let name = self.summary_struct_name();
         let mut return_bounds = vec![];
 
         for field in self.summary_fields.iter() {
@@ -1722,18 +1735,29 @@ impl ApiModel<'_> {
             return_bounds.push(field.call_map());
         }
 
-        let output = quote! {
-            .map(|row: sqlx::postgres::PgRow| {
-                use sqlx::Row;
+        let out = quote! {
+            use sqlx::Row;
 
-                total = row.get("total_count");
-                #name {
-                    #(#return_bounds),*
-                }
-            })
+            #name {
+                #(#return_bounds),*
+            }
         };
+        tracing::debug!("From pg row inner: {}", out.to_string());
+        out.into()
+    }
 
-        output.into()
+    pub fn from_pg_row_summary_trait(&self) -> proc_macro2::TokenStream {
+        let name = self.summary_struct_name();
+        let inner = self.from_pg_row_inner();
+        let out = quote! {
+            impl From<sqlx::postgres::PgRow> for #name {
+                fn from(row: sqlx::postgres::PgRow) -> Self {
+                    #inner
+                }
+            }
+        };
+        tracing::debug!("From<PgRow> trait for Summary: {}", out.to_string());
+        out.into()
     }
 
     pub fn call_map_iter(&self) -> proc_macro2::TokenStream {
