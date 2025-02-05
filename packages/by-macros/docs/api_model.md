@@ -64,7 +64,7 @@ It is automatically generated for models that have the `queryable` or `query_act
 - `Query param` structure, which is named by suffix of `Query` is composed with fields described as `queryable` or `query_action`
 
 **Example Usage:**
-```rust no_run
+```rust,no_run
 let client = ExampleModel::get_client("https://api.example.com");
 let query_params = ExampleModelQuery::new(10).with_page(2);
 let response = client.query(query_params).await?;
@@ -80,7 +80,7 @@ for item in response.items {
 
 **Example Usage:**
 
-```rust no_run
+```rust,no_run
 #[api_model(base = "/examples", iter_type = QueryResponse)]
 pub struct ExampleModel {
     #[api_model(summary, primary_key)]
@@ -116,7 +116,7 @@ async fn test_query() {
 For composition of query url, It uses `Param` structure. ex) `ExampleModelParam`.
 It will declared as below:
 
-```rust no_run
+```rust,no_run
 #[serde(rename = "kebab-case", tag = "param-type")]
 pub struct ExampleModelParam {
     Query(ExampleModelQuery)
@@ -176,7 +176,7 @@ In contrast of `structure attiribute`, field
 - Automatically generates SQL table creation scripts.
 
 #### Example Usage
-```rust no_run
+```rust,no_run
 let repo = ExampleModel::get_repository(pool);
 let new_item = repo.insert("Example Name").await?;
 let updated_item = repo.update("123", ExampleModelRepositoryUpdateRequest { name: Some("Updated") }).await?;
@@ -187,7 +187,7 @@ let deleted = repo.delete("123").await?;
 
 ## 📌 Example
 
-```rust no_run
+```rust,no_run
 #[api_model(
     base = "/examples",
     table = example_table,

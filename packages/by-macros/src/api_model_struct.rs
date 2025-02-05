@@ -2884,7 +2884,7 @@ LEFT JOIN (
         output.into()
     }
 
-    pub fn unwrapped_type_token(&self) -> syn::Ident {
+    pub fn unwrapped_type_token(&self) -> proc_macro2::TokenStream {
         tracing::debug!(
             "ApiField::unwrapped_type_token {} -> {}",
             self.rust_type,
@@ -2894,13 +2894,16 @@ LEFT JOIN (
                 .trim_end_matches(">"),
         );
 
-        syn::Ident::new(
+        if self.rust_type.starts_with("Option") {
             self.rust_type
                 .replace(" ", "")
                 .trim_start_matches("Option<")
-                .trim_end_matches(">"),
-            proc_macro2::Span::call_site(),
-        )
+                .trim_end_matches(">")
+                .parse()
+                .unwrap()
+        } else {
+            self.rust_type.parse().unwrap()
+        }
     }
 
     pub fn field_name_token(&self) -> proc_macro2::TokenStream {
