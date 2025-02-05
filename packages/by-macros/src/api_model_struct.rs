@@ -140,6 +140,10 @@ impl ApiModel<'_> {
         let parent_ids = &self.parent_ids;
         let actions = &self.action_by_id_names;
         let has_validator = self.has_validator;
+        #[cfg(feature = "server")]
+        let repo_update_st = self.repository_update_request_st_name();
+        #[cfg(feature = "server")]
+        let mut enum_into_arms = vec![];
 
         if actions.is_empty() {
             return quote! {};
@@ -184,10 +188,17 @@ impl ApiModel<'_> {
                 #act(#request_struct_name),
             });
 
+            #[cfg(feature = "server")]
+            enum_into_arms.push(quote! {
+                #action_name::#act(req) => req.into(),
+            });
+
             if let ActionField::Fields(v) = v {
                 let mut fields = vec![];
                 let mut params = vec![];
                 let mut field_names = vec![];
+                #[cfg(feature = "server")]
+                let mut into_fields = vec![];
 
                 for field in v.iter() {
                     let field_name = &field.ident;
@@ -208,6 +219,24 @@ impl ApiModel<'_> {
                     });
                     params.push(quote! { #field_name: #field_type, });
                     field_names.push(quote! { #field_name, });
+                    #[cfg(feature = "server")]
+                    {
+                        if self
+                            .fields
+                            .get(
+                                &field_name
+                                    .to_token_stream()
+                                    .to_string()
+                                    .to_case(self.rename),
+                            )
+                            .unwrap()
+                            .is_option()
+                        {
+                            into_fields.push(quote! { #field_name: self.#field_name, });
+                        } else {
+                            into_fields.push(quote! { #field_name: Some(self.#field_name), });
+                        }
+                    }
                 }
 
                 for field in self.actions.action_by_id.get(k).clone().unwrap_or(&vec![]) {
@@ -221,6 +250,26 @@ impl ApiModel<'_> {
                     field_names.push(quote! { #field_name, });
                 }
 
+                #[cfg(feature = "server")]
+                action_requests.push(quote! {
+                    #validator_derive
+                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+                    #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+                    pub struct #request_struct_name {
+                        #(#fields)*
+                    }
+
+                    impl Into<#repo_update_st> for #request_struct_name {
+                        fn into(self) -> #repo_update_st {
+                            #repo_update_st {
+                                #(#into_fields)*
+                                ..Default::default()
+                            }
+                        }
+                    }
+                });
+
+                #[cfg(not(feature = "server"))]
                 action_requests.push(quote! {
                     #validator_derive
                     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
@@ -279,7 +328,7 @@ impl ApiModel<'_> {
             quote! {}
         };
 
-        quote! {
+        let output = quote! {
             #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
             #[serde(rename_all = "snake_case")]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
@@ -300,7 +349,22 @@ impl ApiModel<'_> {
 
                 #(#cli_actions)*
             }
-        }
+        };
+
+        #[cfg(feature = "server")]
+        let output = quote! {
+            #output
+
+            impl Into<#repo_update_st> for #action_name {
+                fn into(self) -> #repo_update_st {
+                    match self {
+                        #(#enum_into_arms)*
+                    }
+                }
+            }
+        };
+
+        output
     }
 
     pub fn generate_read_struct(&self) -> proc_macro2::TokenStream {
@@ -1488,7 +1552,12 @@ impl ApiModel<'_> {
                 #(#binds)*
                 let mut total: i64 = 0;
                 let rows = q
-                    #call_map
+                    .map(|row: sqlx::postgres::PgRow| {
+                        use sqlx::Row;
+
+                        total = row.get("total_count");
+                        row.into()
+                    })
                 .fetch_all(&self.pool).await?;
 
                 Ok((rows, total).into())
@@ -1496,6 +1565,17 @@ impl ApiModel<'_> {
         };
 
         output.into()
+    }
+
+    pub fn impl_summary_functions(&self) -> proc_macro2::TokenStream {
+        let name = self.summary_struct_name();
+        let base_sql_function = self.base_sql_with_function_for_summary();
+
+        quote! {
+            impl #name {
+                #base_sql_function
+            }
+        }
     }
 
     pub fn impl_functions(&self) -> proc_macro2::TokenStream {
@@ -1538,6 +1618,97 @@ impl ApiModel<'_> {
         }
 
         false
+    }
+
+    pub fn base_sql_with_function_for_summary(&self) -> proc_macro2::TokenStream {
+        let mut aggregates = vec![];
+        let mut aggregated_fields = vec![];
+        let mut aggregate_args = vec![];
+        let mut arg_names = vec![];
+        let mut group_by = vec![];
+
+        for field in self.summary_fields.iter() {
+            let n = field
+                .clone()
+                .ident
+                .unwrap()
+                .to_string()
+                .to_case(self.rename);
+            let field = self.fields.get(&n).expect(&format!("Field not found: {n}"));
+            let field_name = field.name.clone();
+
+            if let Some(query) = field.aggregate_query(&field_name) {
+                aggregates.push(query)
+            }
+
+            if let Some(q) = field.aggregate_expose_query(&field_name) {
+                aggregated_fields.push(q);
+            }
+
+            if let Some(q) = field.aggregate_arg() {
+                aggregate_args.push(q);
+            }
+
+            if let Some(q) = field.aggregate_arg_name() {
+                arg_names.push(q);
+            }
+
+            if let Some(q) = field.group_by() {
+                group_by.push(q);
+            }
+        }
+
+        let q = if aggregated_fields.len() > 0 {
+            syn::LitStr::new(
+                &format!(
+                    "SELECT p.*, {} FROM {} p {}",
+                    aggregated_fields.join(", "),
+                    self.table_name,
+                    aggregates.join(" "),
+                ),
+                proc_macro2::Span::call_site(),
+            )
+        } else {
+            syn::LitStr::new(
+                &format!("SELECT * FROM {}", self.table_name),
+                proc_macro2::Span::call_site(),
+            )
+        };
+
+        let group_by = syn::LitStr::new(&group_by.join(" "), proc_macro2::Span::call_site());
+        let qc = syn::LitStr::new(
+            &format!("SELECT COUNT(*) FROM {}", self.table_name),
+            proc_macro2::Span::call_site(),
+        );
+
+        let output = quote! {
+            pub fn base_sql_with(#(#aggregate_args,)* where_and_statements: &str) -> String {
+                let query = if where_and_statements.is_empty() {
+                    format!("{} {}", format!(#q, #(#arg_names),*), #group_by)
+                } else {
+                    if where_and_statements.to_lowercase().starts_with("where") {
+                        format!("{} {} {}", format!(#q, #(#arg_names),*), where_and_statements, #group_by)
+                    } else {
+                        format!("{} WHERE {} {}", format!(#q, #(#arg_names),*), where_and_statements, #group_by)
+                    }
+                };
+
+                let count_query = if where_and_statements.is_empty() {
+                    format!("{}", #qc)
+                } else {
+                    if where_and_statements.to_lowercase().starts_with("where") {
+                        format!("{} {} {}", #qc, where_and_statements, #group_by)
+                    } else {
+                        format!("{} WHERE {} {}", #qc, where_and_statements, #group_by)
+                    }
+                };
+
+
+                format!("WITH data AS ({}) SELECT ({}) AS total_count, data.* FROM data;", query, count_query)
+            }
+        };
+
+        output.into()
     }
 
     pub fn base_sql_function(&self) -> proc_macro2::TokenStream {
@@ -1703,6 +1874,19 @@ impl ApiModel<'_> {
 
     pub fn call_map_summary(&self) -> proc_macro2::TokenStream {
         let name = self.summary_struct_name();
+        let inner = self.from_pg_row_summary_inner();
+
+        let output = quote! {
+            .map(|row: sqlx::postgres::PgRow| {
+                #inner
+            })
+        };
+
+        output.into()
+    }
+
+    pub fn from_pg_row_summary_inner(&self) -> proc_macro2::TokenStream {
+        let name = self.summary_struct_name();
         let mut return_bounds = vec![];
 
         for field in self.summary_fields.iter() {
@@ -1722,18 +1906,29 @@ impl ApiModel<'_> {
             return_bounds.push(field.call_map());
         }
 
-        let output = quote! {
-            .map(|row: sqlx::postgres::PgRow| {
-                use sqlx::Row;
+        let out = quote! {
+            use sqlx::Row;
 
-                total = row.get("total_count");
-                #name {
-                    #(#return_bounds),*
-                }
-            })
+            #name {
+                #(#return_bounds),*
+            }
         };
+        tracing::debug!("From pg row inner: {}", out.to_string());
+        out.into()
+    }
 
-        output.into()
+    pub fn from_pg_row_summary_trait(&self) -> proc_macro2::TokenStream {
+        let name = self.summary_struct_name();
+        let inner = self.from_pg_row_summary_inner();
+        let out = quote! {
+            impl From<sqlx::postgres::PgRow> for #name {
+                fn from(row: sqlx::postgres::PgRow) -> Self {
+                    #inner
+                }
+            }
+        };
+        tracing::debug!("From<PgRow> trait for Summary: {}", out.to_string());
+        out.into()
     }
 
     pub fn call_map_iter(&self) -> proc_macro2::TokenStream {
@@ -1959,13 +2154,17 @@ impl ApiModel<'_> {
         }
     }
 
+    pub fn repository_update_request_st_name(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}RepositoryUpdateRequest", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
     // TODO: impelment update function like find function with optional params
     // default all insert fields can be updated
     pub fn update_function(&self) -> proc_macro2::TokenStream {
-        let update_req_st_name = syn::Ident::new(
-            &format!("{}RepositoryUpdateRequest", self.name),
-            proc_macro2::Span::call_site(),
-        );
+        let update_req_st_name = self.repository_update_request_st_name();
 
         let st_var_name = syn::Ident::new(
             &format!("{}RepositoryUpdateRequest", self.name).to_case(Case::Snake),
