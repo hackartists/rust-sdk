@@ -8,7 +8,28 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-deployment:
+
+  non-server-feature:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          ssh-key: ${{ secrets.PULL_KEY_REPO }}
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy, rustfmt
+          target: wasm32-unknown-unknown
+          toolchain: stable
+
+      - name: test
+        env:
+          RUSTFLAGS: "-A warnings"
+        run: cargo test
+
+  server-feature:
     runs-on: ubuntu-latest
 
     services:
@@ -36,16 +57,26 @@ jobs:
           target: wasm32-unknown-unknown
           toolchain: stable
 
-      - name: test
-        env:
-          RUSTFLAGS: "-A warnings"
-        run: cargo test
-
       - name: test with server feature
         env:
           RUSTFLAGS: "-A warnings"
           DATABASE_URL: postgres://postgres:postgres@postgres:5432/test
         run: cargo test --features server
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          ssh-key: ${{ secrets.PULL_KEY_REPO }}
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy, rustfmt
+          target: wasm32-unknown-unknown
+          toolchain: stable
 
       - name: Building packages
         run: |
