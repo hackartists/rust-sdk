@@ -1488,7 +1488,12 @@ impl ApiModel<'_> {
                 #(#binds)*
                 let mut total: i64 = 0;
                 let rows = q
-                    #call_map
+                    .map(|row: sqlx::postgres::PgRow| {
+                        use sqlx::Row;
+
+                        total = row.get("total_count");
+                        row.into()
+                    })
                 .fetch_all(&self.pool).await?;
 
                 Ok((rows, total).into())
@@ -1496,6 +1501,17 @@ impl ApiModel<'_> {
         };
 
         output.into()
+    }
+
+    pub fn impl_summary_functions(&self) -> proc_macro2::TokenStream {
+        let name = self.summary_struct_name();
+        let base_sql_function = self.base_sql_with_function_for_summary();
+
+        quote! {
+            impl #name {
+                #base_sql_function
+            }
+        }
     }
 
     pub fn impl_functions(&self) -> proc_macro2::TokenStream {
@@ -1538,6 +1554,97 @@ impl ApiModel<'_> {
         }
 
         false
+    }
+
+    pub fn base_sql_with_function_for_summary(&self) -> proc_macro2::TokenStream {
+        let mut aggregates = vec![];
+        let mut aggregated_fields = vec![];
+        let mut aggregate_args = vec![];
+        let mut arg_names = vec![];
+        let mut group_by = vec![];
+
+        for field in self.summary_fields.iter() {
+            let n = field
+                .clone()
+                .ident
+                .unwrap()
+                .to_string()
+                .to_case(self.rename);
+            let field = self.fields.get(&n).expect(&format!("Field not found: {n}"));
+            let field_name = field.name.clone();
+
+            if let Some(query) = field.aggregate_query(&field_name) {
+                aggregates.push(query)
+            }
+
+            if let Some(q) = field.aggregate_expose_query(&field_name) {
+                aggregated_fields.push(q);
+            }
+
+            if let Some(q) = field.aggregate_arg() {
+                aggregate_args.push(q);
+            }
+
+            if let Some(q) = field.aggregate_arg_name() {
+                arg_names.push(q);
+            }
+
+            if let Some(q) = field.group_by() {
+                group_by.push(q);
+            }
+        }
+
+        let q = if aggregated_fields.len() > 0 {
+            syn::LitStr::new(
+                &format!(
+                    "SELECT p.*, {} FROM {} p {}",
+                    aggregated_fields.join(", "),
+                    self.table_name,
+                    aggregates.join(" "),
+                ),
+                proc_macro2::Span::call_site(),
+            )
+        } else {
+            syn::LitStr::new(
+                &format!("SELECT * FROM {}", self.table_name),
+                proc_macro2::Span::call_site(),
+            )
+        };
+
+        let group_by = syn::LitStr::new(&group_by.join(" "), proc_macro2::Span::call_site());
+        let qc = syn::LitStr::new(
+            &format!("SELECT COUNT(*) FROM {}", self.table_name),
+            proc_macro2::Span::call_site(),
+        );
+
+        let output = quote! {
+            pub fn base_sql_with(#(#aggregate_args),* where_and_statements: &str) -> String {
+                let query = if where_and_statements.is_empty() {
+                    format!("{} {}", format!(#q, #(#arg_names),*), #group_by)
+                } else {
+                    if where_and_statements.to_lowercase().starts_with("where") {
+                        format!("{} {} {}", format!(#q, #(#arg_names),*), where_and_statements, #group_by)
+                    } else {
+                        format!("{} WHERE {} {}", format!(#q, #(#arg_names),*), where_and_statements, #group_by)
+                    }
+                };
+
+                let count_query = if where_and_statements.is_empty() {
+                    format!("{}", #qc)
+                } else {
+                    if where_and_statements.to_lowercase().starts_with("where") {
+                        format!("{} {} {}", #qc, where_and_statements, #group_by)
+                    } else {
+                        format!("{} WHERE {} {}", #qc, where_and_statements, #group_by)
+                    }
+                };
+
+
+                format!("WITH data AS ({}) SELECT ({}) AS total_count, data.* FROM data;", query, count_query)
+            }
+        };
+
+        output.into()
     }
 
     pub fn base_sql_function(&self) -> proc_macro2::TokenStream {
@@ -1748,7 +1855,7 @@ impl ApiModel<'_> {
 
     pub fn from_pg_row_summary_trait(&self) -> proc_macro2::TokenStream {
         let name = self.summary_struct_name();
-        let inner = self.from_pg_row_inner();
+        let inner = self.from_pg_row_summary_inner();
         let out = quote! {
             impl From<sqlx::postgres::PgRow> for #name {
                 fn from(row: sqlx::postgres::PgRow) -> Self {

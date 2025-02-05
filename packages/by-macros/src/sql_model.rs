@@ -26,6 +26,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let from_trait = model.from_pg_row_trait();
     let summary_trait = model.from_pg_row_summary_trait();
     let impl_functions = model.impl_functions();
+    let impl_summary_functions = model.impl_summary_functions();
     let update_req_st = model.repo_update_request();
 
     let output = quote! {
@@ -36,6 +37,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #impl_functions
+        #impl_summary_functions
 
         #[derive(Debug, Clone)]
         pub struct #repo_name {
