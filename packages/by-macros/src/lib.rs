@@ -27,6 +27,7 @@ pub fn query_display_derive(input: TokenStream) -> TokenStream {
     query_display_impl(input)
 }
 
+// #[doc = include_str!("../docs/api_model.md")]
 #[proc_macro_attribute]
 pub fn api_model(attr: TokenStream, item: TokenStream) -> TokenStream {
     let _ = tracing_subscriber::fmt()
