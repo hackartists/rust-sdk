@@ -220,7 +220,23 @@ impl ApiModel<'_> {
                     params.push(quote! { #field_name: #field_type, });
                     field_names.push(quote! { #field_name, });
                     #[cfg(feature = "server")]
-                    into_fields.push(quote! { #field_name: Some(self.#field_name), });
+                    {
+                        if self
+                            .fields
+                            .get(
+                                &field_name
+                                    .to_token_stream()
+                                    .to_string()
+                                    .to_case(self.rename),
+                            )
+                            .unwrap()
+                            .is_option()
+                        {
+                            into_fields.push(quote! { #field_name: self.#field_name, });
+                        } else {
+                            into_fields.push(quote! { #field_name: Some(self.#field_name), });
+                        }
+                    }
                 }
 
                 for field in self.actions.action_by_id.get(k).clone().unwrap_or(&vec![]) {
@@ -1666,7 +1682,7 @@ impl ApiModel<'_> {
         );
 
         let output = quote! {
-            pub fn base_sql_with(#(#aggregate_args),* where_and_statements: &str) -> String {
+            pub fn base_sql_with(#(#aggregate_args,)* where_and_statements: &str) -> String {
                 let query = if where_and_statements.is_empty() {
                     format!("{} {}", format!(#q, #(#arg_names),*), #group_by)
                 } else {
