@@ -1696,6 +1696,9 @@ impl ApiModel<'_> {
                 let count_query = if where_and_statements.is_empty() {
                     format!("{}", #qc)
                 } else {
+                    let re = regex::Regex::new(r"(?i)\s*LIMIT\s+\$\d+\s*(OFFSET\s+\$\d+)?").unwrap();
+                    let where_and_statements = re.replace(where_and_statements, "").to_string();
+
                     if where_and_statements.to_lowercase().starts_with("where") {
                         format!("{} {} {}", #qc, where_and_statements, #group_by)
                     } else {
