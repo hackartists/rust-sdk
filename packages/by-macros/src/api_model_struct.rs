@@ -222,13 +222,13 @@ impl ApiModel<'_> {
                 }
 
                 action_requests.push(quote! {
-                #validator_derive
-                #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
-                #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
-                pub struct #request_struct_name {
-                    #(#fields)*
-                }
-            });
+                    #validator_derive
+                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+                    #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+                    pub struct #request_struct_name {
+                        #(#fields)*
+                    }
+                });
                 validates.push(quote! {
                     #action_name::#act(req) => req.validate(),
                 });
@@ -237,16 +237,16 @@ impl ApiModel<'_> {
                 let parent_names = parent_names.clone();
 
                 cli_actions.push(quote! {
-                pub async fn #cli_act(&self, #(#parent_params)* id: &str, #(#params)*) -> crate::Result<#struct_name> {
-                    let path = format!(#base_endpoint_lit, #(#parent_names)*);
-                    let endpoint = format!("{}{}/{}", self.endpoint, path, id);
-                    let req = #action_name::#act(#request_struct_name {
-                        #(#field_names)*
-                    });
-                    rest_api::post(&endpoint, req).await
-                }
+                    pub async fn #cli_act(&self, #(#parent_params)* id: &str, #(#params)*) -> crate::Result<#struct_name> {
+                        let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                        let endpoint = format!("{}{}/{}", self.endpoint, path, id);
+                        let req = #action_name::#act(#request_struct_name {
+                            #(#field_names)*
+                        });
+                        rest_api::post(&endpoint, req).await
+                    }
 
-            })
+                })
             } else if let ActionField::Related(st) = v {
                 let parent_params = parent_params.clone();
                 let parent_names = parent_names.clone();
@@ -1419,10 +1419,17 @@ impl ApiModel<'_> {
         for f in fields.iter() {
             let fname = syn::LitStr::new(&f.to_string(), proc_macro2::Span::call_site());
 
+            let field = self
+                .fields
+                .get(&f.to_string().to_case(self.rename))
+                .expect(&format!("Field not found: {}", f.to_string()));
+
+            let bind = field.bind();
+
             binds.push(quote! {
                 if let Some(#f) = &param.#f {
                     tracing::debug!("{} binding {} = {}", #fmt_str, #fname, #f);
-                    q = q.bind(#f);
+                    q = q #bind;
                 }
             });
 
@@ -1904,6 +1911,159 @@ impl ApiModel<'_> {
         }
     }
 
+    pub fn repo_update_request(&self) -> proc_macro2::TokenStream {
+        let name = syn::Ident::new(
+            &format!("{}RepositoryUpdateRequest", self.name),
+            proc_macro2::Span::call_site(),
+        );
+
+        let mut fields = vec![];
+        let mut functions = vec![];
+
+        for (_, v) in self.fields.iter() {
+            if v.should_skip_inserting() {
+                continue;
+            }
+            let name = syn::Ident::new(&v.name, proc_macro2::Span::call_site());
+            let ty = v.unwrapped_type_token();
+
+            fields.push(quote! {
+                pub #name: Option<#ty>
+            });
+
+            let fname =
+                syn::Ident::new(&format!("with_{}", v.name), proc_macro2::Span::call_site());
+
+            functions.push(quote! {
+                pub fn #fname(mut self, #name: #ty) -> Self {
+                    self.#name = Some(#name);
+                    self
+                }
+            });
+        }
+
+        quote! {
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+            #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+            pub struct #name {
+                #(#fields),*
+            }
+
+            impl #name {
+                pub fn new() -> Self {
+                    Self::default()
+                }
+
+                #(#functions)*
+            }
+        }
+    }
+
+    // TODO: impelment update function like find function with optional params
+    // default all insert fields can be updated
+    pub fn update_function(&self) -> proc_macro2::TokenStream {
+        let update_req_st_name = syn::Ident::new(
+            &format!("{}RepositoryUpdateRequest", self.name),
+            proc_macro2::Span::call_site(),
+        );
+
+        let st_var_name = syn::Ident::new(
+            &format!("{}RepositoryUpdateRequest", self.name).to_case(Case::Snake),
+            proc_macro2::Span::call_site(),
+        );
+
+        let mut returning = vec![];
+        let mut option_condition = vec![];
+        let mut option_binds = vec![];
+
+        for (field_name, field) in self.fields.iter() {
+            tracing::debug!("Field processing(update): {}", field_name);
+            if !field.should_return_in_insert() {
+                continue;
+            }
+            returning.push(field_name.clone());
+
+            if field.should_skip_inserting() {
+                continue;
+            }
+
+            let n = field.field_name_token();
+            let ty = field.unwrapped_type_token();
+
+            let field_name = syn::LitStr::new(field_name, proc_macro2::Span::call_site());
+            option_condition.push(quote! {
+                if let Some(#n) = &#st_var_name.#n {
+                    i += 1;
+                    update_values.push(format!("{} = ${}", #field_name, i));
+                }
+            });
+            let bind = field.bind();
+            option_binds.push(quote! {
+                if let Some(#n) = &#st_var_name.#n {
+                    q = q #bind;
+                }
+            });
+            continue;
+        }
+
+        let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
+        let call_map = self.call_map();
+
+        let q = syn::LitStr::new(
+            &format!(
+                "UPDATE {} SET {{}} WHERE id = $1 RETURNING {}",
+                self.table_name,
+                returning.join(", "),
+            ),
+            proc_macro2::Span::call_site(),
+        );
+
+        let output = quote! {
+            pub async fn update(&self, id: &str, #st_var_name: #update_req_st_name) -> Result<#name> {
+                let mut i = 1;
+                let mut update_values = vec![];
+
+                #(#option_condition)*
+
+                let query = format!(
+                    #q,
+                    update_values.join(", "),
+                );
+                tracing::debug!("insert query: {}", query);
+                let mut q = sqlx::query(&query)
+                    .bind(id.parse::<i64>().unwrap());
+                #(#option_binds)*
+                let row = q
+                    #call_map
+                .fetch_one(&self.pool)
+                    .await?;
+
+                Ok(row)
+            }
+        };
+
+        output
+    }
+
+    pub fn delete_function(&self) -> proc_macro2::TokenStream {
+        let repo_name = self.repository_struct_name();
+        let query = syn::LitStr::new(
+            &format!("DELETE FROM {} WHERE id = $1", self.table_name),
+            proc_macro2::Span::call_site(),
+        );
+
+        quote! {
+            pub async fn delete(&self, id: &str) -> Result<()> {
+                sqlx::query(#query)
+                    .bind(id.parse::<i64>().unwrap())
+                    .execute(&self.pool)
+                    .await?;
+
+                Ok(())
+            }
+        }
+    }
+
     pub fn insert_function(&self) -> proc_macro2::TokenStream {
         let mut insert_fields = vec![];
         let mut insert_values = vec![];
@@ -1943,9 +2103,11 @@ impl ApiModel<'_> {
                         insert_values.push(format!("${}", i));
                     }
                 });
+
+                let bind = field.bind();
                 option_binds.push(quote! {
                     if let Some(#n) = &#n {
-                        q = q.bind(#n);
+                        q = q #bind;
                     }
                 });
                 continue;
@@ -1958,6 +2120,7 @@ impl ApiModel<'_> {
 
             i += 1;
         }
+        tracing::debug!("Insert fields: {:?}", insert_fields);
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let call_map = self.call_map();
 
@@ -2140,18 +2303,18 @@ impl<'a> ApiModel<'a> {
                             .join("/");
                     }
                     "iter_type" => iter_type = value.to_string(),
-                    "read_action" => {
-                        let value = value
-                            .trim_matches('[')
-                            .trim_matches(']')
-                            .split(",")
-                            .collect::<Vec<&str>>();
-                        for v in value {
-                            tracing::debug!("Read action: {}", v);
-                            let v = v.trim();
-                            read_action_names.insert(v.to_string(), ActionField::Fields(vec![]));
-                        }
-                    }
+                    // "read_action" => {
+                    //     let value = value
+                    //         .trim_matches('[')
+                    //         .trim_matches(']')
+                    //         .split(",")
+                    //         .collect::<Vec<&str>>();
+                    //     for v in value {
+                    //         tracing::debug!("Read action: {}", v);
+                    //         let v = v.trim();
+                    //         read_action_names.insert(v.to_string(), ActionField::Fields(vec![]));
+                    //     }
+                    // }
                     #[cfg(feature = "server")]
                     "database" => {
                         if value.contains("skip") {
@@ -2183,6 +2346,24 @@ impl<'a> ApiModel<'a> {
         let mut action_by_id_names = IndexMap::<String, ActionField>::new();
         let mut query_action_names = IndexMap::<String, ActionField>::new();
         let mut primary_key = (String::new(), String::new());
+
+        for (k, v) in actions.read_actions.iter() {
+            read_action_names
+                .entry(k.to_string())
+                .or_insert_with(|| ActionField::Fields(vec![]));
+        }
+
+        for (k, v) in actions.action_by_id.iter() {
+            action_by_id_names
+                .entry(k.to_string())
+                .or_insert_with(|| ActionField::Fields(vec![]));
+        }
+
+        for (k, v) in actions.actions.iter() {
+            action_names
+                .entry(k.to_string())
+                .or_insert_with(|| ActionField::Fields(vec![]));
+        }
 
         #[cfg(feature = "server")]
         for f in data.fields.iter() {
@@ -2703,6 +2884,25 @@ LEFT JOIN (
         output.into()
     }
 
+    pub fn unwrapped_type_token(&self) -> syn::Ident {
+        tracing::debug!(
+            "ApiField::unwrapped_type_token {} -> {}",
+            self.rust_type,
+            self.rust_type
+                .replace(" ", "")
+                .trim_start_matches("Option<")
+                .trim_end_matches(">"),
+        );
+
+        syn::Ident::new(
+            self.rust_type
+                .replace(" ", "")
+                .trim_start_matches("Option<")
+                .trim_end_matches(">"),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
     pub fn field_name_token(&self) -> proc_macro2::TokenStream {
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
 
@@ -3021,7 +3221,9 @@ impl ApiField {
             proc_macro2::Span::call_site(),
         );
 
-        match (self.rust_type.as_str(), self.r#type.as_str()) {
+        let rust_type = self.unwrapped_type_token().to_string();
+
+        match (rust_type.as_str(), self.r#type.as_str()) {
             (rust_type, "TEXT") if rust_type != "String" => {
                 quote! {
                     .bind(#n.to_string())
