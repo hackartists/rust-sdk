@@ -140,7 +140,9 @@ impl ApiModel<'_> {
         let parent_ids = &self.parent_ids;
         let actions = &self.action_by_id_names;
         let has_validator = self.has_validator;
+        #[cfg(feature = "server")]
         let repo_update_st = self.repository_update_request_st_name();
+        #[cfg(feature = "server")]
         let mut enum_into_arms = vec![];
 
         if actions.is_empty() {
@@ -185,6 +187,8 @@ impl ApiModel<'_> {
             action_fields.push(quote! {
                 #act(#request_struct_name),
             });
+
+            #[cfg(feature = "server")]
             enum_into_arms.push(quote! {
                 #action_name::#act(req) => req.into(),
             });
@@ -193,6 +197,7 @@ impl ApiModel<'_> {
                 let mut fields = vec![];
                 let mut params = vec![];
                 let mut field_names = vec![];
+                #[cfg(feature = "server")]
                 let mut into_fields = vec![];
 
                 for field in v.iter() {
@@ -214,6 +219,7 @@ impl ApiModel<'_> {
                     });
                     params.push(quote! { #field_name: #field_type, });
                     field_names.push(quote! { #field_name, });
+                    #[cfg(feature = "server")]
                     into_fields.push(quote! { #field_name: Some(self.#field_name), });
                 }
 
@@ -228,6 +234,7 @@ impl ApiModel<'_> {
                     field_names.push(quote! { #field_name, });
                 }
 
+                #[cfg(feature = "server")]
                 action_requests.push(quote! {
                     #validator_derive
                     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
@@ -243,6 +250,16 @@ impl ApiModel<'_> {
                                 ..Default::default()
                             }
                         }
+                    }
+                });
+
+                #[cfg(not(feature = "server"))]
+                action_requests.push(quote! {
+                    #validator_derive
+                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+                    #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+                    pub struct #request_struct_name {
+                        #(#fields)*
                     }
                 });
                 validates.push(quote! {
@@ -295,20 +312,12 @@ impl ApiModel<'_> {
             quote! {}
         };
 
-        quote! {
+        let output = quote! {
             #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
             #[serde(rename_all = "snake_case")]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub enum #action_name {
                 #(#action_fields)*
-            }
-
-            impl Into<#repo_update_st> for #action_name {
-                fn into(self) -> #repo_update_st {
-                    match self {
-                        #(#enum_into_arms)*
-                    }
-                }
             }
 
             #validate_function
@@ -324,7 +333,22 @@ impl ApiModel<'_> {
 
                 #(#cli_actions)*
             }
-        }
+        };
+
+        #[cfg(feature = "server")]
+        let output = quote! {
+            #output
+
+            impl Into<#repo_update_st> for #action_name {
+                fn into(self) -> #repo_update_st {
+                    match self {
+                        #(#enum_into_arms)*
+                    }
+                }
+            }
+        };
+
+        output
     }
 
     pub fn generate_read_struct(&self) -> proc_macro2::TokenStream {
