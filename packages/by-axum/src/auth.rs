@@ -111,7 +111,8 @@ pub fn verify_api_key(value: Option<&str>) -> Result<Authorization, StatusCode> 
     }
 
     let api_key = value.unwrap();
-    let secret_server_key = option_env!("SECRET_API_KEY").unwrap_or_default();
+    let secret_server_key = option_env!("SECRET_API_KEY")
+        .expect("You must set SECRET_API_KEY to enable api-key authentication");
 
     if api_key == secret_server_key {
         return Ok(Authorization::SecretApiKey);
