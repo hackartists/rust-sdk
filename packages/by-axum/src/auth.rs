@@ -80,11 +80,11 @@ pub async fn authorization_middleware(
                     let claims = verify_jwt(value)?;
                     Some(claims)
                 }
-                "api-key" => {
+                "secret" => {
                     if option_env!("ENV").unwrap_or("local") == "prod" {
                         None
                     } else {
-                        Some(verify_api_key(value)?)
+                        Some(verify_secret(value)?)
                     }
                 }
                 _ => {
@@ -105,14 +105,14 @@ pub async fn authorization_middleware(
     return Ok(next.run(req).await);
 }
 
-pub fn verify_api_key(value: Option<&str>) -> Result<Authorization, StatusCode> {
+pub fn verify_secret(value: Option<&str>) -> Result<Authorization, StatusCode> {
     if value.is_none() {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
     let api_key = value.unwrap();
-    let secret_server_key = option_env!("SECRET_API_KEY")
-        .expect("You must set SECRET_API_KEY to enable api-key authentication");
+    let secret_server_key = option_env!("AUTH_SECRET_KEY")
+        .expect("You must set AUTH_SECRET_KEY to enable `secret` authentication");
 
     if api_key == secret_server_key {
         return Ok(Authorization::SecretApiKey);
