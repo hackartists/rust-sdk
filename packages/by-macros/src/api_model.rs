@@ -23,31 +23,31 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     #[cfg(not(feature = "server"))]
     let db_structs: proc_macro2::TokenStream = quote! {};
 
-    tracing::debug!("generated db code: {}", db_structs.to_string());
+    tracing::trace!("generated db code: {}", db_structs.to_string());
 
     let input_cloned = item.clone();
     let input = parse_macro_input!(item as DeriveInput);
 
     let model = ApiModel::new(&input, attr.clone());
-    tracing::debug!("Model: {:#?}", model);
+    tracing::trace!("Model: {:#?}", model);
     let param_struct = model.param_struct();
-    tracing::debug!("Param struct: {}", param_struct.to_string());
+    tracing::trace!("Param struct: {}", param_struct.to_string());
     let get_response = model.get_response_struct();
-    tracing::debug!("Get response struct: {}", get_response.to_string());
+    tracing::trace!("Get response struct: {}", get_response.to_string());
 
     let summary_struct = model.generate_summary_struct();
-    tracing::debug!("Summary struct: {}", summary_struct.to_string());
+    tracing::trace!("Summary struct: {}", summary_struct.to_string());
     let query_struct = model.generate_query_struct();
-    tracing::debug!("Query struct: {}", query_struct.to_string());
+    tracing::trace!("Query struct: {}", query_struct.to_string());
     let read_action_struct = model.generate_read_struct();
-    tracing::debug!("Read action struct: {}", read_action_struct.to_string());
+    tracing::trace!("Read action struct: {}", read_action_struct.to_string());
     let action_struct = model.generate_action_struct();
-    tracing::debug!("Action struct: {}", action_struct.to_string());
+    tracing::trace!("Action struct: {}", action_struct.to_string());
     let action_by_id_struct = model.generate_action_by_id_struct();
-    tracing::debug!("Action by id struct: {}", action_by_id_struct.to_string());
+    tracing::trace!("Action by id struct: {}", action_by_id_struct.to_string());
 
     let client_impl = model.generate_client_impl();
-    tracing::debug!("Client impl: {}", client_impl.to_string());
+    tracing::trace!("Client impl: {}", client_impl.to_string());
     let input = parse_macro_input!(input_cloned as syn::ItemStruct);
     let stripped_input = strip_struct_attributes(&input);
 

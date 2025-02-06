@@ -40,7 +40,7 @@ pub async fn serve(
     _tcp_listener: tokio::net::TcpListener,
     app: BiyardRouter,
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let app = app.layer(tower_http::cors::CorsLayer::permissive());
+    let app = app.layer(tower_http::cors::CorsLayer::permissive().allow_credentials(true));
     let mut api = app.open_api;
     let app = app
         .inner

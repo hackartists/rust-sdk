@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::{
     http::{HeaderMap, HeaderValue},
     response::{IntoResponse, Response},
@@ -9,6 +11,7 @@ use serde::{Deserialize, Deserializer};
 pub struct JsonWithHeaders<T> {
     pub body: T,
     pub headers: HeaderMap,
+    pub cookies: HashMap<String, String>,
 }
 
 impl<T> JsonWithHeaders<T> {
@@ -16,6 +19,7 @@ impl<T> JsonWithHeaders<T> {
         Self {
             body,
             headers: HeaderMap::new(),
+            cookies: HashMap::new(),
         }
     }
 
@@ -28,18 +32,19 @@ impl<T> JsonWithHeaders<T> {
         self
     }
 
-    pub fn with_cookie(mut self, value: &str) -> Self {
-        self.headers
-            .insert(header::SET_COOKIE, HeaderValue::from_str(&value).unwrap());
+    pub fn with_cookie(mut self, key: &str, value: &str) -> Self {
+        self.cookies.insert(key.to_string(), value.to_string());
         self
     }
 
     pub fn with_authorization(mut self, auth_type: &str, value: &str) -> Self {
+        let authz = format!("{} {}", auth_type, value);
         self.headers.insert(
             header::AUTHORIZATION,
-            HeaderValue::from_str(&format!("{} {}", auth_type, value)).unwrap(),
+            HeaderValue::from_str(&authz).unwrap(),
         );
-        self
+
+        self.with_cookie("authz", &authz)
     }
 
     pub fn with_bearer_token(self, token: &str) -> Self {
@@ -71,6 +76,7 @@ where
         Ok(JsonWithHeaders {
             body,
             headers: HeaderMap::new(),
+            cookies: HashMap::new(),
         })
     }
 }
@@ -93,11 +99,32 @@ where
     T: serde::Serialize,
 {
     fn into_response(self) -> Response {
-        (
-            axum::http::StatusCode::OK,
-            self.headers,
-            axum::Json(self.body),
-        )
-            .into_response()
+        let value = self
+            .cookies
+            .iter()
+            .map(|(key, value)| format!("{}={}", key, value))
+            .collect::<Vec<String>>()
+            .join("; ");
+
+        let mut headers = self.headers.clone();
+        headers.insert(
+            header::SET_COOKIE,
+            format!(
+                "{}; Path=/; HttpOnly; Domain SameSite=None{}",
+                value,
+                match option_env!("ENV") {
+                    Some("local") => "".to_string(),
+                    Some(_) => format!(
+                        "; Secure; Domain={}",
+                        option_env!("BASE_DOMAIN").expect("BASE_DOMAIN is not set")
+                    ),
+                    None => panic!("ENV is not set"),
+                }
+            )
+            .parse()
+            .unwrap(),
+        );
+
+        (axum::http::StatusCode::OK, headers, axum::Json(self.body)).into_response()
     }
 }

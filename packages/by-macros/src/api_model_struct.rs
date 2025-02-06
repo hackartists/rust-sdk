@@ -1176,7 +1176,7 @@ impl ApiModel<'_> {
             fields.push(field_name.clone().unwrap());
         }
 
-        tracing::debug!("Query fields: {:?}", fields);
+        tracing::trace!("Query fields: {:?}", fields);
 
         fields
     }
@@ -1204,7 +1204,7 @@ impl ApiModel<'_> {
             }
         }
 
-        tracing::debug!("Read action fields: {:?}", fields);
+        tracing::trace!("Read action fields: {:?}", fields);
 
         fields
     }
@@ -1403,14 +1403,14 @@ impl ApiModel<'_> {
             create_query_fields.join(","),
         );
         let create_query_output = syn::LitStr::new(&q, proc_macro2::Span::call_site());
-        tracing::debug!("create table query: {}", q);
+        tracing::trace!("create table query: {}", q);
 
         quote! {
             pub fn queries(&self) -> Vec<&'static str> {
                 vec![#create_query_output, #(#queries),*]
             }
             pub async fn create_this_table(&self) -> std::result::Result<(), sqlx::Error> {
-                tracing::debug!("Create table: {}", #create_query_output);
+                tracing::trace!("Create table: {}", #create_query_output);
                 sqlx::query(#create_query_output).execute(&self.pool).await?;
 
                 Ok(())
@@ -1418,7 +1418,7 @@ impl ApiModel<'_> {
 
             pub async fn create_related_tables(&self) -> std::result::Result<(), sqlx::Error> {
                 for query in [#(#queries),*] {
-                    tracing::debug!("Execute queries: {}", query);
+                    tracing::trace!("Execute queries: {}", query);
                     sqlx::query(query).execute(&self.pool).await?;
                 }
 
@@ -1429,7 +1429,7 @@ impl ApiModel<'_> {
                 sqlx::query(#create_query_output).execute(&self.pool).await?;
 
                 for query in [#(#queries),*] {
-                    tracing::debug!("Execute queries: {}", query);
+                    tracing::trace!("Execute queries: {}", query);
                     sqlx::query(query).execute(&self.pool).await?;
                 }
 
@@ -1492,7 +1492,7 @@ impl ApiModel<'_> {
 
             binds.push(quote! {
                 if let Some(#f) = &param.#f {
-                    tracing::debug!("{} binding {} = {}", #fmt_str, #fname, #f);
+                    tracing::trace!("{} binding {} = {}", #fmt_str, #fname, #f);
                     q = q #bind;
                 }
             });
@@ -1529,14 +1529,14 @@ impl ApiModel<'_> {
                     format!("{}", #qc)
                 };
                 let query = format!("WITH data AS ({}) SELECT ({}) AS total_count, data.* FROM data;", query, count_query);
-                tracing::debug!("{} query {}", #fmt_str, query);
+                tracing::trace!("{} query {}", #fmt_str, query);
                 let offset: i32 = (param.size as i32) * (param.page() - 1);
                 let mut q = sqlx::query(&query).bind(param.size as i32).bind(offset);
             }
         } else {
             quote! {
                 let query = format!("WITH data AS ({} {}) SELECT ({}) AS total_count, data.* FROM data;", #q, #tail_q, #qc);
-                tracing::debug!("{} query {}", #fmt_str, query);
+                tracing::trace!("{} query {}", #fmt_str, query);
                 let offset: i32 = (param.size as i32) * (param.page() - 1);
                 let q = sqlx::query(&query).bind(param.size as i32).bind(offset);
             }
@@ -1813,7 +1813,7 @@ impl ApiModel<'_> {
 
             binds.push(quote! {
                 if let Some(#f) = &param.#f {
-                    tracing::debug!("{} binding {} = {}", #fmt_str, #fname, #f);
+                    tracing::trace!("{} binding {} = {}", #fmt_str, #fname, #f);
                     q = q #bind;
                 }
             });
@@ -1851,7 +1851,7 @@ impl ApiModel<'_> {
                 #for_where
                 query.push_str(" ");
                 query.push_str(#name::group_by().as_str());
-                tracing::debug!("{} query {}: {:?}", #fmt_str, query, param);
+                tracing::trace!("{} query {}: {:?}", #fmt_str, query, param);
 
                 let mut q = sqlx::query(&query);
 
@@ -1916,7 +1916,7 @@ impl ApiModel<'_> {
                 #(#return_bounds),*
             }
         };
-        tracing::debug!("From pg row inner: {}", out.to_string());
+        tracing::trace!("From pg row inner: {}", out.to_string());
         out.into()
     }
 
@@ -1930,7 +1930,7 @@ impl ApiModel<'_> {
                 }
             }
         };
-        tracing::debug!("From<PgRow> trait for Summary: {}", out.to_string());
+        tracing::trace!("From<PgRow> trait for Summary: {}", out.to_string());
         out.into()
     }
 
@@ -1987,7 +1987,7 @@ impl ApiModel<'_> {
                 #(#return_bounds),*
             }
         };
-        tracing::debug!("From pg row inner: {}", out.to_string());
+        tracing::trace!("From pg row inner: {}", out.to_string());
         out.into()
     }
 
@@ -2001,7 +2001,7 @@ impl ApiModel<'_> {
                 }
             }
         };
-        tracing::debug!("From pg row trait: {}", out.to_string());
+        tracing::trace!("From pg row trait: {}", out.to_string());
         out.into()
     }
 
@@ -2179,7 +2179,7 @@ impl ApiModel<'_> {
         let mut option_binds = vec![];
 
         for (field_name, field) in self.fields.iter() {
-            tracing::debug!("Field processing(update): {}", field_name);
+            tracing::trace!("Field processing(update): {}", field_name);
             if !field.should_return_in_insert() {
                 continue;
             }
@@ -2231,7 +2231,7 @@ impl ApiModel<'_> {
                     #q,
                     update_values.join(", "),
                 );
-                tracing::debug!("insert query: {}", query);
+                tracing::trace!("insert query: {}", query);
                 let mut q = sqlx::query(&query)
                     .bind(id.parse::<i64>().unwrap());
                 #(#option_binds)*
@@ -2280,7 +2280,7 @@ impl ApiModel<'_> {
         let mut option_binds = vec![];
 
         for (field_name, field) in self.fields.iter() {
-            tracing::debug!("Field processing(insert): {}", field_name);
+            tracing::trace!("Field processing(insert): {}", field_name);
             if !field.should_return_in_insert() {
                 continue;
             }
@@ -2295,7 +2295,7 @@ impl ApiModel<'_> {
             args.push(field.arg_token());
 
             if field.is_option() {
-                tracing::debug!("Field is option: {}", field_name);
+                tracing::trace!("Field is option: {}", field_name);
                 has_option_args = true;
                 let field_name = syn::LitStr::new(field_name, proc_macro2::Span::call_site());
                 option_condition.push(quote! {
@@ -2322,16 +2322,16 @@ impl ApiModel<'_> {
 
             i += 1;
         }
-        tracing::debug!("Insert fields: {:?}", insert_fields);
+        tracing::trace!("Insert fields: {:?}", insert_fields);
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let call_map = self.call_map();
 
         let insert_with_dep = self.insert_function_for_many_to_many();
-        tracing::debug!("Insert with dep: {}", insert_with_dep.to_string());
+        tracing::trace!("Insert with dep: {}", insert_with_dep.to_string());
         let start = syn::LitInt::new((i - 1).to_string().as_str(), proc_macro2::Span::call_site());
 
         let inner = if has_option_args {
-            tracing::debug!("Has option args");
+            tracing::trace!("Has option args");
             let insert_fields = insert_fields
                 .iter()
                 .map(|f| syn::LitStr::new(f, proc_macro2::Span::call_site()));
@@ -2357,7 +2357,7 @@ impl ApiModel<'_> {
                     insert_fields.join(", "),
                     insert_values.join(", "),
                 );
-                tracing::debug!("insert query: {}", query);
+                tracing::trace!("insert query: {}", query);
                 let mut q = sqlx::query(&query)
                     #(#binds)*;
                 #(#option_binds)*
@@ -2379,7 +2379,7 @@ impl ApiModel<'_> {
             );
 
             quote! {
-                tracing::debug!("insert query: {}", #q);
+                tracing::trace!("insert query: {}", #q);
                 let row = sqlx::query(#q)
                     #(#binds)*
                 #call_map
@@ -2398,7 +2398,7 @@ impl ApiModel<'_> {
 
             #insert_with_dep
         };
-        tracing::debug!("insert function output: {}", output);
+        tracing::trace!("insert function output: {}", output);
 
         output.into()
     }
@@ -2446,11 +2446,11 @@ impl<'a> ApiModel<'a> {
         let name = input.ident.to_string();
 
         let mut has_validator = false;
-        tracing::debug!("Length of attributes: {}", input.attrs.len());
+        tracing::trace!("Length of attributes: {}", input.attrs.len());
         for at in &input.attrs {
-            tracing::debug!("Meta: {:?}", at);
+            tracing::trace!("Meta: {:?}", at);
             if let Meta::List(meta_list) = at.meta.clone() {
-                tracing::debug!("Meta list: {}", meta_list.tokens.to_string());
+                tracing::trace!("Meta list: {}", meta_list.tokens.to_string());
                 let validate: Vec<String> = meta_list
                     .tokens
                     .to_string()
@@ -2459,7 +2459,7 @@ impl<'a> ApiModel<'a> {
                     .map(|f| f.to_string())
                     .collect();
                 if validate.len() > 0 {
-                    tracing::debug!("Has validator: true");
+                    tracing::trace!("Has validator: true");
                     has_validator = true;
                     break;
                 }
@@ -2512,7 +2512,7 @@ impl<'a> ApiModel<'a> {
                     //         .split(",")
                     //         .collect::<Vec<&str>>();
                     //     for v in value {
-                    //         tracing::debug!("Read action: {}", v);
+                    //         tracing::trace!("Read action: {}", v);
                     //         let v = v.trim();
                     //         read_action_names.insert(v.to_string(), ActionField::Fields(vec![]));
                     //     }
@@ -3087,7 +3087,7 @@ LEFT JOIN (
     }
 
     pub fn unwrapped_type_token(&self) -> proc_macro2::TokenStream {
-        tracing::debug!(
+        tracing::trace!(
             "ApiField::unwrapped_type_token {} -> {}",
             self.rust_type,
             self.rust_type
@@ -3306,7 +3306,7 @@ END $$;
             line = format!("{} UNIQUE", line);
         }
 
-        tracing::debug!("field creation query for {}: {}", name, line);
+        tracing::trace!("field creation query for {}: {}", name, line);
 
         Some(line)
     }
@@ -3333,7 +3333,7 @@ END $$;
         let var_name = self.name.to_case(self.rename);
         let case = self.rename;
 
-        tracing::debug!("additional query for {var_name}");
+        tracing::trace!("additional query for {var_name}");
         let mut query = vec![];
 
         match &self.relation {
@@ -3344,7 +3344,7 @@ END $$;
                 foreign_table_name,
                 ..
             }) => {
-                tracing::debug!("additional query for many to many relation: {var_name}");
+                tracing::trace!("additional query for many to many relation: {var_name}");
                 let q = format!(
                     r#"
 CREATE TABLE IF NOT EXISTS {} (
@@ -3371,7 +3371,7 @@ CREATE TABLE IF NOT EXISTS {} (
                     foreign_primary_key,
                     foreign_table_name,
                 );
-                tracing::debug!("query: {}", q);
+                tracing::trace!("query: {}", q);
                 query.push(q);
 
                 if self.unique {
@@ -3388,7 +3388,7 @@ CREATE TABLE IF NOT EXISTS {} (
                 }
             }
             Some(Relation::ManyToOne { .. }) => {
-                tracing::debug!("additional query for many to one relation: {var_name}");
+                tracing::trace!("additional query for many to one relation: {var_name}");
 
                 // NOTE: Usually foreign key is the primary key of the other table in many-to-one relation.
                 let index_name = format!("idx_{}_{}", self.table, self.name);
@@ -3487,7 +3487,7 @@ impl ApiField {
             _ => {}
         };
 
-        tracing::debug!("callmap {}: {}", self.name, self.rust_type);
+        tracing::trace!("callmap {}: {}", self.name, self.rust_type);
 
         if &self.rust_type == "String" && &self.r#type != "TEXT" {
             if &self.r#type == "BIGINT" {
@@ -3514,7 +3514,7 @@ impl ApiField {
         }
 
         if self.rust_type.starts_with("Vec") || self.r#type == "JSONB" {
-            tracing::debug!("vector callmap: {}: {}", self.name, self.rust_type);
+            tracing::trace!("vector callmap: {}: {}", self.name, self.rust_type);
             let field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
 
             return quote! {
@@ -3534,7 +3534,7 @@ impl ApiField {
         let name = field.clone().ident.unwrap().to_string();
         let rust_type = field.ty.to_token_stream().to_string();
 
-        tracing::debug!("new for {}:{}", name, rust_type);
+        tracing::trace!("new for {}:{}", name, rust_type);
 
         let mut summary = false;
         let mut queryable = false;
@@ -3615,18 +3615,18 @@ impl ApiField {
             }),
 
             rel => {
-                tracing::debug!("no relation for {:?}", rel);
+                tracing::trace!("no relation for {:?}", rel);
                 None
             }
         };
 
-        tracing::debug!("relation: {:?}", relation);
+        tracing::trace!("relation: {:?}", relation);
 
         let ((mut r#type, mut nullable), mut failed_type_inference) = match to_type(&field.ty) {
             Some(t) => (t, false),
             None => (("TEXT".to_string(), false), true),
         };
-        tracing::debug!(
+        tracing::trace!(
             "inference type: {} {} for {}",
             r#type,
             if nullable { "NULL" } else { "NOT NULL" },
@@ -3638,7 +3638,7 @@ impl ApiField {
                 ref foreign_key_type,
                 ..
             }) => {
-                tracing::debug!("many to one realtion: {}", foreign_key_type);
+                tracing::trace!("many to one realtion: {}", foreign_key_type);
                 failed_type_inference = false;
                 r#type = foreign_key_type.to_string();
             }
@@ -3646,7 +3646,7 @@ impl ApiField {
                 ref foreign_key_type,
                 ..
             }) => {
-                tracing::debug!("many to many realtion: {}", foreign_key_type);
+                tracing::trace!("many to many realtion: {}", foreign_key_type);
                 failed_type_inference = false;
             }
             _ => {}
@@ -3654,7 +3654,7 @@ impl ApiField {
 
         match f.attrs.get(&SqlAttributeKey::SqlType) {
             Some(SqlAttribute::SqlType(t)) => {
-                tracing::debug!("sql type: {}", t);
+                tracing::trace!("sql type: {}", t);
                 failed_type_inference = false;
                 r#type = t.to_string();
             }
@@ -3662,12 +3662,12 @@ impl ApiField {
         };
 
         if f.attrs.contains_key(&SqlAttributeKey::Nullable) {
-            tracing::debug!("nullable: true");
+            tracing::trace!("nullable: true");
             nullable = true;
         };
 
         if primary_key {
-            tracing::debug!("primary key: true");
+            tracing::trace!("primary key: true");
             r#type = "BIGINT".to_string();
         }
 
@@ -3685,19 +3685,19 @@ impl ApiField {
             || primary_key
             || !auto.is_empty();
 
-        tracing::debug!("omitted: {}", omitted);
+        tracing::trace!("omitted: {}", omitted);
 
         let unique = f.attrs.contains_key(&SqlAttributeKey::Unique);
-        tracing::debug!("unique: {}", unique);
+        tracing::trace!("unique: {}", unique);
 
-        tracing::debug!("ended new for {}:{}", name, rust_type);
+        tracing::trace!("ended new for {}:{}", name, rust_type);
 
         let aggregator = match f.attrs.get(&SqlAttributeKey::Aggregator) {
             Some(SqlAttribute::Aggregator(aggregator)) => Some(aggregator.clone()),
             _ => None,
         };
 
-        tracing::debug!("aggregator: {:?}", aggregator);
+        tracing::trace!("aggregator: {:?}", aggregator);
 
         Self {
             name,
@@ -3732,7 +3732,7 @@ fn to_type(var_type: &syn::Type) -> Option<(String, bool)> {
     let name = match var_type {
         syn::Type::Path(ref type_path) => {
             let type_ident = type_path.path.segments.last().unwrap().ident.to_string();
-            tracing::debug!("field type: {:?}", type_ident.as_str());
+            tracing::trace!("field type: {:?}", type_ident.as_str());
             match type_ident.as_str() {
                 "u64" | "i64" => "BIGINT".to_string(),
                 "String" => "TEXT".to_string(),
@@ -3742,7 +3742,7 @@ fn to_type(var_type: &syn::Type) -> Option<(String, bool)> {
 
                 "Option" => {
                     nullable = true;
-                    tracing::debug!("option field type: {:?}", type_path.path);
+                    tracing::trace!("option field type: {:?}", type_path.path);
                     if let PathArguments::AngleBracketed(ref args) =
                         type_path.path.segments.last().unwrap().arguments
                     {
