@@ -46,6 +46,7 @@ pub enum Authorization {
     UserSig(Signature),
     Bearer { claims: Claims },
     Basic { username: String, password: String },
+    SecretApiKey,
 }
 
 /// Authorization middleware
@@ -79,6 +80,13 @@ pub async fn authorization_middleware(
                     let claims = verify_jwt(value)?;
                     Some(claims)
                 }
+                "secret" => {
+                    if option_env!("ENV").unwrap_or("local") == "prod" {
+                        None
+                    } else {
+                        Some(verify_secret(value)?)
+                    }
+                }
                 _ => {
                     tracing::debug!("Unknown scheme: {}", scheme.unwrap_or_default());
                     None
@@ -95,6 +103,22 @@ pub async fn authorization_middleware(
     req.extensions_mut().insert(None::<Authorization>);
 
     return Ok(next.run(req).await);
+}
+
+pub fn verify_secret(value: Option<&str>) -> Result<Authorization, StatusCode> {
+    if value.is_none() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let api_key = value.unwrap();
+    let secret_server_key = option_env!("AUTH_SECRET_KEY")
+        .expect("You must set AUTH_SECRET_KEY to enable `secret` authentication");
+
+    if api_key == secret_server_key {
+        return Ok(Authorization::SecretApiKey);
+    }
+
+    Err(StatusCode::UNAUTHORIZED)
 }
 
 pub fn generate_jwt(claims: &mut Claims) -> Result<String, StatusCode> {
