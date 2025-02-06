@@ -59,3 +59,28 @@ fn test_from_str() {
     // Test invalid input
     assert!(ProjectArea::from_str("invalid_field").is_err());
 }
+
+#[test]
+fn test_variants() {
+    assert_eq!(
+        ProjectArea::VARIANTS,
+        &[
+            ProjectArea::Economy,
+            ProjectArea::Society,
+            ProjectArea::Technology,
+        ],
+    );
+}
+
+#[test]
+fn test_fn_variants() {
+    println!("{:?}", ProjectArea::variants(&Language::Ko));
+    assert_eq!(
+        ProjectArea::variants(&Language::En),
+        vec!["Economy", "Society", "Technology"],
+    );
+    assert_eq!(
+        ProjectArea::variants(&Language::Ko),
+        vec!["경제", "사회", "기술"],
+    );
+}
