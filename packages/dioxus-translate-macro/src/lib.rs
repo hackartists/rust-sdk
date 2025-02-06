@@ -6,7 +6,7 @@ use std::rc::Rc;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{braced, parse_macro_input, DeriveInput, Ident, Lit, LitStr, Meta, Token};
+use syn::{braced, parse_macro_input, DeriveInput, Fields, Ident, Lit, LitStr, Meta, Token};
 
 #[proc_macro]
 pub fn translate(input: TokenStream) -> TokenStream {
@@ -169,7 +169,22 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
     let mut display_arms = Vec::new();
     let mut from_str_arms = Vec::new();
 
+    let mut idents: Vec<Ident> = Vec::new();
+
     for variant in variants {
+        match variant.fields {
+            Fields::Unit => {
+                idents.push(variant.ident.clone());
+            }
+            _ => {
+                return syn::Error::new_spanned(
+                    enum_name,
+                    "Translate can only be derived for enums with unit variants",
+                )
+                .to_compile_error()
+                .into();
+            }
+        }
         let variant_ident = &variant.ident;
         let default_str = variant_ident.to_string();
         let en_translation = Rc::new(RefCell::new(default_str.clone()));
@@ -251,6 +266,11 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
                     },
                     #ko_arm
                 }
+            }
+
+            pub const VARIANTS: &'static [Self] = &[ #(#enum_name::#idents,)* ];
+            pub fn variants(lang: &dioxus_translate::Language) -> Vec<String> {
+                Self::VARIANTS.iter().map(|v| v.translate(&lang).to_string()).collect::<Vec<_>>()
             }
         }
 
