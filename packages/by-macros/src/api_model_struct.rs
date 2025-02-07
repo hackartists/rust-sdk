@@ -2333,7 +2333,7 @@ impl ApiModel<'_> {
         tracing::debug!("Insert with dep: {}", insert_with_dep.to_string());
         let start = syn::LitInt::new((i - 1).to_string().as_str(), proc_macro2::Span::call_site());
 
-        let inner = if has_option_args {
+        let (inner, without_inner) = if has_option_args {
             tracing::debug!("Has option args");
             let insert_fields = insert_fields
                 .iter()
@@ -2341,6 +2341,9 @@ impl ApiModel<'_> {
             let insert_values = insert_values
                 .iter()
                 .map(|f| syn::LitStr::new(f, proc_macro2::Span::call_site()));
+            let insert_fields2 = insert_fields.clone();
+            let insert_values2 = insert_values.clone();
+
             let q = syn::LitStr::new(
                 &format!(
                     "INSERT INTO {} ({{}}) VALUES ({{}}) RETURNING {}",
@@ -2350,25 +2353,50 @@ impl ApiModel<'_> {
                 proc_macro2::Span::call_site(),
             );
 
-            quote! {
-                let mut i = #start;
-                let mut insert_fields = vec![#(#insert_fields),*];
-                let mut insert_values = vec![#(#insert_values),*].iter().map(|f| f.to_string()).collect::<Vec<String>>();
-                #(#option_condition)*
-                let query = format!(
-                    #q,
-                    insert_fields.join(", "),
-                    insert_values.join(", "),
-                );
-                tracing::debug!("insert query: {}", query);
-                let mut q = sqlx::query(&query)
-                    #(#binds)*;
-                #(#option_binds)*
-                let row = q
-                    #call_map
-                .fetch_one(&self.pool)
-                    .await?;
-            }
+            let wq = syn::LitStr::new(
+                &format!("INSERT INTO {} ({{}}) VALUES ({{}})", self.table_name,),
+                proc_macro2::Span::call_site(),
+            );
+
+            (
+                quote! {
+                    let mut i = #start;
+                    let mut insert_fields = vec![#(#insert_fields),*];
+                    let mut insert_values = vec![#(#insert_values),*].iter().map(|f| f.to_string()).collect::<Vec<String>>();
+                    #(#option_condition)*
+                    let query = format!(
+                        #q,
+                        insert_fields.join(", "),
+                        insert_values.join(", "),
+                    );
+                    tracing::debug!("insert query: {}", query);
+                    let mut q = sqlx::query(&query)
+                        #(#binds)*;
+                    #(#option_binds)*
+                    let row = q
+                        #call_map
+                    .fetch_one(&self.pool)
+                        .await?;
+                },
+                quote! {
+                    let mut i = #start;
+                    let mut insert_fields = vec![#(#insert_fields2),*];
+                    let mut insert_values = vec![#(#insert_values2),*].iter().map(|f| f.to_string()).collect::<Vec<String>>();
+                    #(#option_condition)*
+                    let query = format!(
+                        #wq,
+                        insert_fields.join(", "),
+                        insert_values.join(", "),
+                    );
+                    tracing::debug!("insert query: {}", query);
+                    let mut q = sqlx::query(&query)
+                        #(#binds)*;
+                    #(#option_binds)*
+                    q
+                    .execute(&self.pool)
+                        .await?;
+                },
+            )
         } else {
             let q = syn::LitStr::new(
                 &format!(
@@ -2381,15 +2409,35 @@ impl ApiModel<'_> {
                 proc_macro2::Span::call_site(),
             );
 
-            quote! {
-                tracing::debug!("insert query: {}", #q);
-                let row = sqlx::query(#q)
-                    #(#binds)*
-                #call_map
-                .fetch_one(&self.pool)
-                    .await?;
+            let wq = syn::LitStr::new(
+                &format!(
+                    "INSERT INTO {} ({}) VALUES ({})",
+                    self.table_name,
+                    insert_fields.join(", "),
+                    insert_values.join(", "),
+                ),
+                proc_macro2::Span::call_site(),
+            );
 
-            }
+            (
+                quote! {
+                    tracing::debug!("insert query: {}", #q);
+                    let row = sqlx::query(#q)
+                        #(#binds)*
+                    #call_map
+                    .fetch_one(&self.pool)
+                        .await?;
+
+                },
+                quote! {
+                    tracing::debug!("insert query: {}", #q);
+                    sqlx::query(#wq)
+                        #(#binds)*
+                    .execute(&self.pool)
+                        .await?;
+
+                },
+            )
         };
 
         let output = quote! {
@@ -2397,6 +2445,12 @@ impl ApiModel<'_> {
                 #inner
 
                 Ok(row)
+            }
+
+            pub async fn insert_without_returning(&self, #(#args),*) -> Result<()> {
+                #without_inner
+
+                Ok(())
             }
 
             #insert_with_dep
@@ -3479,7 +3533,7 @@ impl ApiField {
                 let rust_type = self.rust_type_id();
 
                 return quote! {
-                    #n: row.get::<bigdecimal::BigDecimal, _>(#sql_field_name).to_string().parse::<#rust_type>().unwrap()
+                    #n: row.try_get::<bigdecimal::BigDecimal, _>(#sql_field_name).unwrap_or_default().to_string().parse::<#rust_type>().unwrap()
                 };
             }
             _ => {}
@@ -3490,11 +3544,11 @@ impl ApiField {
         if &self.rust_type == "String" && &self.r#type != "TEXT" {
             if &self.r#type == "BIGINT" {
                 return quote! {
-                    #n: row.get::<i64, _>(#sql_field_name).to_string()
+                    #n: row.try_get::<i64, _>(#sql_field_name).unwrap_or_default().to_string()
                 };
             } else if &self.r#type == "INTEGER" {
                 return quote! {
-                    #n: row.get::<i32, _>(#sql_field_name).to_string()
+                    #n: row.try_get::<i32, _>(#sql_field_name).unwrap_or_default().to_string()
                 };
             }
         } else if (&self.rust_type == "u64" || &self.rust_type == "u32") {
@@ -3502,11 +3556,11 @@ impl ApiField {
 
             if &self.r#type == "BIGINT" {
                 return quote! {
-                    #n: row.get::<i64, _>(#sql_field_name) as #ty
+                    #n: row.try_get::<i64, _>(#sql_field_name).unwrap_or_default() as #ty
                 };
             } else if &self.r#type == "INTEGER" {
                 return quote! {
-                    #n: row.get::<i32, _>(#sql_field_name) as #ty
+                    #n: row.try_get::<i32, _>(#sql_field_name).unwrap_or_default() as #ty
                 };
             }
         }
@@ -3517,7 +3571,13 @@ impl ApiField {
 
             return quote! {
                 #n: match row.try_get::<serde_json::Value, _>(#field_name) {
-                    Ok(v) => serde_json::from_value(v).unwrap(),
+                    Ok(v) => match serde_json::from_value(v) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            tracing::error!("error on {} field: {}", field_name, e);
+                            vec![]
+                        }
+                    },
                     _ => vec![]
                 }
             };
