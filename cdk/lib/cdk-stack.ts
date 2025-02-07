@@ -64,10 +64,11 @@ export class CdkStack extends cdk.Stack {
     let enableFargate = process.env.ENABLE_FARGATE === "true";
     let enableOpensearch = process.env.ENABLE_OPENSEARCH === "true";
     let enableRds = process.env.ENABLE_RDS === "true";
+    let createRds = process.env.CREATE_RDS === "true";
     let enableCron = process.env.ENABLE_CRON === "true";
     let opensearchCollections = [
       {
-        name: `dagit-${env}`,
+        name: `${project}-${env}`,
         type: "SEARCH",
         description:
           "It saves and searches NFTs, Agits, Collections, DAOs, public proposal and other public data",
@@ -78,6 +79,20 @@ export class CdkStack extends cdk.Stack {
     const repoName = process.env.REPO_NAME || "";
     const commit = process.env.COMMIT || "";
     const prefix = `${process.env.SERVICE}-${process.env.ENV}`;
+    const versions = (process.env.VERSIONS || "").split(",");
+    let endpoints = [];
+
+    for (let version of versions) {
+      if (version === "") {
+        continue;
+      }
+      let endpoint = process.env[`${version.toUpperCase()}_ENDPOINT`]
+      if (endpoint === undefined) {
+        console.error(`${version.toUpperCase()}_ENDPOINT is required`);
+        process.exit(1);
+      }
+      endpoints.push({version, endpoint});
+    }
 
     const hostedZoneDomainName = process.env.BASE_DOMAIN || "";
 
@@ -241,6 +256,14 @@ export class CdkStack extends cdk.Stack {
       };
     }
 
+    for (let endpoint of endpoints) {
+      let path = `/${endpoint.version}/*`;
+      distributionProps.additionalBehaviors[path] = {
+        origin: new origins.HttpOrigin(endpoint.endpoint),
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+      };
+    }
+
     if (enableFargate) {
       const vpc = ec2.Vpc.fromLookup(this, "Vpc", {
         vpcId,
@@ -367,8 +390,63 @@ export class CdkStack extends cdk.Stack {
       }
     }
 
-    if (enableRds) {
-      console.error("creating an individual db cluster for service is not recommended. Instead of it, you manually create a table in `ENV` database cluster.")
+    if (createRds) {
+      const adminPassword = process.env.RDS_ADMIN_PASSWORD || "";
+      if (adminPassword ==="") {
+        console.error("RDS_ADMIN_PASSWORD is required");
+        process.exit(1);
+      }
+
+      const vpc = ec2.Vpc.fromLookup(this, "Vpc", {
+        vpcId,
+      });
+      const securityGroup = new ec2.SecurityGroup(this, 'AuroraSecurityGroup', {
+        vpc,
+        allowAllOutbound: true,
+      });
+      securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(5432), 'Allow PostgreSQL access from anywhere');
+
+      const cluster = new rds.DatabaseCluster(this, 'Database', {
+        engine: rds.DatabaseClusterEngine.auroraPostgres({
+          version: rds.AuroraPostgresEngineVersion.VER_16_4,
+        }),
+        writer: rds.ClusterInstance.serverlessV2('writer'),
+        // readers: [
+        //   rds.ClusterInstance.serverlessV2('reader'),
+        // ],
+        serverlessV2MinCapacity: 0.5,
+        serverlessV2MaxCapacity: 256,
+        vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        securityGroups: [securityGroup],
+        defaultDatabaseName: `${project}`,
+        credentials: rds.Credentials.fromPassword(project, cdk.SecretValue.unsafePlainText(adminPassword)),
+        deletionProtection:true,
+      });
+
+      cluster.metricServerlessDatabaseCapacity({
+        period: Duration.minutes(10),
+      }).createAlarm(this, 'capacity', {
+        threshold: 1.5,
+        evaluationPeriods: 3,
+      });
+      cluster.metricACUUtilization({
+        period: Duration.minutes(10),
+      }).createAlarm(this, 'alarm', {
+        evaluationPeriods: 3,
+        threshold: 90,
+      });
+
+      new cdk.CfnOutput(this, 'AuroraEndpoint', {
+        value: cluster.clusterEndpoint.hostname,
+        description: 'The endpoint of the Aurora PostgreSQL cluster',
+      });
+
+    }
+
+    if (!createRds && enableRds) {
+      console.error("creating an individual db cluster for service is not recommended. Instead of it, you manually create a table in `ENV` database cluster. If you want to create a new individual db cluster, set CREATE_RDS=true")
       process.exit(1);
 
       const adminPassword = process.env.RDS_ADMIN_PASSWORD || "";
@@ -400,7 +478,7 @@ export class CdkStack extends cdk.Stack {
         vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
         removalPolicy: cdk.RemovalPolicy.RETAIN,
         securityGroups: [securityGroup],
-        defaultDatabaseName: `${project}${env}`.replace("-", "").replace("_", ""),
+        defaultDatabaseName: `${project}`.replace("-", "").replace("_", ""),
         credentials: rds.Credentials.fromPassword(project.replace("-", "").replace("_", ""), cdk.SecretValue.unsafePlainText(adminPassword)),
         deletionProtection:true,
       });
