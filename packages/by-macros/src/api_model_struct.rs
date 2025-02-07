@@ -285,8 +285,9 @@ impl ApiModel<'_> {
                 let parent_params = parent_params.clone();
                 let parent_names = parent_names.clone();
 
+                // FIXME: fix when supporting additional primary key type
                 cli_actions.push(quote! {
-                    pub async fn #cli_act(&self, #(#parent_params)* id: &str, #(#params)*) -> crate::Result<#struct_name> {
+                    pub async fn #cli_act(&self, #(#parent_params)* id: i64, #(#params)*) -> crate::Result<#struct_name> {
                         let path = format!(#base_endpoint_lit, #(#parent_names)*);
                         let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                         let req = #action_name::#act(#request_struct_name {
@@ -301,8 +302,9 @@ impl ApiModel<'_> {
                 let parent_names = parent_names.clone();
                 let req_type = syn::Ident::new(&st, struct_name.span());
 
+                // FIXME: fix when supporting additional primary key type
                 cli_actions.push(quote! {
-                pub async fn #cli_act(&self, #(#parent_params)* id: &str, request: #req_type) -> crate::Result<#struct_name> {
+                pub async fn #cli_act(&self, #(#parent_params)* id: i64, request: #req_type) -> crate::Result<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}/{}", self.endpoint, path, id);
 
@@ -341,7 +343,7 @@ impl ApiModel<'_> {
             #(#action_requests)*
 
             impl #client_name {
-                pub async fn act_by_id(&self, #(#parent_params)* id: &str, params: #action_name) -> crate::Result<#struct_name> {
+                pub async fn act_by_id(&self, #(#parent_params)* id: i64, params: #action_name) -> crate::Result<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                     rest_api::post(&endpoint, params).await
@@ -2220,8 +2222,9 @@ impl ApiModel<'_> {
             proc_macro2::Span::call_site(),
         );
 
+        // FIXME: fix when supporting additional primary key type
         let output = quote! {
-            pub async fn update(&self, id: &str, #st_var_name: #update_req_st_name) -> Result<#name> {
+            pub async fn update(&self, id: i64, #st_var_name: #update_req_st_name) -> Result<#name> {
                 let mut i = 1;
                 let mut update_values = vec![];
 
@@ -2233,7 +2236,7 @@ impl ApiModel<'_> {
                 );
                 tracing::debug!("insert query: {}", query);
                 let mut q = sqlx::query(&query)
-                    .bind(id.parse::<i64>().unwrap());
+                    .bind(id);
                 #(#option_binds)*
                 let row = q
                     #call_map
@@ -2255,9 +2258,9 @@ impl ApiModel<'_> {
         );
 
         quote! {
-            pub async fn delete(&self, id: &str) -> Result<()> {
+            pub async fn delete(&self, id: i64) -> Result<()> {
                 sqlx::query(#query)
-                    .bind(id.parse::<i64>().unwrap())
+                    .bind(id)
                     .execute(&self.pool)
                     .await?;
 

@@ -127,9 +127,7 @@ $$ LANGUAGE plpgsql;
         let user = user.unwrap();
 
         let name = "org".to_string();
-        let res = o
-            .insert_with_dependency(user.id.parse().unwrap(), name.to_string())
-            .await;
+        let res = o.insert_with_dependency(user.id, name.to_string()).await;
 
         assert!(res.is_ok(), "{:?}", res);
 
@@ -144,9 +142,7 @@ $$ LANGUAGE plpgsql;
         assert_eq!(found_user.orgs.len(), 1);
         assert_eq!(found_user.orgs[0].name, name);
 
-        let res = o
-            .insert_with_dependency(user.id.parse().unwrap(), name.to_string())
-            .await;
+        let res = o.insert_with_dependency(user.id, name.to_string()).await;
         assert!(res.is_ok(), "{:?}", res);
 
         let res = u

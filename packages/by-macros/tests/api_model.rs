@@ -53,7 +53,7 @@ pub struct Topic {
 #[cfg(not(feature = "server"))]
 #[api_model(base = "/topics/v1/:topic-id/comments", iter_type=QueryResponse)]
 pub struct Comment {
-    pub id: String,
+    pub id: i64,
     #[api_model(action = comment, related = String, read_action = search_by)]
     pub content: String,
     #[api_model(action_by_id = update, related = i64)]
@@ -196,7 +196,7 @@ mod server_tests {
     #[api_model(base = "/users/v1", read_action = user_info, table = test_users, iter_type=QueryResponse)]
     pub struct User {
         #[api_model(primary_key)]
-        pub id: String,
+        pub id: i64,
         #[api_model(auto = insert)]
         pub created_at: u64,
         #[api_model(auto = [insert, update])]
@@ -250,7 +250,7 @@ $$ LANGUAGE plpgsql;
     #[test]
     fn test_macro_expansion_user() {
         let _ = User {
-            id: "id".to_string(),
+            id: 1,
             created_at: 0,
             updated_at: 0,
             principal: "principal".to_string(),
