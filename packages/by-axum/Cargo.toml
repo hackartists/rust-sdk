@@ -9,7 +9,7 @@ repository = "https://github.com/biyard/rust-sdk/tree/main/packages/by-axum"
 
 [dependencies]
 dioxus-aws = { workspace = true, optional = true }
-http = { version = "1.1.0", optional = true }
+http = { version = "1.1.0" }
 lambda_http = { version = "0.13.0", optional = true }
 lambda_runtime = { version = "0.13.0", optional = true }
 serde = "1.0.217"
@@ -37,4 +37,4 @@ rest-api.workspace = true
 jsonwebtoken = "9.3.0"
 
 [features]
-lambda = ["dioxus-aws", "lambda_runtime", "lambda_http", "http"]
+lambda = ["dioxus-aws", "lambda_runtime", "lambda_http"]

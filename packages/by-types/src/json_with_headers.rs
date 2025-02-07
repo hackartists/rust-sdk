@@ -4,6 +4,7 @@ use axum::{
     http::{HeaderMap, HeaderValue},
     response::{IntoResponse, Response},
 };
+use chrono::{Duration, Utc};
 use reqwest::header::{self, IntoHeaderName};
 use serde::{Deserialize, Deserializer};
 
@@ -44,7 +45,8 @@ impl<T> JsonWithHeaders<T> {
             HeaderValue::from_str(&authz).unwrap(),
         );
 
-        self.with_cookie("authz", &authz)
+        self.with_cookie("token", value)
+            .with_cookie("type", auth_type)
     }
 
     pub fn with_bearer_token(self, token: &str) -> Self {
@@ -99,31 +101,31 @@ where
     T: serde::Serialize,
 {
     fn into_response(self) -> Response {
-        let value = self
-            .cookies
-            .iter()
-            .map(|(key, value)| format!("{}={}", key, value))
-            .collect::<Vec<String>>()
-            .join("; ");
+        let expires_time = Utc::now() + Duration::hours(24);
+        let exp = expires_time.format("%a, %d %b %Y %T GMT").to_string();
 
         let mut headers = self.headers.clone();
-        headers.insert(
-            header::SET_COOKIE,
-            format!(
-                "{}; Path=/; HttpOnly; Domain SameSite=None{}",
-                value,
-                match option_env!("ENV") {
-                    Some("local") => "".to_string(),
-                    Some(_) => format!(
-                        "; Secure; Domain={}",
-                        option_env!("BASE_DOMAIN").expect("BASE_DOMAIN is not set")
-                    ),
-                    None => panic!("ENV is not set"),
-                }
-            )
-            .parse()
-            .unwrap(),
-        );
+        for (k, v) in self.cookies {
+            headers.append(
+                header::SET_COOKIE,
+                format!(
+                    "{}={}; Path=/; HttpOnly; Max-Age=86400; Expires={}; SameSite={}",
+                    k,
+                    v,
+                    exp,
+                    match option_env!("ENV") {
+                        Some("local") => "None".to_string(),
+                        Some(_) => format!(
+                            "None; Secure; Domain={}",
+                            option_env!("BASE_DOMAIN").expect("BASE_DOMAIN is not set")
+                        ),
+                        None => panic!("ENV is not set"),
+                    }
+                )
+                .parse()
+                .unwrap(),
+            );
+        }
 
         (axum::http::StatusCode::OK, headers, axum::Json(self.body)).into_response()
     }

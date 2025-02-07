@@ -864,6 +864,7 @@ version = "0.3.7"
 dependencies = [
  "aide",
  "axum 0.8.1",
+ "chrono",
  "reqwest",
  "schemars",
  "serde",
