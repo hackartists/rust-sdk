@@ -76,7 +76,7 @@ pub fn derive_api_model(input: TokenStream) -> TokenStream {
             Some((_, expr)) => quote! { #expr },
             None => quote! { compile_error!("Enum variants must have explicit discriminants"); },
         };
-        tracing::debug!("discriminant: {}", discriminant.to_string());
+        tracing::trace!("discriminant: {}", discriminant.to_string());
         quote! { #discriminant => Ok(#name::#ident), }
     });
 
@@ -128,7 +128,7 @@ pub fn derive_api_model(input: TokenStream) -> TokenStream {
         }
     };
 
-    tracing::debug!("ApiModel expanded: {}", expanded.to_string());
+    tracing::trace!("ApiModel expanded: {}", expanded.to_string());
 
     TokenStream::from(expanded)
 }
