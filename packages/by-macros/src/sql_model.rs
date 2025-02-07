@@ -64,7 +64,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
         #summary_trait
     };
 
-    tracing::debug!("Generated code: {}", output.to_string());
+    tracing::trace!("Generated code: {}", output.to_string());
 
     output.into()
 }
@@ -293,7 +293,7 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                             foreign_reference_key: "".to_string(),
                                         },
                                     );
-                                    tracing::debug!("many_to_many: {name}");
+                                    tracing::trace!("many_to_many: {name}");
                                 }
                                 OpenedOffset::ManyToOne => {
                                     field_attrs.insert(
@@ -304,7 +304,7 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                             foreign_key_type: "BIGINT".to_string(),
                                         },
                                     );
-                                    tracing::debug!("many_to_one: {name}");
+                                    tracing::trace!("many_to_one: {name}");
                                 }
                                 OpenedOffset::OneToMany => {
                                     field_attrs.insert(
@@ -314,7 +314,7 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                             foreign_key: "id".to_string(),
                                         },
                                     );
-                                    tracing::debug!("one_to_many: {name}");
+                                    tracing::trace!("one_to_many: {name}");
                                 }
                                 OpenedOffset::ForeignKey => {
                                     field_attrs.get_mut(&SqlAttributeKey::Relation).map(|attr| {
