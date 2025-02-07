@@ -3574,7 +3574,7 @@ impl ApiField {
                     Ok(v) => match serde_json::from_value(v) {
                         Ok(v) => v,
                         Err(e) => {
-                            tracing::error!("error on {} field: {}", field_name, e);
+                            tracing::error!("error on {} field: {}", #field_name, e);
                             vec![]
                         }
                     },
