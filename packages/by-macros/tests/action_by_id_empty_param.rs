@@ -27,7 +27,7 @@ mod empty_param_tests {
     #[api_model(base = "/models", table = action_empty_params, iter_type=QueryResponse, action_by_id = delete, action = [no_param, empty])]
     pub struct ActionEmptyParamModel {
         #[api_model(summary, primary_key, read_action = find_by_id)]
-        pub id: String,
+        pub id: i64,
         #[api_model(summary, auto = [insert])]
         pub created_at: i64,
         #[api_model(summary, auto = [insert, update])]
@@ -40,7 +40,7 @@ mod empty_param_tests {
     #[tokio::test]
     async fn test_action_by_id_empty_param() {
         let cli = ActionEmptyParamModel::get_client("test");
-        cli.delete("0");
+        cli.delete(0);
 
         cli.no_param();
         cli.empty();
@@ -70,7 +70,7 @@ mod empty_param_tests {
 
         let res = repo
             .update(
-                &res.id,
+                res.id,
                 ActionEmptyParamModelRepositoryUpdateRequest {
                     name: Some("test".to_string()),
                 },
@@ -82,7 +82,7 @@ mod empty_param_tests {
 
         let res = repo
             .update(
-                &res.id,
+                res.id,
                 ActionEmptyParamModelRepositoryUpdateRequest::new().with_name("test-2".to_string()),
             )
             .await;
@@ -91,7 +91,7 @@ mod empty_param_tests {
         assert_eq!(res.name, "test-2".to_string());
 
         let id = res.id.clone();
-        let res = repo.delete(&res.id).await;
+        let res = repo.delete(res.id).await;
         assert_eq!(res.is_ok(), true);
 
         let res = repo

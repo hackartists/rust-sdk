@@ -28,7 +28,7 @@ pub mod update_into_tests {
     #[api_model(base = "/models", table = upinto, iter_type=QueryResponse)]
     pub struct UpdateInto {
         #[api_model(summary, primary_key, read_action = find_by_id)]
-        pub id: String,
+        pub id: i64,
         #[api_model(summary, auto = [insert])]
         pub created_at: i64,
         #[api_model(summary, auto = [insert, update])]
@@ -78,7 +78,7 @@ pub mod update_into_tests {
             description: new_desc.clone(),
         });
 
-        repo.update(&doc.id, req.into()).await.unwrap();
+        repo.update(doc.id, req.into()).await.unwrap();
 
         let res: UpdateInto = repo
             .find_one(&UpdateIntoReadAction::new().find_by_id(doc.id.clone()))
@@ -90,7 +90,7 @@ pub mod update_into_tests {
         assert_eq!(res.status, status);
 
         let req = UpdateIntoByIdAction::UpdateStatus(UpdateIntoUpdateStatusRequest { status: 2 });
-        repo.update(&doc.id, req.into()).await.unwrap();
+        repo.update(doc.id, req.into()).await.unwrap();
         let res: UpdateInto = repo
             .find_one(&UpdateIntoReadAction::new().find_by_id(doc.id.clone()))
             .await
@@ -102,7 +102,7 @@ pub mod update_into_tests {
 
         let req = UpdateIntoByIdAction::UpdateStatus(UpdateIntoUpdateStatusRequest { status: 2 });
         let req: UpdateIntoRepositoryUpdateRequest = req.into();
-        repo.update(&doc.id, req.with_name(name.clone()))
+        repo.update(doc.id, req.with_name(name.clone()))
             .await
             .unwrap();
 

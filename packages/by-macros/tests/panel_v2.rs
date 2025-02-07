@@ -28,7 +28,7 @@ mod empty_param_tests {
     #[api_model(base = "organizations/v2/:org-id/panels", table = panels, iter_type=QueryResponse)]
     pub struct PanelV2 {
         #[api_model(summary, primary_key, action = delete, read_action = [get_panel, find_by_id])]
-        pub id: String,
+        pub id: i64,
         #[api_model(summary, auto = insert)]
         pub created_at: i64,
         #[api_model(auto = [insert, update])]
@@ -39,6 +39,6 @@ mod empty_param_tests {
         #[api_model(summary, action = [create], action_by_id = update)]
         pub user_count: u64,
         #[api_model(summary, many_to_one = organizations)]
-        pub org_id: String,
+        pub org_id: i64,
     }
 }

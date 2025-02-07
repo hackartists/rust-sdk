@@ -92,7 +92,7 @@ impl ApiModel<'_> {
         let iter_type_tokens: proc_macro2::TokenStream = iter_type_with_summary.parse().unwrap();
         let parent_params = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
-            quote! { #id: &str, }
+            quote! { #id: i64, }
         });
         let parent_names = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
@@ -125,7 +125,7 @@ impl ApiModel<'_> {
                     rest_api::get(&query).await
                 }
 
-                pub async fn get(&self, #(#parent_params_for_get)* id: &str) -> crate::Result<#struct_name> {
+                pub async fn get(&self, #(#parent_params_for_get)* id: i64) -> crate::Result<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names_for_get)*);
                     let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                     rest_api::get(&endpoint).await
@@ -157,7 +157,7 @@ impl ApiModel<'_> {
         let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
         let parent_params = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
-            quote! { #id: &str, }
+            quote! { #id: i64, }
         });
         let parent_names = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
@@ -285,8 +285,9 @@ impl ApiModel<'_> {
                 let parent_params = parent_params.clone();
                 let parent_names = parent_names.clone();
 
+                // FIXME: fix when supporting additional primary key type
                 cli_actions.push(quote! {
-                    pub async fn #cli_act(&self, #(#parent_params)* id: &str, #(#params)*) -> crate::Result<#struct_name> {
+                    pub async fn #cli_act(&self, #(#parent_params)* id: i64, #(#params)*) -> crate::Result<#struct_name> {
                         let path = format!(#base_endpoint_lit, #(#parent_names)*);
                         let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                         let req = #action_name::#act(#request_struct_name {
@@ -301,8 +302,9 @@ impl ApiModel<'_> {
                 let parent_names = parent_names.clone();
                 let req_type = syn::Ident::new(&st, struct_name.span());
 
+                // FIXME: fix when supporting additional primary key type
                 cli_actions.push(quote! {
-                pub async fn #cli_act(&self, #(#parent_params)* id: &str, request: #req_type) -> crate::Result<#struct_name> {
+                pub async fn #cli_act(&self, #(#parent_params)* id: i64, request: #req_type) -> crate::Result<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}/{}", self.endpoint, path, id);
 
@@ -341,7 +343,7 @@ impl ApiModel<'_> {
             #(#action_requests)*
 
             impl #client_name {
-                pub async fn act_by_id(&self, #(#parent_params)* id: &str, params: #action_name) -> crate::Result<#struct_name> {
+                pub async fn act_by_id(&self, #(#parent_params)* id: i64, params: #action_name) -> crate::Result<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                     rest_api::post(&endpoint, params).await
@@ -381,7 +383,7 @@ impl ApiModel<'_> {
         let param_name = syn::Ident::new(&format!("{}Param", struct_name), struct_name.span());
         let parent_params = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
-            quote! { #id: &str, }
+            quote! { #id: i64, }
         });
         let parent_names = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
@@ -834,7 +836,7 @@ impl ApiModel<'_> {
                 .map(|(field_name, _)| quote! { #field_name: Some(#field_name), });
             let parent_params = parent_ids.iter().map(|id| {
                 let id = syn::Ident::new(id, struct_name.span());
-                quote! { #id: &str, }
+                quote! { #id: i64, }
             });
             let parent_names = parent_ids.iter().map(|id| {
                 let id = syn::Ident::new(id, struct_name.span());
@@ -984,7 +986,7 @@ impl ApiModel<'_> {
         let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
         let parent_params = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
-            quote! { #id: &str, }
+            quote! { #id: i64, }
         });
         let parent_names = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
@@ -2220,8 +2222,9 @@ impl ApiModel<'_> {
             proc_macro2::Span::call_site(),
         );
 
+        // FIXME: fix when supporting additional primary key type
         let output = quote! {
-            pub async fn update(&self, id: &str, #st_var_name: #update_req_st_name) -> Result<#name> {
+            pub async fn update(&self, id: i64, #st_var_name: #update_req_st_name) -> Result<#name> {
                 let mut i = 1;
                 let mut update_values = vec![];
 
@@ -2233,7 +2236,7 @@ impl ApiModel<'_> {
                 );
                 tracing::debug!("insert query: {}", query);
                 let mut q = sqlx::query(&query)
-                    .bind(id.parse::<i64>().unwrap());
+                    .bind(id);
                 #(#option_binds)*
                 let row = q
                     #call_map
@@ -2255,9 +2258,9 @@ impl ApiModel<'_> {
         );
 
         quote! {
-            pub async fn delete(&self, id: &str) -> Result<()> {
+            pub async fn delete(&self, id: i64) -> Result<()> {
                 sqlx::query(#query)
-                    .bind(id.parse::<i64>().unwrap())
+                    .bind(id)
                     .execute(&self.pool)
                     .await?;
 
@@ -2474,7 +2477,7 @@ impl<'a> ApiModel<'a> {
 
         let mut base = String::new();
         let mut parent_ids = Vec::new();
-        let mut iter_type = "Vec".to_string();
+        let mut iter_type = "by_types::QueryResponse".to_string();
         let mut read_action_names = IndexMap::<String, ActionField>::new();
         let actions = attr
             .to_string()
@@ -2824,13 +2827,7 @@ END AS {}"#,
                         Some(format!(
                             r#"
 COALESCE(
-    json_agg(
-        jsonb_set(
-            to_jsonb(f),
-            '{{{{id}}}}',
-            to_jsonb(f.id::TEXT)
-        )
-    ) FILTER (WHERE f.id IS NOT NULL), '[]'
+    json_agg(to_jsonb(f)) FILTER (WHERE f.id IS NOT NULL), '[]'
 ) AS {}
 "#,
                             bound_name
@@ -3574,6 +3571,12 @@ impl ApiField {
 
         let f = super::sql_model::parse_field_attr(field);
         let primary_key = f.attrs.contains_key(&SqlAttributeKey::PrimaryKey);
+        if primary_key {
+            if rust_type.as_str() != "i64" {
+                panic!("primary key must be i64 type");
+            }
+        }
+
         let version = match f.attrs.get(&SqlAttributeKey::Version) {
             Some(SqlAttribute::Version(v)) => Some(v.to_string()),
             _ => None,
