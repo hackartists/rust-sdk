@@ -2825,11 +2825,7 @@ END AS {}"#,
                             r#"
 COALESCE(
     json_agg(
-        jsonb_set(
-            to_jsonb(f),
-            '{{{{id}}}}',
-            to_jsonb(f.id::TEXT)
-        )
+        to_jsonb(f),
     ) FILTER (WHERE f.id IS NOT NULL), '[]'
 ) AS {}
 "#,
@@ -3574,6 +3570,12 @@ impl ApiField {
 
         let f = super::sql_model::parse_field_attr(field);
         let primary_key = f.attrs.contains_key(&SqlAttributeKey::PrimaryKey);
+        if primary_key {
+            if rust_type.as_str() != "i64" {
+                panic!("primary key must be i64 type");
+            }
+        }
+
         let version = match f.attrs.get(&SqlAttributeKey::Version) {
             Some(SqlAttribute::Version(v)) => Some(v.to_string()),
             _ => None,
