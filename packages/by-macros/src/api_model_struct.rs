@@ -3059,6 +3059,7 @@ LEFT JOIN (
     pub fn should_return_in_insert(&self) -> bool {
         match self.relation {
             Some(Relation::ManyToMany { .. }) => false,
+            Some(Relation::OneToMany { .. }) => false,
             _ => true,
         }
     }
