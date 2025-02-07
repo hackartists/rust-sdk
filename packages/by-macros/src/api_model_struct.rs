@@ -2477,7 +2477,7 @@ impl<'a> ApiModel<'a> {
 
         let mut base = String::new();
         let mut parent_ids = Vec::new();
-        let mut iter_type = "Vec".to_string();
+        let mut iter_type = "by_types::QueryResponse".to_string();
         let mut read_action_names = IndexMap::<String, ActionField>::new();
         let actions = attr
             .to_string()
