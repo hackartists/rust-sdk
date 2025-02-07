@@ -1709,7 +1709,7 @@ impl ApiModel<'_> {
                 };
 
 
-                format!("WITH data AS ({}) SELECT ({}) AS total_count, data.* FROM data;", query, count_query)
+                format!("WITH data AS ({}) SELECT ({}) AS total_count, data.* FROM data", query, count_query)
             }
         };
 

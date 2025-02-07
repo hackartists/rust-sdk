@@ -93,7 +93,9 @@ pub mod many_to_one_tests {
 
         v.insert(50, doc.id + 1).await.unwrap();
 
-        let q = TopicSummary::base_sql_with("title ilike $1");
+        let mut q = TopicSummary::base_sql_with("title ilike $1");
+        q.push_str(" order by id asc");
+
         let docs: Vec<TopicSummary> = sqlx::query(&q)
             .bind(format!("{}%", now))
             .map(|row: PgRow| row.into())
