@@ -2827,9 +2827,7 @@ END AS {}"#,
                         Some(format!(
                             r#"
 COALESCE(
-    json_agg(
-        to_jsonb(f),
-    ) FILTER (WHERE f.id IS NOT NULL), '[]'
+    json_agg(to_jsonb(f)) FILTER (WHERE f.id IS NOT NULL), '[]'
 ) AS {}
 "#,
                             bound_name
