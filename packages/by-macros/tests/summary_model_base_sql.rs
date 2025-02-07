@@ -43,13 +43,13 @@ pub mod summary_model_base_sql_tests {
     #[tokio::test]
     async fn test_summary_base_sql() {
         let q = SummaryTestSummary::base_sql_with("description = $1");
-        assert_eq!(q, "WITH data AS (SELECT * FROM summary_base_sql WHERE description = $1 ) SELECT (SELECT COUNT(*) FROM summary_base_sql WHERE description = $1 ) AS total_count, data.* FROM data;");
+        assert_eq!(q, "WITH data AS (SELECT * FROM summary_base_sql WHERE description = $1 ) SELECT (SELECT COUNT(*) FROM summary_base_sql WHERE description = $1 ) AS total_count, data.* FROM data");
 
         let q = SummaryTestSummary::base_sql_with("WHERE description = $1");
-        assert_eq!(q, "WITH data AS (SELECT * FROM summary_base_sql WHERE description = $1 ) SELECT (SELECT COUNT(*) FROM summary_base_sql WHERE description = $1 ) AS total_count, data.* FROM data;");
+        assert_eq!(q, "WITH data AS (SELECT * FROM summary_base_sql WHERE description = $1 ) SELECT (SELECT COUNT(*) FROM summary_base_sql WHERE description = $1 ) AS total_count, data.* FROM data");
 
         let q = SummaryTestSummary::base_sql_with("WHERE description = $1 and name like $2");
-        assert_eq!(q, "WITH data AS (SELECT * FROM summary_base_sql WHERE description = $1 and name like $2 ) SELECT (SELECT COUNT(*) FROM summary_base_sql WHERE description = $1 and name like $2 ) AS total_count, data.* FROM data;");
+        assert_eq!(q, "WITH data AS (SELECT * FROM summary_base_sql WHERE description = $1 and name like $2 ) SELECT (SELECT COUNT(*) FROM summary_base_sql WHERE description = $1 and name like $2 ) AS total_count, data.* FROM data");
 
         let pool: sqlx::Pool<sqlx::Postgres> = sqlx::postgres::PgPoolOptions::new()
             .max_connections(5)
