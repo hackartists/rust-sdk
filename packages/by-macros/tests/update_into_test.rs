@@ -28,7 +28,7 @@ pub mod update_into_tests {
     #[api_model(base = "/models", table = upinto, iter_type=QueryResponse)]
     pub struct UpdateInto {
         #[api_model(summary, primary_key, read_action = find_by_id)]
-        pub id: String,
+        pub id: i64,
         #[api_model(summary, auto = [insert])]
         pub created_at: i64,
         #[api_model(summary, auto = [insert, update])]

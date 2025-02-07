@@ -21,7 +21,7 @@ pub type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 #[api_model(base = "/public-surveys/v1/questions", table = questions, iter_type=QueryResponse)]
 pub struct PublicSurveyQuestion {
     #[api_model(primary_key)]
-    pub id: String,
+    pub id: i64,
     #[api_model(summary, auto = [insert])]
     pub created_at: i64,
     #[api_model(summary, auto = [insert, update])]

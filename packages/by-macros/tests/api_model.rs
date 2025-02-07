@@ -23,7 +23,7 @@ impl<T> From<(Vec<T>, i64)> for QueryResponse<T> {
 #[api_model(base = "/topics/v1", iter_type=QueryResponse, table = topics)] // rename is supported but usually use default(snake_case)
 pub struct Topic {
     #[api_model(summary, primary_key)]
-    pub id: String,
+    pub id: i64,
     #[api_model(read_action = user_info)]
     pub wallet_address: String,
     #[api_model(read_action = [check_email,user_info])]

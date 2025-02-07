@@ -42,17 +42,17 @@ mod server_tests {
     #[api_model(base = "/topics/v1/:topic-id/votes", table = votes, iter_type=QueryResponse)]
     pub struct Vote {
         #[api_model(summary, primary_key)]
-        pub id: String,
+        pub id: i64,
         #[api_model(summary, auto = [insert])]
         pub created_at: i64,
         #[api_model(summary, auto = [insert, update])]
         pub updated_at: i64,
 
         #[api_model(many_to_one = topics)]
-        pub topic_id: String,
+        pub topic_id: i64,
 
         #[api_model(many_to_one = users)]
-        pub user_id: String,
+        pub user_id: i64,
 
         #[api_model(summary, action = support)]
         pub amount: i64,
@@ -68,7 +68,7 @@ mod server_tests {
     #[api_model(base = "/users/v1", read_action = user_info, table = users, iter_type=QueryResponse)]
     pub struct User {
         #[api_model(primary_key)]
-        pub id: String,
+        pub id: i64,
         #[api_model(auto = insert)]
         pub created_at: u64,
         #[api_model(auto = [insert, update])]
@@ -94,7 +94,7 @@ mod server_tests {
     #[api_model(base = "/topics/v1", read_action = [get_topic] , table = topics, iter_type=QueryResponse)]
     pub struct Topic {
         #[api_model(summary, primary_key)]
-        pub id: String,
+        pub id: i64,
         #[api_model(summary, auto = [insert])]
         pub created_at: i64,
         #[api_model(summary, auto = [insert, update])]

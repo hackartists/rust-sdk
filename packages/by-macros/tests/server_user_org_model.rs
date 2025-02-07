@@ -27,7 +27,7 @@ mod server_tests {
     #[api_model(base = "/auth/v1", action = [signup(code = String), reset(code = String)], table = uo_users, iter_type=QueryResponse)]
     pub struct User {
         #[api_model(primary_key)]
-        pub id: String,
+        pub id: i64,
         #[api_model(auto = insert)]
         pub created_at: i64,
         #[api_model(auto = [insert, update])]
@@ -45,7 +45,7 @@ mod server_tests {
     #[api_model(base = "/auth/v1/organizations", table = uo_organizations, iter_type=QueryResponse)]
     pub struct Organization {
         #[api_model(summary, primary_key)]
-        pub id: String,
+        pub id: i64,
         #[api_model(summary, auto = insert)]
         pub created_at: i64,
         #[api_model(summary, auto = [insert, update])]

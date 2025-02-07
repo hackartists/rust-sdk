@@ -27,7 +27,7 @@ mod empty_param_tests {
     #[api_model(base = "/models", table = action_empty_params, iter_type=QueryResponse, action_by_id = delete, action = [no_param, empty])]
     pub struct ActionEmptyParamModel {
         #[api_model(summary, primary_key, read_action = find_by_id)]
-        pub id: String,
+        pub id: i64,
         #[api_model(summary, auto = [insert])]
         pub created_at: i64,
         #[api_model(summary, auto = [insert, update])]

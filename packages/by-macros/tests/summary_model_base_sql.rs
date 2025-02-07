@@ -28,7 +28,7 @@ pub mod summary_model_base_sql_tests {
     #[api_model(base = "/models", table = summary_base_sql, iter_type=QueryResponse)]
     pub struct SummaryTest {
         #[api_model(summary, primary_key, read_action = find_by_id)]
-        pub id: String,
+        pub id: i64,
         #[api_model(summary, auto = [insert])]
         pub created_at: i64,
         #[api_model(summary, auto = [insert, update])]
