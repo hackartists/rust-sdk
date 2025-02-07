@@ -60,14 +60,14 @@ pub struct Comment {
     pub updated_at: i64,
 
     #[api_model(many_to_one = topics, foreign_key = id, foreign_key_type = TEXT)]
-    pub topic_id: String,
+    pub topic_id: i64,
 }
 
 #[cfg(not(feature = "server"))]
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 pub struct CommentRequest {
-    pub comment_id: String,
+    pub comment_id: i64,
     pub is_liked: bool,
 }
 
@@ -115,7 +115,7 @@ mod normal {
         );
 
         let summary = TopicSummary::default();
-        assert_eq!(summary.id, "".to_string());
+        assert_eq!(summary.id, 0);
         assert_eq!(summary.title, "".to_string());
         assert_eq!(summary.description, "".to_string());
         assert_eq!(summary.status, 0);
@@ -140,28 +140,28 @@ mod normal {
         let create_request = TopicAction::Create(create_request);
         let update_request = TopicByIdAction::Update(update_request);
         let like_request = TopicByIdAction::Like(CommentRequest {
-            comment_id: "1".to_string(),
+            comment_id: 1,
             is_liked: true,
         });
         let comment_request = TopicAction::Comment(Comment {
-            id: "1".to_string(),
+            id: 1,
             content: "content".to_string(),
             updated_at: 0,
-            topic_id: "1".to_string(),
+            topic_id: 1,
         });
 
         let cli = Topic::get_client("");
-        let _ = cli.get("1");
+        let _ = cli.get(1);
         let _ = cli.query(q);
         let _ = cli.act(create_request);
         let _ = cli.act(comment_request);
-        let _ = cli.act_by_id("1", update_request);
-        let _ = cli.act_by_id("1", like_request);
+        let _ = cli.act_by_id(1, update_request);
+        let _ = cli.act_by_id(1, like_request);
         let _ = cli.user_info("wallet".to_string(), "email".to_string(), 1);
         let _ = cli.check_email("email".to_string());
         // let _ = cli.search_by("test".to_string(), 0);
         let _ = cli.create("title".to_string(), "description".to_string());
-        let _ = cli.update("id", "description".to_string(), 1, vec!["tag".to_string()]);
+        let _ = cli.update(1, "description".to_string(), 1, vec!["tag".to_string()]);
         let _ = cli.search_by(
             1,
             Some("bookmark".to_string()),
@@ -174,13 +174,13 @@ mod normal {
     #[test]
     fn test_macro_expansion_comment() {
         let cli = Comment::get_client("");
-        let _ = cli.get("topic-id", "comment-id");
-        let _ = cli.query("topic-id", CommentQuery::new(10));
-        let _ = cli.act("topic-id", CommentAction::Comment("content".to_string()));
-        let _ = cli.comment("topic-id", "content".to_string());
-        let _ = cli.search_by("topic-id", "content".to_string());
-        let _ = cli.update("topic-id", "comment-id", 100);
-        let _ = cli.act_by_id("topic-id", "comment-id", CommentByIdAction::Update(100));
+        let _ = cli.get(1, 1);
+        let _ = cli.query(1, CommentQuery::new(10));
+        let _ = cli.act(1, CommentAction::Comment("content".to_string()));
+        let _ = cli.comment(1, "content".to_string());
+        let _ = cli.search_by(1, "content".to_string());
+        let _ = cli.update(1, 1, 100);
+        let _ = cli.act_by_id(1, 1, CommentByIdAction::Update(100));
     }
 }
 

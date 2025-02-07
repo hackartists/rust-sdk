@@ -92,7 +92,7 @@ impl ApiModel<'_> {
         let iter_type_tokens: proc_macro2::TokenStream = iter_type_with_summary.parse().unwrap();
         let parent_params = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
-            quote! { #id: &str, }
+            quote! { #id: i64, }
         });
         let parent_names = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
@@ -125,7 +125,7 @@ impl ApiModel<'_> {
                     rest_api::get(&query).await
                 }
 
-                pub async fn get(&self, #(#parent_params_for_get)* id: &str) -> crate::Result<#struct_name> {
+                pub async fn get(&self, #(#parent_params_for_get)* id: i64) -> crate::Result<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names_for_get)*);
                     let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                     rest_api::get(&endpoint).await
@@ -157,7 +157,7 @@ impl ApiModel<'_> {
         let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
         let parent_params = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
-            quote! { #id: &str, }
+            quote! { #id: i64, }
         });
         let parent_names = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
@@ -383,7 +383,7 @@ impl ApiModel<'_> {
         let param_name = syn::Ident::new(&format!("{}Param", struct_name), struct_name.span());
         let parent_params = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
-            quote! { #id: &str, }
+            quote! { #id: i64, }
         });
         let parent_names = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
@@ -836,7 +836,7 @@ impl ApiModel<'_> {
                 .map(|(field_name, _)| quote! { #field_name: Some(#field_name), });
             let parent_params = parent_ids.iter().map(|id| {
                 let id = syn::Ident::new(id, struct_name.span());
-                quote! { #id: &str, }
+                quote! { #id: i64, }
             });
             let parent_names = parent_ids.iter().map(|id| {
                 let id = syn::Ident::new(id, struct_name.span());
@@ -986,7 +986,7 @@ impl ApiModel<'_> {
         let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
         let parent_params = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
-            quote! { #id: &str, }
+            quote! { #id: i64, }
         });
         let parent_names = parent_ids.iter().map(|id| {
             let id = syn::Ident::new(id, struct_name.span());
