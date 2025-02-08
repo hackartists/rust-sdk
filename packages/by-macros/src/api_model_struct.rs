@@ -1,6 +1,6 @@
 #![allow(dead_code, unused)]
 
-use crate::{action::Actions, api_model::*};
+use crate::{action::Actions, api_model::*, query_builder_functions::*};
 use convert_case::{Case, Casing};
 use indexmap::IndexMap;
 use proc_macro::TokenStream;
@@ -1683,6 +1683,9 @@ impl ApiModel<'_> {
             proc_macro2::Span::call_site(),
         );
 
+        let query_builder = self.repo_query_struct_id();
+        let summary_name = self.summary_struct_name();
+
         let output = quote! {
             pub fn base_sql_with(#(#aggregate_args,)* where_and_statements: &str) -> String {
                 let query = if where_and_statements.is_empty() {
@@ -1710,6 +1713,11 @@ impl ApiModel<'_> {
 
 
                 format!("WITH data AS ({}) SELECT ({}) AS total_count, data.* FROM data", query, count_query)
+            }
+
+            pub fn query_builder(#(#aggregate_args)*) -> #query_builder {
+                let base_sql = format!(#q, #(#arg_names),*);
+                #query_builder::from(&base_sql, #group_by).with_count()
             }
         };
 
@@ -1761,12 +1769,20 @@ impl ApiModel<'_> {
 
         let group_by = self.group_by();
 
+        let query_builder = self.repo_query_struct_id();
+
         let output = quote! {
             pub fn base_sql(#(#aggregate_args),*) -> String {
                 format!(#q, #(#arg_names),*)
             }
 
             #group_by
+
+            pub fn query_builder(#(#aggregate_args)*) -> #query_builder {
+                let base_sql = format!(#q, #(#arg_names),*);
+                let g = #name::group_by();
+                #query_builder::from(&base_sql, &g)
+            }
         };
 
         output.into()
@@ -2107,6 +2123,269 @@ impl ApiModel<'_> {
 
                 tx.commit().await?;
                 Ok(())
+            }
+        }
+    }
+
+    pub fn repo_query_struct_id(&self) -> syn::Ident {
+        syn::Ident::new(
+            &format!("{}RepositoryQueryBuilder", self.name),
+            proc_macro2::Span::call_site(),
+        )
+    }
+
+    pub fn repo_query_request(&self) -> proc_macro2::TokenStream {
+        let name = syn::Ident::new(
+            &format!("{}RepositoryQueryBuilder", self.name),
+            proc_macro2::Span::call_site(),
+        );
+
+        let mut fields = vec![];
+        let mut functions = vec![];
+
+        for (_, v) in self.fields.iter() {
+            if !v.can_query() {
+                continue;
+            }
+            let name = syn::Ident::new(&v.name, proc_macro2::Span::call_site());
+            let ty = v.unwrapped_type_token();
+            let field_id_str = syn::LitStr::new(&v.name, proc_macro2::Span::call_site());
+
+            fields.push(quote! {
+                pub #name: Option<#ty>
+            });
+
+            match ty.to_string().as_str() {
+                "i32" | "u32" => {
+                    let ty = ty.to_string();
+                    let f = build_integer_query_functions(&v.name, &ty);
+
+                    functions.push(quote! {
+                        #f
+                    });
+                }
+                "i64" | "u64" => {
+                    let ty = ty.to_string();
+                    let f = build_bigint_query_functions(&v.name, &ty);
+
+                    functions.push(quote! {
+                        #f
+                    });
+                }
+                "String" => {
+                    let ty = ty.to_string();
+                    let f = build_string_query_functions(&v.name, &ty);
+
+                    functions.push(quote! {
+                        #f
+                    })
+                }
+                "bool" => {
+                    let f = build_boolean_query_functions(&v.name);
+
+                    functions.push(quote! {
+                        #f
+                    })
+                }
+                _ => {}
+            }
+        }
+
+        quote! {
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+            pub struct #name {
+                pub base_sql: String,
+                pub group_by: String,
+                pub count: bool,
+                pub conditions: Vec<by_types::Conditions>,
+                pub sort_field: Option<String>,
+                pub limit: Option<i32>,
+                pub page: Option<i32>,
+            }
+
+            impl #name {
+                pub fn from(base_sql: &str, group_by: &str) -> Self {
+                    Self {
+                        base_sql: base_sql.to_string(),
+                        group_by: group_by.to_string(),
+                        ..Default::default()
+                    }
+                }
+
+                pub fn with_count(mut self) -> Self {
+                    self.count = true;
+                    self
+                }
+
+                pub fn new() -> Self {
+                    Self::default()
+                }
+
+                pub fn limit(mut self, limit: i32) -> Self {
+                    self.limit = Some(limit);
+                    self
+                }
+
+                pub fn page(mut self, page: i32) -> Self {
+                    self.page = Some(page);
+                    self
+                }
+
+                pub fn build_where(&self) -> String {
+                    let mut where_clause = vec![];
+                    let mut i = 1;
+
+                    for condition in self.conditions.iter() {
+                        let (q, new_i) = condition.to_binder(i);
+                        i = new_i;
+                        where_clause.push(q);
+                    }
+
+                    where_clause.join(" AND ")
+                }
+
+                pub fn sql(&self) -> String {
+                    let w = self.build_where();
+
+                    if w.is_empty() {
+                        format!("{}", self.base_sql)
+                    } else {
+                        format!("{} WHERE {}", self.base_sql, w)
+                    }
+                }
+
+                pub fn query(
+                    &self,
+                ) -> sqlx::query::Query<
+                    'static,
+                sqlx::Postgres,
+                <sqlx::Postgres as sqlx::Database>::Arguments<'static>,
+                > {
+                    let mut query = self.sql();
+
+                    if let Some(limit) = self.limit {
+                        query = if let Some(page) = self.page {
+                            format!("{} LIMIT {} OFFSET {}", query, limit, (limit * (page - 1)))
+                        } else {
+                            format!("{} LIMIT {}", query, limit)
+                        };
+                    }
+
+                    let s: Box<String> = Box::new(query);
+                    let query: &'static str = Box::leak(s);
+
+                    let mut q = sqlx::query(query);
+
+                    for condition in self.conditions.clone() {
+                        q = match condition {
+                            by_types::Conditions::BetweenBigint(_, from, to) => {
+                                tracing::debug!("Binding BetweenBigint {} and {}", from, to);
+                                q.bind(from).bind(to)
+                            },
+                            by_types::Conditions::EqualsBigint(_, value) => {
+                                tracing::debug!("Binding EqualsBigint {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::NotEqualsBigint(_, value) => {
+                                tracing::debug!("Binding NotEqualsBigint {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::GreaterThanBigint(_, value) => {
+                                tracing::debug!("Binding GreaterThanBigint {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::LessThanBigint(_, value) => {
+                                tracing::debug!("Binding LessThanBigint {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::GreaterThanEqualsBigint(_, value) => {
+                                tracing::debug!("Binding GreaterThanEqualsBigint {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::LessThanEqualsBigint(_, value) => {
+                                tracing::debug!("Binding LessThanEqualsBigint {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::BetweenInteger(_, from, to) =>  {
+                                tracing::debug!("Binding BetweenInteger {} and {}", from, to);
+                                q.bind(from).bind(to)
+                            },
+                            by_types::Conditions::EqualsInteger(_, value) => {
+                                tracing::debug!("Binding EqualsInteger {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::NotEqualsInteger(_, value) => {
+                                tracing::debug!("Binding NotEqualsInteger {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::GreaterThanInteger(_, value) => {
+                                tracing::debug!("Binding GreaterThanInteger {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::LessThanInteger(_, value) => {
+                                tracing::debug!("Binding LessThanInteger {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::GreaterThanEqualsInteger(_, value) => {
+                                tracing::debug!("Binding GreaterThanEqualsInteger {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::LessThanEqualsInteger(_, value) => {
+                                tracing::debug!("Binding LessThanEqualsInteger {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::EqualsText(_, value) => {
+                                tracing::debug!("Binding EqualsText {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::NotEqualsText(_, value) => {
+                                tracing::debug!("Binding NotEqualsText {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::ContainsText(_, value) => {
+                                let value = format!("%{}%", value);
+                                tracing::debug!("Binding ContainsText {}", value);
+                                q.bind(value)
+                            },
+                            by_types::Conditions::NotContainsText(_, value) => {
+                                let value = format!("%{}%", value);
+                                tracing::debug!("Binding NotContainsText {}", value);
+                                q.bind(value)
+                            }
+                            by_types::Conditions::StartsWithText(_, value) => {
+                                let value = format!("{}%", value);
+                                tracing::debug!("Binding StartsWithText {}", value);
+                                q.bind(value)
+                            }
+                            by_types::Conditions::NotStartsWithText(_, value) => {
+                                let value = format!("{}%", value);
+                                tracing::debug!("Binding NotStartsWithText {}", value);
+                                q.bind(value)
+                            }
+                            by_types::Conditions::EndsWithText(_, value) => {
+                                let value = format!("%{}", value);
+                                tracing::debug!("Binding EndsWithText {}", value);
+                                q.bind(value)
+                            }
+                            by_types::Conditions::NotEndsWithText(_, value) => {
+                                let value = format!("%{}", value);
+                                tracing::debug!("Binding NotEndsWithText {}", value);
+                                q.bind(value)
+                            }
+                            by_types::Conditions::TrueBoolean(_) => {
+                                tracing::debug!("(Not)Binding TrueBoolean");
+                                q
+                            }
+                            by_types::Conditions::FalseBoolean(_) => {
+                                tracing::debug!("(Not)Binding FalseBoolean");
+                                q
+                            }
+                        };
+                    }
+                    q
+                }
+
+                #(#functions)*
             }
         }
     }
@@ -3108,6 +3387,14 @@ LEFT JOIN (
         );
 
         Some(query)
+    }
+
+    pub fn can_query(&self) -> bool {
+        match self.relation {
+            Some(Relation::ManyToMany { .. }) => false,
+            Some(Relation::OneToMany { .. }) => false,
+            _ => true,
+        }
     }
 
     pub fn should_return_in_insert(&self) -> bool {
