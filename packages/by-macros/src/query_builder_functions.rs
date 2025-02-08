@@ -300,7 +300,7 @@ pub fn build_boolean_query_functions(field_name: &str) -> proc_macro2::TokenStre
     );
 
     quote! {
-        pub fn #eq_fn(mut self, x: bool) -> Self {
+        pub fn #eq_fn(mut self) -> Self {
             self.conditions.push(by_types::Conditions::TrueBoolean(#field_id_str.to_string()));
             self
         }

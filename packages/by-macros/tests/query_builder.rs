@@ -35,10 +35,36 @@ pub mod update_into_tests {
         pub num: i64,
 
         pub is_like: bool,
+
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id)]
+        pub children: Vec<ChildModels>,
+
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=sum(volumes))]
+        pub volume_of_children: i64,
+
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=count)]
+        pub num_of_children: i64,
+    }
+
+    #[api_model(base = "/:model-id/models", table = child_model_query_builder_test)]
+    pub struct ChildModels {
+        #[api_model(summary, primary_key, read_action = find_by_id)]
+        pub id: i64,
+        #[api_model(summary, auto = [insert])]
+        pub created_at: i64,
+        #[api_model(summary, auto = [insert, update])]
+        pub updated_at: i64,
+
+        #[api_model(summary, many_to_one = query_builder_test)]
+        pub model_id: i64,
+
+        pub name: String,
+
+        pub volumes: i64,
     }
 
     #[tokio::test]
-    async fn test_query_builder() {
+    async fn test_query_builder_basic() {
         let _ = tracing_subscriber::fmt()
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
             .with_file(true)
@@ -65,7 +91,13 @@ pub mod update_into_tests {
         let status = 1;
 
         let repo = QueryModel::get_repository(pool.clone());
+        let repo_child = ChildModels::get_repository(pool.clone());
+
+        repo.create_this_table().await;
+        repo_child.create_this_table().await;
+
         repo.create_table().await;
+        repo_child.create_table().await;
 
         for b in [true, false].iter() {
             for n in 0..10 {
@@ -81,6 +113,45 @@ pub mod update_into_tests {
             }
         }
 
+        let mut q = QueryModel::query_builder()
+            .num_between(0, 5)
+            .name_contains(name.clone())
+            .order_by_id_asc();
+
+        //         assert_eq!(q.sql(), r#"SELECT p.*,
+        // COALESCE(
+        //     json_agg(to_jsonb(children)) FILTER (WHERE f.id IS NOT NULL), '[]'
+        // ) AS children
+        // , COALESCE(volume_of_children.value, 0) AS volume_of_children, COALESCE(num_of_children.value, 0) AS num_of_children FROM query_builder_test p
+        // LEFT JOIN child_model_query_builder_test children ON p.id = children.model_id
+
+        // LEFT JOIN (
+        //     SELECT model_id, SUM(volumes) AS value
+        //     FROM child_model_query_builder_test
+        //     GROUP BY model_id
+        // ) volume_of_children ON p.id = volume_of_children.model_id
+
+        // LEFT JOIN (
+        //     SELECT model_id, COUNT(id) AS value
+        //     FROM child_model_query_builder_test
+        //     GROUP BY model_id
+        // ) num_of_children ON p.id = num_of_children.model_id
+        //  WHERE num BETWEEN $1 AND $2 AND name ILIKE $3 ORDER BY id ASC"#);
+
+        let mut q = q.with_count();
+
+        // "#
+        //         assert_eq!(
+        //             q.sql(),
+        //             "SELECT COUNT(*) OVER() as total_count, p.*, COALESCE(volume_of_children.value, 0) AS volume_of_children, COALESCE(num_of_children.value, 0) AS num_of_children FROM query_builder_test p \nLEFT JOIN (\n    SELECT model_id, SUM(volumes) AS value\n    FROM child_model_query_builder_test \n    GROUP BY model_id\n) volume_of_children ON p.id = volume_of_children.model_id\n \nLEFT JOIN (\n    SELECT model_id, COUNT(id) AS value\n    FROM child_model_query_builder_test \n    GROUP BY model_id\n) num_of_children ON p.id = num_of_children.model_id\n WHERE num BETWEEN $1 AND $2 AND name ILIKE $3 ORDER BY id ASC"
+        //         );
+
+        //         let sq = QueryModelSummary::query_builder().sql();
+        //         assert_eq!(
+        //             sq,
+        //             "SELECT COUNT(*) OVER() as total_count,  COUNT(*) OVER() as total_count, p.id, p.created_at, p.updated_at, p.name, p.num, p.children, COALESCE(volume_of_children.value, 0) AS volume_of_children, COALESCE(num_of_children.value, 0) AS num_of_children FROM query_builder_test p \nLEFT JOIN (\n    SELECT model_id, SUM(volumes) AS value\n    FROM child_model_query_builder_test \n    GROUP BY model_id\n) volume_of_children ON p.id = volume_of_children.model_id\n \nLEFT JOIN (\n    SELECT model_id, COUNT(id) AS value\n    FROM child_model_query_builder_test \n    GROUP BY model_id\n) num_of_children ON p.id = num_of_children.model_id\n "
+        //         );
+
         let docs: Vec<QueryModel> = QueryModel::query_builder()
             .name_contains(name.clone())
             .query()
@@ -90,29 +161,6 @@ pub mod update_into_tests {
             .unwrap();
 
         assert_eq!(docs.len(), 20);
-
-        let mut q = QueryModel::query_builder()
-            .num_between(0, 5)
-            .name_contains(name.clone())
-            .order_by_id_asc();
-
-        assert_eq!(
-            q.sql(),
-            "SELECT * FROM query_builder_test WHERE num BETWEEN $1 AND $2 AND name ILIKE $3 ORDER BY id ASC"
-        );
-
-        let mut q = q.with_count();
-
-        assert_eq!(
-            q.sql(),
-            "SELECT COUNT(*) OVER() as total_count, * FROM query_builder_test WHERE num BETWEEN $1 AND $2 AND name ILIKE $3 ORDER BY id ASC"
-        );
-
-        let sq = QueryModelSummary::query_builder().sql();
-        assert_eq!(
-            sq,
-            "SELECT COUNT(*) OVER() as total_count, id, created_at, updated_at, name, num FROM query_builder_test "
-        );
 
         let doc: QueryModel = q
             .query()
@@ -166,5 +214,164 @@ pub mod update_into_tests {
         assert_eq!(docs[0].name, format!("{} 0-false", name));
         assert_eq!(docs[1].name, format!("{} 1-false", name));
         assert_eq!(docs[2].name, format!("{} 2-false", name));
+
+        let docs: QueryModel = QueryModel::query_builder()
+            .name_contains(name.clone())
+            .is_like_is_false()
+            .order_by_id_desc()
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.name, format!("{} 9-false", name));
+
+        let docs: QueryModel = QueryModel::query_builder()
+            .name_contains(name.clone())
+            .is_like_is_true()
+            .order_by_id_asc()
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.name, format!("{} 0-true", name));
+
+        let docs: Vec<QueryModel> = QueryModel::query_builder()
+            .name_contains(name.clone())
+            .num_greater_than(5)
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.len(), 8);
+
+        for doc in docs {
+            assert!(doc.num > 5);
+        }
+
+        let docs: Vec<QueryModel> = QueryModel::query_builder()
+            .name_contains(name.clone())
+            .num_greater_than_equals(5)
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.len(), 10);
+
+        for doc in docs {
+            assert!(doc.num >= 5);
+        }
+
+        let docs: Vec<QueryModel> = QueryModel::query_builder()
+            .name_contains(name.clone())
+            .num_less_than(5)
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.len(), 10);
+
+        for doc in docs {
+            assert!(doc.num < 5);
+        }
+
+        let docs: Vec<QueryModel> = QueryModel::query_builder()
+            .name_contains(name.clone())
+            .num_less_than_equals(5)
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.len(), 12);
+
+        for doc in docs {
+            assert!(doc.num <= 5);
+        }
+
+        let docs: Vec<QueryModel> = QueryModel::query_builder()
+            .name_contains(name.clone())
+            .num_equals(5)
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.len(), 2);
+
+        for doc in docs {
+            assert!(doc.num == 5);
+        }
+
+        let docs: Vec<QueryModel> = QueryModel::query_builder()
+            .name_contains(name.clone())
+            .num_not_equals(5)
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.len(), 18);
+
+        for doc in docs {
+            assert!(doc.num != 5);
+        }
+
+        let test_name = format!("test-{}", now);
+
+        let doc = repo
+            .insert(test_name.clone(), description, status, 10, false)
+            .await
+            .unwrap();
+
+        let docs: QueryModel = QueryModel::query_builder()
+            .name_not_contains("name".to_string())
+            .name_contains(format!("{}", now))
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.name, test_name);
+
+        let child_name = format!("child-{}", now);
+
+        repo_child
+            .insert(doc.id, child_name.clone(), 10)
+            .await
+            .unwrap();
+        repo_child
+            .insert(doc.id, child_name.clone(), 10)
+            .await
+            .unwrap();
+        repo_child
+            .insert(doc.id, child_name.clone(), 10)
+            .await
+            .unwrap();
+
+        let docs: QueryModel = QueryModel::query_builder()
+            .name_contains(test_name.clone())
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.volume_of_children, 30);
+        assert_eq!(docs.num_of_children, 3);
+        assert_eq!(docs.children.len(), 3);
     }
 }

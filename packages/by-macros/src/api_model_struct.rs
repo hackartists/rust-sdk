@@ -1599,7 +1599,9 @@ impl ApiModel<'_> {
 
         for (field_name, field) in self.fields.iter() {
             if let Some(q) = field.group_by() {
-                group_by.push(q);
+                if !group_by.contains(&q) {
+                    group_by.push(q);
+                }
             }
         }
 
@@ -1664,7 +1666,9 @@ impl ApiModel<'_> {
             }
 
             if let Some(q) = field.group_by() {
-                group_by.push(q);
+                if !group_by.contains(&q) {
+                    group_by.push(q);
+                }
             }
 
             if !is_agg {
@@ -1713,6 +1717,7 @@ impl ApiModel<'_> {
 
         let output = quote! {
             pub fn base_sql_with(#(#aggregate_args,)* where_and_statements: &str) -> String {
+                tracing::debug!("{} base_sql_with group: {}", #q, #group_by);
                 let query = if where_and_statements.is_empty() {
                     format!("{} {}", format!(#q, #(#arg_names),*), #group_by)
                 } else {
@@ -1723,21 +1728,6 @@ impl ApiModel<'_> {
                     }
                 };
 
-                // let count_query = if where_and_statements.is_empty() {
-                //     format!("{}", #qc)
-                // } else {
-                //     let re = regex::Regex::new(r"(?i)\s*LIMIT\s+\$\d+\s*(OFFSET\s+\$\d+)?").unwrap();
-                //     let where_and_statements = re.replace(where_and_statements, "").to_string();
-
-                //     if where_and_statements.to_lowercase().starts_with("where") {
-                //         format!("{} {} {}", #qc, where_and_statements, #group_by)
-                //     } else {
-                //         format!("{} WHERE {} {}", #qc, where_and_statements, #group_by)
-                //     }
-                // };
-
-
-                // format!("WITH data AS ({}) SELECT ({}) AS total_count, data.* FROM data", query, count_query)
                 query
             }
 
@@ -2266,11 +2256,17 @@ impl ApiModel<'_> {
                 pub fn build_where(&self) -> String {
                     let mut where_clause = vec![];
                     let mut i = 1;
+                    tracing::debug!("Building where clause with group: {}", self.group_by);
+                    let prefix = if self.group_by.is_empty() {
+                        ""
+                    } else {
+                        "p."
+                    };
 
                     for condition in self.conditions.iter() {
                         let (q, new_i) = condition.to_binder(i);
                         i = new_i;
-                        where_clause.push(q);
+                        where_clause.push(format!("{}{}", prefix, q));
                     }
 
                     where_clause.join(" AND ")
@@ -2280,9 +2276,9 @@ impl ApiModel<'_> {
                     let w = self.build_where();
 
                     let mut query = if w.is_empty() {
-                        format!("{} {}", self.base_sql, self.order)
+                        format!("{} {} {}", self.base_sql, self.group_by, self.order)
                     } else {
-                        format!("{} WHERE {} {}", self.base_sql, w, self.order)
+                        format!("{} WHERE {} {} {}", self.base_sql, w, self.group_by, self.order)
                     };
 
                     if self.count && !query.starts_with("SELECT COUNT(*) OVER() as total_count") {
@@ -3184,24 +3180,35 @@ END AS {}"#,
                 bound_name, bound_name
             )),
             Some(_) => Some(format!(
-                "COALESCE({}.value, 0) AS {}",
+                "COALESCE(MAX({}.value), 0) AS {}",
                 bound_name, bound_name
             )),
 
             None => match &self.relation {
-                Some(Relation::ManyToMany {
-                    ref foreign_table_name,
-                    ref foreign_primary_key,
-                    ..
-                }) => {
+                Some(Relation::ManyToMany { .. }) => {
                     if self.rust_type.starts_with("Vec") {
                         Some(format!(
                             r#"
 COALESCE(
-    json_agg(to_jsonb(f)) FILTER (WHERE f.id IS NOT NULL), '[]'
+    json_agg(to_jsonb({})) FILTER (WHERE {}.id IS NOT NULL), '[]'
 ) AS {}
 "#,
-                            bound_name
+                            bound_name, bound_name, bound_name
+                        ))
+                    } else {
+                        None
+                    }
+                }
+
+                Some(Relation::OneToMany { .. }) => {
+                    if self.rust_type.starts_with("Vec") {
+                        Some(format!(
+                            r#"
+COALESCE(
+    json_agg(to_jsonb({})) FILTER (WHERE {}.id IS NOT NULL), '[]'
+) AS {}
+"#,
+                            bound_name, bound_name, bound_name
                         ))
                     } else {
                         None
@@ -3329,17 +3336,21 @@ COALESCE(
     }
 
     pub fn group_by(&self) -> Option<String> {
-        if self.aggregator.is_none() && self.rust_type.starts_with("Vec") {
-            match self.relation {
-                Some(Relation::ManyToMany {
-                    ref foreign_primary_key,
-                    ..
-                }) => return Some("GROUP BY p.id".to_string()),
-                _ => None,
-            }
-        } else {
-            None
+        match self.relation {
+            Some(Relation::ManyToMany { .. }) => return Some("GROUP BY p.id".to_string()),
+            Some(Relation::OneToMany { .. }) => return Some("GROUP BY p.id".to_string()),
+            _ => None,
         }
+
+        // if self.aggregator.is_none() && self.rust_type.starts_with("Vec") {
+        //     match self.relation {
+        //         Some(Relation::ManyToMany { .. }) => return Some("GROUP BY p.id".to_string()),
+        //         Some(Relation::OneToMany { .. }) => return Some("GROUP BY p.id".to_string()),
+        //         _ => None,
+        //     }
+        // } else {
+        //     None
+        // }
     }
 
     /// It will be bound {bound_name.value}.
@@ -3348,7 +3359,19 @@ COALESCE(
             Some(Relation::OneToMany {
                 ref table_name,
                 ref foreign_key,
-            }) => (table_name, foreign_key),
+            }) => {
+                if self.aggregator.is_none() {
+                    let query = format!(
+                        r#"
+LEFT JOIN {} {} ON p.id = {}.{}
+"#,
+                        table_name, bound_name, bound_name, foreign_key,
+                    );
+                    return Some(query);
+                }
+
+                (table_name, foreign_key)
+            }
             Some(Relation::ManyToMany {
                 ref table_name,
                 ref foreign_table_name,
@@ -3360,14 +3383,16 @@ COALESCE(
                     let query = format!(
                         r#"
 LEFT JOIN {} j ON p.id = j.{}
-LEFT JOIN {} f ON j.{} = f.id
+LEFT JOIN {} {} ON j.{} = {}.id
 "#,
                         // reference
                         table_name,
                         foreign_reference_key,
                         // foreign
                         foreign_table_name,
+                        bound_name,
                         foreign_primary_key,
+                        bound_name,
                     );
 
                     return Some(query);
