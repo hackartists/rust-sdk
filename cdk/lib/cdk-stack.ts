@@ -261,6 +261,10 @@ export class CdkStack extends cdk.Stack {
       distributionProps.additionalBehaviors[path] = {
         origin: new origins.HttpOrigin(endpoint.endpoint),
         cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+        compress: false,
       };
     }
 
