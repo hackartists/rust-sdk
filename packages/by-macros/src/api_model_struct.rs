@@ -3410,14 +3410,24 @@ LEFT JOIN {} {} ON j.{} = {}.id
             Some(Aggregator::Count) => "COUNT(id)".to_string(),
             Some(Aggregator::Sum(ref field_name)) => format!("SUM({})", field_name),
             Some(Aggregator::Avg(ref field_name)) => format!("AVG({})", field_name),
-            Some(Aggregator::Max(ref field_name)) => format!("MAX({})", field_name),
-            Some(Aggregator::Min(ref field_name)) => format!("MIN({})", field_name),
+            Some(Aggregator::Max(ref field_name)) => {
+                panic!("currently Max, Min aggregator are not correctly supported");
+                format!("MAX({})", field_name)
+            }
+            Some(Aggregator::Min(ref field_name)) => {
+                panic!("currently Max, Min aggregator are not correctly supported");
+                format!("MIN({})", field_name)
+            }
             Some(Aggregator::Exist) => {
                 let foreign_primary_key = match self.relation {
                     Some(Relation::ManyToMany {
                         ref foreign_primary_key,
                         ..
                     }) => foreign_primary_key,
+
+                    // Some(Relation::OneToMany {
+                    //     ref foreign_key, ..
+                    // }) => foreign_key,
                     _ => return None,
                 };
 

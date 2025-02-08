@@ -42,6 +42,16 @@ pub mod update_into_tests {
         #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=sum(volumes))]
         pub volume_of_children: i64,
 
+        // #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=max(volumes))]
+        // pub max_volume_of_children: i64,
+
+        // #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=min(volumes))]
+        // pub min_volume_of_children: i64,
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=avg(volumes))]
+        pub avg_volume_of_children: i64,
+
+        // #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=exist)]
+        // pub has_children: bool,
         #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=count)]
         pub num_of_children: i64,
     }
@@ -61,6 +71,21 @@ pub mod update_into_tests {
         pub name: String,
 
         pub volumes: i64,
+    }
+
+    #[api_model(base = "/many-models", table = many_model_query_builder_test)]
+    pub struct ManyModels {
+        #[api_model(summary, primary_key, read_action = find_by_id)]
+        pub id: i64,
+        #[api_model(summary, auto = [insert])]
+        pub created_at: i64,
+        #[api_model(summary, auto = [insert, update])]
+        pub updated_at: i64,
+
+        #[api_model(summary, many_to_one = query_builder_test)]
+        pub model_id: i64,
+
+        pub name: String,
     }
 
     #[tokio::test]
@@ -350,7 +375,7 @@ pub mod update_into_tests {
         let child_name = format!("child-{}", now);
 
         repo_child
-            .insert(doc.id, child_name.clone(), 10)
+            .insert(doc.id, child_name.clone(), 5)
             .await
             .unwrap();
         repo_child
@@ -358,7 +383,7 @@ pub mod update_into_tests {
             .await
             .unwrap();
         repo_child
-            .insert(doc.id, child_name.clone(), 10)
+            .insert(doc.id, child_name.clone(), 15)
             .await
             .unwrap();
 
@@ -372,6 +397,9 @@ pub mod update_into_tests {
 
         assert_eq!(docs.volume_of_children, 30);
         assert_eq!(docs.num_of_children, 3);
+        // assert_eq!(docs.max_volume_of_children, 15);
+        // assert_eq!(docs.min_volume_of_children, 5);
+        assert_eq!(docs.avg_volume_of_children, 10);
         assert_eq!(docs.children.len(), 3);
     }
 }
