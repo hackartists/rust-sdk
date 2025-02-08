@@ -4,6 +4,7 @@ mod action;
 mod api_model;
 mod api_model_struct;
 mod enum_prop;
+#[cfg(feature = "server")]
 mod query_builder_functions;
 mod query_display;
 #[cfg(feature = "server")]
