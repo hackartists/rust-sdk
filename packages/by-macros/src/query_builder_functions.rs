@@ -13,12 +13,20 @@ pub fn build_order_by_functions(field_name: &str) -> proc_macro2::TokenStream {
 
     quote! {
         pub fn #asc_fn(mut self) -> Self {
-            self.order = by_types::Order::Asc(#field_id_str.to_string());
+            if let by_types::Order::Asc(ref mut field) = self.order {
+                field.push(format!(",{}", #field_id_str));
+            } else {
+                self.order = by_types::Order::Asc(vec![#field_id_str.to_string()]);
+            }
             self
         }
 
         pub fn #desc_fn(mut self) -> Self {
-            self.order = by_types::Order::Desc(#field_id_str.to_string());
+            if let by_types::Order::Desc(ref mut field) = self.order {
+                field.push(format!(",{}", #field_id_str));
+            } else {
+                self.order = by_types::Order::Desc(vec![#field_id_str.to_string()]);
+            }
             self
         }
     }
