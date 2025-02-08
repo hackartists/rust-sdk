@@ -1,5 +1,7 @@
 #![allow(dead_code, unused)]
 
+#[cfg(feature = "server")]
+use crate::query_builder_functions::*;
 use crate::{action::Actions, api_model::*, query_builder_functions::*};
 use convert_case::{Case, Casing};
 use indexmap::IndexMap;
