@@ -97,7 +97,7 @@ impl Conditions {
                 return (q, i);
             }
             Conditions::FalseBoolean(field) => {
-                let q = format!("{} != false", field);
+                let q = format!("{} = false", field);
                 return (q, i);
             }
         };
