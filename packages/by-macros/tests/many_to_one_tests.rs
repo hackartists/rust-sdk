@@ -95,6 +95,16 @@ pub mod many_to_one_tests {
 
         let mut q = TopicSummary::base_sql_with("title ilike $1");
         q.push_str(" order by id asc");
+        assert_eq!(
+            q,
+            r#"SELECT  COUNT(*) OVER() as total_count, p.id, p.created_at, p.updated_at, p.title, COALESCE(volume.value, 0) AS volume FROM topics_mto p 
+LEFT JOIN (
+    SELECT topic_id, SUM(amount) AS value
+    FROM votes_mto 
+    GROUP BY topic_id
+) volume ON p.id = volume.topic_id
+ WHERE title ilike $1  order by id asc"#
+        );
 
         let docs: Vec<TopicSummary> = sqlx::query(&q)
             .bind(format!("{}%", now))

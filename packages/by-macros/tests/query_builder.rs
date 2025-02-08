@@ -101,6 +101,19 @@ pub mod update_into_tests {
             "SELECT * FROM query_builder_test WHERE num BETWEEN $1 AND $2 AND name ILIKE $3 ORDER BY id ASC"
         );
 
+        let mut q = q.with_count();
+
+        assert_eq!(
+            q.sql(),
+            "SELECT COUNT(*) OVER() as total_count, * FROM query_builder_test WHERE num BETWEEN $1 AND $2 AND name ILIKE $3 ORDER BY id ASC"
+        );
+
+        let sq = QueryModelSummary::query_builder().sql();
+        assert_eq!(
+            sq,
+            "SELECT COUNT(*) OVER() as total_count, id, created_at, updated_at, name, num FROM query_builder_test "
+        );
+
         let doc: QueryModel = q
             .query()
             .map(|r: PgRow| r.into())
@@ -118,17 +131,23 @@ pub mod update_into_tests {
             .unwrap();
 
         assert_eq!(docs.len(), 12);
+        let mut total: i64 = 0;
 
         let docs: Vec<QueryModel> = q
             .clone()
             .limit(3)
             .query()
-            .map(|r: PgRow| r.into())
+            .map(|r: PgRow| {
+                use sqlx::Row;
+                total = r.get("total_count");
+                r.into()
+            })
             .fetch_all(&pool)
             .await
             .unwrap();
 
         assert_eq!(docs.len(), 3);
+        assert_eq!(total, 12);
         assert_eq!(docs[0].name, format!("{} 0-true", name));
         assert_eq!(docs[1].name, format!("{} 1-true", name));
         assert_eq!(docs[2].name, format!("{} 2-true", name));

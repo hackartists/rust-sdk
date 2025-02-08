@@ -1630,6 +1630,7 @@ impl ApiModel<'_> {
         let mut aggregate_args = vec![];
         let mut arg_names = vec![];
         let mut group_by = vec![];
+        let mut summary_fields = vec![];
 
         for field in self.summary_fields.iter() {
             let n = field
@@ -1638,34 +1639,48 @@ impl ApiModel<'_> {
                 .unwrap()
                 .to_string()
                 .to_case(self.rename);
+            let mut is_agg = false;
             let field = self.fields.get(&n).expect(&format!("Field not found: {n}"));
             let field_name = field.name.clone();
 
             if let Some(query) = field.aggregate_query(&field_name) {
+                is_agg = true;
                 aggregates.push(query)
             }
 
             if let Some(q) = field.aggregate_expose_query(&field_name) {
+                is_agg = true;
                 aggregated_fields.push(q);
             }
 
             if let Some(q) = field.aggregate_arg() {
+                is_agg = true;
                 aggregate_args.push(q);
             }
 
             if let Some(q) = field.aggregate_arg_name() {
+                is_agg = true;
                 arg_names.push(q);
             }
 
             if let Some(q) = field.group_by() {
                 group_by.push(q);
             }
+
+            if !is_agg {
+                summary_fields.push(n.clone());
+            }
         }
 
         let q = if aggregated_fields.len() > 0 {
             syn::LitStr::new(
                 &format!(
-                    "SELECT p.*, {} FROM {} p {}",
+                    "SELECT  COUNT(*) OVER() as total_count, {}, {} FROM {} p {}",
+                    summary_fields
+                        .iter()
+                        .map(|x| format!("p.{}", x))
+                        .collect::<Vec<_>>()
+                        .join(", "),
                     aggregated_fields.join(", "),
                     self.table_name,
                     aggregates.join(" "),
@@ -1674,16 +1689,24 @@ impl ApiModel<'_> {
             )
         } else {
             syn::LitStr::new(
-                &format!("SELECT * FROM {}", self.table_name),
+                &format!(
+                    "SELECT COUNT(*) OVER() as total_count, {} FROM {}",
+                    summary_fields
+                        .iter()
+                        .map(|x| format!("{}", x))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    self.table_name
+                ),
                 proc_macro2::Span::call_site(),
             )
         };
 
         let group_by = syn::LitStr::new(&group_by.join(" "), proc_macro2::Span::call_site());
-        let qc = syn::LitStr::new(
-            &format!("SELECT COUNT(*) FROM {}", self.table_name),
-            proc_macro2::Span::call_site(),
-        );
+        // let qc = syn::LitStr::new(
+        //     &format!("SELECT COUNT(*) FROM {}", self.table_name),
+        //     proc_macro2::Span::call_site(),
+        // );
 
         let query_builder = self.repo_query_struct_id();
         let summary_name = self.summary_struct_name();
@@ -1700,21 +1723,22 @@ impl ApiModel<'_> {
                     }
                 };
 
-                let count_query = if where_and_statements.is_empty() {
-                    format!("{}", #qc)
-                } else {
-                    let re = regex::Regex::new(r"(?i)\s*LIMIT\s+\$\d+\s*(OFFSET\s+\$\d+)?").unwrap();
-                    let where_and_statements = re.replace(where_and_statements, "").to_string();
+                // let count_query = if where_and_statements.is_empty() {
+                //     format!("{}", #qc)
+                // } else {
+                //     let re = regex::Regex::new(r"(?i)\s*LIMIT\s+\$\d+\s*(OFFSET\s+\$\d+)?").unwrap();
+                //     let where_and_statements = re.replace(where_and_statements, "").to_string();
 
-                    if where_and_statements.to_lowercase().starts_with("where") {
-                        format!("{} {} {}", #qc, where_and_statements, #group_by)
-                    } else {
-                        format!("{} WHERE {} {}", #qc, where_and_statements, #group_by)
-                    }
-                };
+                //     if where_and_statements.to_lowercase().starts_with("where") {
+                //         format!("{} {} {}", #qc, where_and_statements, #group_by)
+                //     } else {
+                //         format!("{} WHERE {} {}", #qc, where_and_statements, #group_by)
+                //     }
+                // };
 
 
-                format!("WITH data AS ({}) SELECT ({}) AS total_count, data.* FROM data", query, count_query)
+                // format!("WITH data AS ({}) SELECT ({}) AS total_count, data.* FROM data", query, count_query)
+                query
             }
 
             pub fn query_builder(#(#aggregate_args)*) -> #query_builder {
@@ -2255,10 +2279,24 @@ impl ApiModel<'_> {
                 pub fn sql(&self) -> String {
                     let w = self.build_where();
 
-                    if w.is_empty() {
+                    let mut query = if w.is_empty() {
                         format!("{} {}", self.base_sql, self.order)
                     } else {
                         format!("{} WHERE {} {}", self.base_sql, w, self.order)
+                    };
+
+                    if self.count && !query.starts_with("SELECT COUNT(*) OVER() as total_count") {
+                        query = query.replacen("SELECT", "SELECT COUNT(*) OVER() as total_count,", 1);
+                    }
+
+                    if let Some(limit) = self.limit {
+                        if let Some(page) = self.page {
+                            format!("{} LIMIT {} OFFSET {}", query, limit, (limit * (page - 1)))
+                        } else {
+                            format!("{} LIMIT {}", query, limit)
+                        }
+                    } else {
+                        query
                     }
                 }
 
@@ -2270,14 +2308,6 @@ impl ApiModel<'_> {
                 <sqlx::Postgres as sqlx::Database>::Arguments<'static>,
                 > {
                     let mut query = self.sql();
-
-                    if let Some(limit) = self.limit {
-                        query = if let Some(page) = self.page {
-                            format!("{} LIMIT {} OFFSET {}", query, limit, (limit * (page - 1)))
-                        } else {
-                            format!("{} LIMIT {}", query, limit)
-                        };
-                    }
 
                     let s: Box<String> = Box::new(query);
                     let query: &'static str = Box::leak(s);
