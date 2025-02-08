@@ -93,11 +93,12 @@ pub mod update_into_tests {
 
         let mut q = QueryModel::query_builder()
             .num_between(0, 5)
-            .name_contains(name.clone());
+            .name_contains(name.clone())
+            .order_by_id_asc();
 
         assert_eq!(
             q.sql(),
-            "SELECT * FROM query_builder_test WHERE num BETWEEN $1 AND $2 AND name ILIKE $3"
+            "SELECT * FROM query_builder_test WHERE num BETWEEN $1 AND $2 AND name ILIKE $3 ORDER BY id ASC"
         );
 
         let doc: QueryModel = q

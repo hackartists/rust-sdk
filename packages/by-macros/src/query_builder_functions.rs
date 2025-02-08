@@ -1,5 +1,29 @@
 use quote::quote;
 
+pub fn build_order_by_functions(field_name: &str) -> proc_macro2::TokenStream {
+    let field_id_str = syn::LitStr::new(field_name, proc_macro2::Span::call_site());
+    let asc_fn = syn::Ident::new(
+        &format!("order_by_{}_asc", field_name),
+        proc_macro2::Span::call_site(),
+    );
+    let desc_fn = syn::Ident::new(
+        &format!("order_by_{}_desc", field_name),
+        proc_macro2::Span::call_site(),
+    );
+
+    quote! {
+        pub fn #asc_fn(mut self) -> Self {
+            self.order = by_types::Order::Asc(#field_id_str.to_string());
+            self
+        }
+
+        pub fn #desc_fn(mut self) -> Self {
+            self.order = by_types::Order::Desc(#field_id_str.to_string());
+            self
+        }
+    }
+}
+
 pub fn build_string_query_functions(field_name: &str, ty: &str) -> proc_macro2::TokenStream {
     let ty: proc_macro2::TokenStream = ty.parse().unwrap();
     let n: proc_macro2::TokenStream = field_name.parse().unwrap();
@@ -88,10 +112,15 @@ pub fn build_string_query_functions(field_name: &str, ty: &str) -> proc_macro2::
     }
 }
 
-pub fn build_bigint_query_functions(field_name: &str, ty: &str) -> proc_macro2::TokenStream {
-    let ty: proc_macro2::TokenStream = ty.parse().unwrap();
+pub fn build_bigint_query_functions(field_name: &str, ty_str: &str) -> proc_macro2::TokenStream {
+    let ty: proc_macro2::TokenStream = ty_str.parse().unwrap();
     let n: proc_macro2::TokenStream = field_name.parse().unwrap();
     let field_id_str = syn::LitStr::new(field_name, proc_macro2::Span::call_site());
+    let bridge = if ty_str == "u64" {
+        quote! { as i64 }
+    } else {
+        quote! {}
+    };
 
     let eq_fn = syn::Ident::new(
         &format!("{}_equals", field_name),
@@ -130,46 +159,51 @@ pub fn build_bigint_query_functions(field_name: &str, ty: &str) -> proc_macro2::
 
     quote! {
         pub fn #eq_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::EqualsBigint(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::EqualsBigint(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #neq_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::NotEqualsBigint(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::NotEqualsBigint(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #gt_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::GreaterThanBigint(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::GreaterThanBigint(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #lt_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::LessThanBigint(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::LessThanBigint(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #gte_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::GreaterThanEqualsBigint(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::GreaterThanEqualsBigint(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #lte_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::LessThanEqualsBigint(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::LessThanEqualsBigint(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #between_fn(mut self, from: #ty, to: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::BetweenBigint(#field_id_str.to_string(),from,to));
+            self.conditions.push(by_types::Conditions::BetweenBigint(#field_id_str.to_string(),from #bridge,to #bridge));
             self
         }
     }
 }
 
-pub fn build_integer_query_functions(field_name: &str, ty: &str) -> proc_macro2::TokenStream {
-    let ty: proc_macro2::TokenStream = ty.parse().unwrap();
+pub fn build_integer_query_functions(field_name: &str, ty_str: &str) -> proc_macro2::TokenStream {
+    let ty: proc_macro2::TokenStream = ty_str.parse().unwrap();
     let n: proc_macro2::TokenStream = field_name.parse().unwrap();
     let field_id_str = syn::LitStr::new(field_name, proc_macro2::Span::call_site());
+    let bridge = if ty_str == "u32" {
+        quote! { as i32 }
+    } else {
+        quote! {}
+    };
 
     let eq_fn = syn::Ident::new(
         &format!("{}_equals", field_name),
@@ -208,37 +242,37 @@ pub fn build_integer_query_functions(field_name: &str, ty: &str) -> proc_macro2:
 
     quote! {
         pub fn #eq_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::EqualsInteger(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::EqualsInteger(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #neq_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::NotEqualsInteger(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::NotEqualsInteger(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #gt_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::GreaterThanInteger(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::GreaterThanInteger(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #lt_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::LessThanInteger(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::LessThanInteger(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #gte_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::GreaterThanEqualsInteger(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::GreaterThanEqualsInteger(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #lte_fn(mut self, #n: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::LessThanEqualsInteger(#field_id_str.to_string(),#n));
+            self.conditions.push(by_types::Conditions::LessThanEqualsInteger(#field_id_str.to_string(),#n #bridge));
             self
         }
 
         pub fn #between_fn(mut self, from: #ty, to: #ty) -> Self {
-            self.conditions.push(by_types::Conditions::BetweenInteger(#field_id_str.to_string(),from,to));
+            self.conditions.push(by_types::Conditions::BetweenInteger(#field_id_str.to_string(),from #bridge,to #bridge));
             self
         }
     }

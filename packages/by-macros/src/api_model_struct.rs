@@ -2159,25 +2159,31 @@ impl ApiModel<'_> {
                 "i32" | "u32" => {
                     let ty = ty.to_string();
                     let f = build_integer_query_functions(&v.name, &ty);
+                    let o = build_order_by_functions(&v.name);
 
                     functions.push(quote! {
                         #f
+                        #o
                     });
                 }
                 "i64" | "u64" => {
                     let ty = ty.to_string();
                     let f = build_bigint_query_functions(&v.name, &ty);
+                    let o = build_order_by_functions(&v.name);
 
                     functions.push(quote! {
                         #f
+                        #o
                     });
                 }
                 "String" => {
                     let ty = ty.to_string();
                     let f = build_string_query_functions(&v.name, &ty);
+                    let o = build_order_by_functions(&v.name);
 
                     functions.push(quote! {
                         #f
+                        #o
                     })
                 }
                 "bool" => {
@@ -2198,7 +2204,7 @@ impl ApiModel<'_> {
                 pub group_by: String,
                 pub count: bool,
                 pub conditions: Vec<by_types::Conditions>,
-                pub sort_field: Option<String>,
+                pub order: by_types::Order,
                 pub limit: Option<i32>,
                 pub page: Option<i32>,
             }
@@ -2248,9 +2254,9 @@ impl ApiModel<'_> {
                     let w = self.build_where();
 
                     if w.is_empty() {
-                        format!("{}", self.base_sql)
+                        format!("{} {}", self.base_sql, self.order)
                     } else {
-                        format!("{} WHERE {}", self.base_sql, w)
+                        format!("{} WHERE {} {}", self.base_sql, w, self.order)
                     }
                 }
 

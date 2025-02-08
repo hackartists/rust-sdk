@@ -105,3 +105,25 @@ impl Conditions {
         (q, i + 1)
     }
 }
+
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+#[serde(rename_all = "snake_case")]
+pub enum Order {
+    Asc(String),
+    Desc(String),
+    #[default]
+    None,
+}
+
+impl std::fmt::Display for Order {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Order::Asc(field) => format!("ORDER BY {} ASC", field),
+            Order::Desc(field) => format!("ORDER BY {} DESC", field),
+            Order::None => "".to_string(),
+        };
+
+        write!(f, "{}", s)
+    }
+}
