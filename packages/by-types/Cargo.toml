@@ -22,6 +22,7 @@ sqlx = { version = "0.8.*", features = [
 ], optional = true }
 validator = "0.20.0"
 tracing = "0.1.41"
+serde_json.workspace = true
 
 [features]
 server = [ "aide", "axum", "schemars", "sqlx"]

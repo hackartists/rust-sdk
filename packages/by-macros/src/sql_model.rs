@@ -28,6 +28,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let impl_functions = model.impl_functions();
     let impl_summary_functions = model.impl_summary_functions();
     let update_req_st = model.repo_update_request();
+    let query_req_st = model.repo_query_request();
 
     let output = quote! {
         impl #name {
@@ -62,6 +63,7 @@ pub fn sql_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         #from_trait
         #summary_trait
+        #query_req_st
     };
 
     tracing::trace!("Generated code: {}", output.to_string());

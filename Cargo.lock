@@ -867,6 +867,7 @@ dependencies = [
  "reqwest",
  "schemars",
  "serde",
+ "serde_json",
  "sqlx",
  "tracing",
  "validator",
