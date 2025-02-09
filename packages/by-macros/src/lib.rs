@@ -128,6 +128,26 @@ pub fn derive_api_model(input: TokenStream) -> TokenStream {
                     .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)).into())
             }
         }
+
+        impl serde::Serialize for #name {
+            fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                serializer.serialize_i32(self.clone() as i32)
+            }
+        }
+
+        impl<'de> serde::Deserialize<'de> for #name {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let value = i32::deserialize(deserializer)?;
+                Self::try_from(value)
+                    .map_err(|v| serde::de::Error::custom(format!("Failed to parse ApiModel: {}", v)))
+            }
+        }
     };
 
     tracing::trace!("ApiModel expanded: {}", expanded.to_string());
