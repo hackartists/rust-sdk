@@ -138,28 +138,30 @@ pub fn sign_request(req: RequestBuilder) -> RequestBuilder {
     }
 }
 
+pub fn add_authorization(token: &str) {
+    unsafe {
+        let mut headers = HEADERS.write().unwrap();
+        match headers.as_mut() {
+            Some(headers) => {
+                headers.insert("Authorization".to_string(), token.to_string());
+            }
+            None => {
+                let mut new_headers = HashMap::new();
+                new_headers.insert("Authorization".to_string(), token.to_string());
+                *headers = Some(new_headers);
+            }
+        }
+    }
+}
+
 pub fn extract_for_next_request(res: &reqwest::Response) {
     let headers = res.headers();
     if let Some(authz) = headers.get(reqwest::header::AUTHORIZATION) {
-        unsafe {
-            let mut headers = HEADERS.write().unwrap();
-            match headers.as_mut() {
-                Some(headers) => {
-                    headers.insert(
-                        "Authorization".to_string(),
-                        authz.to_str().unwrap().to_string(),
-                    );
-                }
-                None => {
-                    let mut new_headers = HashMap::new();
-                    new_headers.insert(
-                        "Authorization".to_string(),
-                        authz.to_str().unwrap().to_string(),
-                    );
-                    *headers = Some(new_headers);
-                }
-            }
-        }
+        let authz = authz.to_str().unwrap();
+        add_authorization(authz);
+    } else if let Some(authz) = headers.get("x-amzn-remapped-authorization") {
+        let authz = authz.to_str().unwrap();
+        add_authorization(authz);
     }
 }
 
