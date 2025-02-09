@@ -596,6 +596,13 @@ impl ApiModel<'_> {
     pub fn generate_summary_struct(&self) -> proc_macro2::TokenStream {
         let struct_name = self.name_id;
         let summary_fields = &self.summary_fields;
+        let s_fields = summary_fields
+            .iter()
+            .map(|field| {
+                let id = field.ident.clone();
+                quote! { #id }
+            })
+            .collect::<Vec<_>>();
 
         let summary_name = syn::Ident::new(&format!("{}Summary", struct_name), struct_name.span());
         let fields = summary_fields.iter().map(|field| {
@@ -609,6 +616,23 @@ impl ApiModel<'_> {
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo, sqlx::FromRow))]
             pub struct #summary_name {
                 #(#fields)*
+            }
+
+            impl From<#struct_name> for #summary_name {
+                fn from(item: #struct_name) -> Self {
+                    Self {
+                        #(#s_fields: item.#s_fields,)*
+                    }
+                }
+            }
+
+            impl Into<#struct_name> for #summary_name {
+                fn into(self) -> #struct_name {
+                    #struct_name {
+                        #(#s_fields: self.#s_fields,)*
+                        ..Default::default()
+                    }
+                }
             }
         }
     }
