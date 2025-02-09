@@ -58,9 +58,7 @@ mod empty_param_tests {
         // pub attributes: Vec<Attribute>,
     }
 
-    #[derive(
-        Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize, Default, ApiModel,
-    )]
+    #[derive(Debug, Clone, Eq, PartialEq, Default, ApiModel)]
     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
     #[serde(rename_all = "snake_case")]
     pub enum ProjectStatus {
@@ -70,9 +68,7 @@ mod empty_param_tests {
         Finish = 3,
     }
 
-    #[derive(
-        Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize, Default, ApiModel,
-    )]
+    #[derive(Debug, Clone, Eq, PartialEq, Default, ApiModel)]
     #[serde(rename_all = "snake_case")]
     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
     pub enum ProjectType {
@@ -81,9 +77,7 @@ mod empty_param_tests {
         Deliberation = 2,
     }
 
-    #[derive(
-        Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize, Default, ApiModel, Copy,
-    )]
+    #[derive(Debug, Clone, Eq, PartialEq, Default, ApiModel, Copy)]
     #[serde(rename_all = "snake_case")]
     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
     pub enum ProjectArea {
