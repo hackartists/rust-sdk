@@ -2146,23 +2146,31 @@ impl ApiModel<'_> {
         );
 
         quote! {
-            pub async fn insert_with_dependency(&self, #(#dep_args),*, #(#args),*) -> Result<()> {
+            pub async fn insert_with_dependency(&self, #(#dep_args),*, #(#args),*) -> Result<#name> {
                 use sqlx::Row;
                 use sqlx::postgres::PgRow;
                 let mut tx = self.pool.begin().await?;
 
 
-                let row: PgRow = sqlx::query(#q)
+                let row: Option<#name> = sqlx::query(#q)
                     #(#binds)*
-                .fetch_one(&mut *tx)
+                .map(|row: PgRow| {
+                    row.into()
+                })
+                .fetch_optional(&mut *tx)
                     .await?;
 
-                let id: i64 = row.try_get("id")?;
+                let row = match row {
+                    None => Err(sqlx::Error::RowNotFound),
+                    Some(row) => Ok(row)
+                }?;
+
+                let id: i64 = row.id;
 
                 #(#joined_query)*
 
                 tx.commit().await?;
-                Ok(())
+                Ok(row)
             }
         }
     }
@@ -2712,8 +2720,6 @@ impl ApiModel<'_> {
                     #(#option_binds)*
                     let row = q
                         #call_map
-                    .fetch_one(&self.pool)
-                        .await?;
                 },
                 quote! {
                     let mut i = #start;
@@ -2730,8 +2736,6 @@ impl ApiModel<'_> {
                         #(#binds)*;
                     #(#option_binds)*
                     q
-                    .execute(&self.pool)
-                        .await?;
                 },
             )
         } else {
@@ -2762,16 +2766,12 @@ impl ApiModel<'_> {
                     let row = sqlx::query(#q)
                         #(#binds)*
                     #call_map
-                    .fetch_one(&self.pool)
-                        .await?;
 
                 },
                 quote! {
                     tracing::trace!("insert query: {}", #q);
                     sqlx::query(#wq)
                         #(#binds)*
-                    .execute(&self.pool)
-                        .await?;
 
                 },
             )
@@ -2780,12 +2780,27 @@ impl ApiModel<'_> {
         let output = quote! {
             pub async fn insert(&self, #(#args),*) -> Result<#name> {
                 #inner
+                .fetch_one(&self.pool)
+                        .await?;
+
+                Ok(row)
+            }
+
+            pub async fn insert_with_tx<'e, 'c: 'e, E>(&self, tx: E, #(#args),*) -> Result<Option<#name>>
+            where
+                E: sqlx::Executor<'c, Database = sqlx::postgres::Postgres>,
+            {
+                #inner
+                .fetch_optional(tx)
+                        .await?;
 
                 Ok(row)
             }
 
             pub async fn insert_without_returning(&self, #(#args),*) -> Result<()> {
                 #without_inner
+                .execute(&self.pool)
+                        .await?;
 
                 Ok(())
             }

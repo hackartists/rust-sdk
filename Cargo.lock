@@ -37,7 +37,7 @@ dependencies = [
  "axum-extra",
  "bytes",
  "cfg-if",
- "http 1.2.0",
+ "http 1.1.0",
  "indexmap",
  "schemars",
  "serde",
@@ -352,7 +352,7 @@ dependencies = [
  "hex",
  "hmac",
  "http 0.2.12",
- "http 1.2.0",
+ "http 1.1.0",
  "once_cell",
  "percent-encoding",
  "sha2",
@@ -447,7 +447,7 @@ dependencies = [
  "aws-smithy-types",
  "bytes",
  "http 0.2.12",
- "http 1.2.0",
+ "http 1.1.0",
  "pin-project-lite",
  "tokio",
  "tracing",
@@ -465,7 +465,7 @@ dependencies = [
  "bytes-utils",
  "futures-core",
  "http 0.2.12",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 0.4.6",
  "http-body 1.0.1",
  "http-body-util",
@@ -511,7 +511,7 @@ checksum = "7319a086b79c3ff026a33a61e80f04fd3885fbb73237981ea080d21944e1cb1c"
 dependencies = [
  "base64 0.22.1",
  "bytes",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-serde",
  "query_map",
@@ -531,10 +531,10 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.5.2",
+ "hyper 1.6.0",
  "hyper-util",
  "itoa",
  "matchit 0.7.3",
@@ -568,10 +568,10 @@ dependencies = [
  "bytes",
  "form_urlencoded",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.5.2",
+ "hyper 1.6.0",
  "hyper-util",
  "itoa",
  "matchit 0.8.4",
@@ -601,7 +601,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
  "mime",
@@ -621,7 +621,7 @@ checksum = "df1362f362fd16024ae199c1970ce98f9661bf5ef94b9808fee734bc3698b733"
 dependencies = [
  "bytes",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
  "mime",
@@ -645,7 +645,7 @@ dependencies = [
  "form_urlencoded",
  "futures-util",
  "headers",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
  "mime",
@@ -800,10 +800,12 @@ dependencies = [
  "axum 0.8.1",
  "by-types",
  "dioxus-aws",
- "http 1.2.0",
+ "http 1.1.0",
+ "hyper 1.6.0",
  "jsonwebtoken",
  "lambda_http 0.13.0",
  "lambda_runtime 0.13.0",
+ "reqwest",
  "rest-api",
  "schemars",
  "serde",
@@ -1295,7 +1297,7 @@ dependencies = [
  "dioxus",
  "dioxus-cli-config",
  "dioxus-fullstack",
- "http 1.2.0",
+ "http 1.1.0",
  "lambda_http 0.12.0",
  "lambda_runtime 0.12.0",
  "tokio",
@@ -1435,8 +1437,8 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
- "http 1.2.0",
- "hyper 1.5.2",
+ "http 1.1.0",
+ "hyper 1.6.0",
  "once_cell",
  "parking_lot",
  "pin-project",
@@ -1544,7 +1546,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff7e1701a498e214dd0c4a99fdb71c256405fc019a5c91663678ac975dd26ae6"
 dependencies = [
  "chrono",
- "http 1.2.0",
+ "http 1.1.0",
  "lru",
  "rustc-hash",
  "thiserror 1.0.69",
@@ -2165,7 +2167,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "gloo-utils",
- "http 1.2.0",
+ "http 1.1.0",
  "js-sys",
  "pin-project",
  "serde",
@@ -2252,7 +2254,7 @@ dependencies = [
  "fnv",
  "futures-core",
  "futures-sink",
- "http 1.2.0",
+ "http 1.1.0",
  "indexmap",
  "slab",
  "tokio",
@@ -2305,7 +2307,7 @@ dependencies = [
  "base64 0.21.7",
  "bytes",
  "headers-core",
- "http 1.2.0",
+ "http 1.1.0",
  "httpdate",
  "mime",
  "sha1",
@@ -2317,7 +2319,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54b4a22553d4242c49fddb9ba998a99962b5cc6f22cb5a3482bec22522403ce4"
 dependencies = [
- "http 1.2.0",
+ "http 1.1.0",
 ]
 
 [[package]]
@@ -2378,9 +2380,9 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "1.2.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f16ca2af56261c99fba8bac40a10251ce8188205a4c448fbb745a2e4daa76fea"
+checksum = "21b9ddb458710bc376481b842f5da65cdf31522de232c1ca8146abce2a358258"
 dependencies = [
  "bytes",
  "fnv",
@@ -2405,7 +2407,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1efedce1fb8e6913f23e0c92de8e62cd5b772a67e7b3946df930a62566c93184"
 dependencies = [
  "bytes",
- "http 1.2.0",
+ "http 1.1.0",
 ]
 
 [[package]]
@@ -2416,7 +2418,7 @@ checksum = "793429d76616a256bcb62c2a2ec2bed781c8307e797e2598c50010f2bee2544f"
 dependencies = [
  "bytes",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "pin-project-lite",
 ]
@@ -2433,7 +2435,7 @@ version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f056c8559e3757392c8d091e796416e4649d8e49e88b8d76df6c002f05027fd"
 dependencies = [
- "http 1.2.0",
+ "http 1.1.0",
  "serde",
 ]
 
@@ -2475,15 +2477,15 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "1.5.2"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "256fb8d4bd6413123cc9d91832d78325c48ff41677595be797d90f42969beae0"
+checksum = "cc2b571658e38e0c01b1fdca3bbbe93c00d3d71693ff2770043f8c29bc7d6f80"
 dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
  "h2 0.4.7",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "httparse",
  "httpdate",
@@ -2517,8 +2519,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d191583f3da1305256f22463b9bb0471acad48a4e534a5218b9963e9c1f59b2"
 dependencies = [
  "futures-util",
- "http 1.2.0",
- "hyper 1.5.2",
+ "http 1.1.0",
+ "hyper 1.6.0",
  "hyper-util",
  "rustls 0.23.21",
  "rustls-pki-types",
@@ -2535,7 +2537,7 @@ checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
 dependencies = [
  "bytes",
  "http-body-util",
- "hyper 1.5.2",
+ "hyper 1.6.0",
  "hyper-util",
  "native-tls",
  "tokio",
@@ -2552,9 +2554,9 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
- "hyper 1.5.2",
+ "hyper 1.6.0",
  "pin-project-lite",
  "socket2",
  "tokio",
@@ -2833,10 +2835,10 @@ dependencies = [
  "encoding_rs",
  "futures",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.5.2",
+ "hyper 1.6.0",
  "lambda_runtime 0.12.0",
  "mime",
  "percent-encoding",
@@ -2860,10 +2862,10 @@ dependencies = [
  "encoding_rs",
  "futures",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.5.2",
+ "hyper 1.6.0",
  "lambda_runtime 0.13.0",
  "mime",
  "percent-encoding",
@@ -2885,11 +2887,11 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
  "http-serde",
- "hyper 1.5.2",
+ "hyper 1.6.0",
  "hyper-util",
  "lambda_runtime_api_client",
  "pin-project",
@@ -2913,11 +2915,11 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
  "http-serde",
- "hyper 1.5.2",
+ "hyper 1.6.0",
  "hyper-util",
  "lambda_runtime_api_client",
  "pin-project",
@@ -2940,10 +2942,10 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.5.2",
+ "hyper 1.6.0",
  "hyper-util",
  "tokio",
  "tower 0.4.13",
@@ -3167,7 +3169,7 @@ dependencies = [
  "bytes",
  "encoding_rs",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "httparse",
  "memchr",
  "mime",
@@ -3667,10 +3669,10 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2 0.4.7",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.5.2",
+ "hyper 1.6.0",
  "hyper-rustls 0.27.5",
  "hyper-tls",
  "hyper-util",
@@ -4134,9 +4136,9 @@ dependencies = [
  "dashmap",
  "futures",
  "gloo-net",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body-util",
- "hyper 1.5.2",
+ "hyper 1.6.0",
  "inventory",
  "js-sys",
  "once_cell",
@@ -4952,7 +4954,7 @@ dependencies = [
  "axum-core 0.4.5",
  "cookie",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "parking_lot",
  "pin-project-lite",
  "tower-layer",
@@ -4968,7 +4970,7 @@ dependencies = [
  "bitflags",
  "bytes",
  "futures-util",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
  "http-range-header",
@@ -4994,7 +4996,7 @@ dependencies = [
  "bitflags",
  "bytes",
  "futures-core",
- "http 1.2.0",
+ "http 1.1.0",
  "http-body 1.0.1",
  "pin-project-lite",
  "tokio",
@@ -5023,7 +5025,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50571505955aaa8b73f2f40489953d92b4d7ff9eb9b2a8b4e11fee0dcdb2760e"
 dependencies = [
  "async-trait",
- "http 1.2.0",
+ "http 1.1.0",
  "time",
  "tokio",
  "tower-cookies",
@@ -5044,7 +5046,7 @@ dependencies = [
  "axum-core 0.4.5",
  "base64 0.22.1",
  "futures",
- "http 1.2.0",
+ "http 1.1.0",
  "parking_lot",
  "rand",
  "serde",
@@ -5195,7 +5197,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "data-encoding",
- "http 1.2.0",
+ "http 1.1.0",
  "httparse",
  "log",
  "rand",
@@ -5213,7 +5215,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "data-encoding",
- "http 1.2.0",
+ "http 1.1.0",
  "httparse",
  "log",
  "rand",
