@@ -1,5 +1,3 @@
-use std::future::Future;
-
 #[allow(missing_docs)]
 pub struct LambdaAdapter<'a, R, S> {
     service: S,
