@@ -1,5 +1,5 @@
 #![allow(static_mut_refs)]
-use std::{collections::HashMap, error::Error, sync::RwLock};
+use std::{collections::HashMap, error::Error, future::Future, pin::Pin, sync::RwLock};
 
 use reqwest::RequestBuilder;
 use serde::Serialize;
@@ -16,12 +16,25 @@ pub trait RequestHooker {
     fn before_request(&self, req: RequestBuilder) -> RequestBuilder;
 }
 
+pub trait ApiService {
+    fn handle(
+        &mut self,
+        req: RequestBuilder,
+    ) -> Pin<Box<dyn Future<Output = Result<reqwest::Response, reqwest::Error>> + Send>>;
+}
+
 static mut SIGNER: Option<RwLock<Box<dyn Signer>>> = None;
 static mut MESSAGE: Option<String> = None;
 // FIXME: It causes dropping Signal of dioxus
 // static mut HOOKS: RwLock<Vec<Box<dyn RequestHooker>>> = RwLock::new(Vec::new());
 static mut HEADERS: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
+static mut API_SERIVICE: Option<Box<dyn ApiService>> = None;
 
+pub fn set_api_service(service: Box<dyn ApiService>) {
+    unsafe {
+        API_SERIVICE = Some(service);
+    }
+}
 // pub fn add_hook<T: RequestHooker + 'static>(hook: T) {
 //     unsafe {
 //         HOOKS.write().unwrap().push(Box::new(hook));
@@ -184,7 +197,13 @@ pub async fn send(req: RequestBuilder) -> reqwest::Result<reqwest::Response> {
     // let req = run_hooks(req);
     let req = sign_request(req);
     let req = load_headers(req);
-    let res = req.send().await;
+
+    let api_service = unsafe { API_SERIVICE.as_mut() };
+    let res = match api_service {
+        Some(api_service) => api_service.handle(req).await,
+        None => req.send().await,
+    };
+
     if let Ok(res) = &res {
         extract_for_next_request(res);
     }
