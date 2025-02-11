@@ -46,6 +46,7 @@ pub enum Authorization {
     UserSig(Signature),
     Bearer { claims: Claims },
     Basic { username: String, password: String },
+    ServerKey,
     SecretApiKey,
 }
 
@@ -87,6 +88,10 @@ pub async fn authorization_middleware(
                         Some(verify_secret(value)?)
                     }
                 }
+                "x-server-key" => {
+                    tracing::debug!("server key");
+                    Some(verify_server_key(value)?)
+                }
                 _ => {
                     tracing::debug!("Unknown scheme: {}", scheme.unwrap_or_default());
                     None
@@ -103,6 +108,22 @@ pub async fn authorization_middleware(
     req.extensions_mut().insert(None::<Authorization>);
 
     return Ok(next.run(req).await);
+}
+
+pub fn verify_server_key(value: Option<&str>) -> Result<Authorization, StatusCode> {
+    if value.is_none() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let server_key = value.unwrap();
+    let server_server_key = option_env!("SERVER_KEY")
+        .expect("You must set SERVER_KEY to enable `server key` authentication");
+
+    if server_key == server_server_key {
+        return Ok(Authorization::ServerKey);
+    }
+
+    Err(StatusCode::UNAUTHORIZED)
 }
 
 pub fn verify_secret(value: Option<&str>) -> Result<Authorization, StatusCode> {
