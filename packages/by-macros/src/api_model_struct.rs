@@ -3229,7 +3229,7 @@ END AS {}"#,
                         Some(format!(
                             r#"
 COALESCE(
-    json_agg(to_jsonb({})) FILTER (WHERE {}.id IS NOT NULL), '[]'
+    jsonb_agg(to_jsonb({})) FILTER (WHERE {}.id IS NOT NULL), '[]'
 ) AS {}
 "#,
                             bound_name, bound_name, bound_name
@@ -3244,7 +3244,7 @@ COALESCE(
                         Some(format!(
                             r#"
 COALESCE(
-    json_agg(to_jsonb({})) FILTER (WHERE {}.id IS NOT NULL), '[]'
+    jsonb_agg(to_jsonb({})) FILTER (WHERE {}.id IS NOT NULL), '[]'
 ) AS {}
 "#,
                             bound_name, bound_name, bound_name
