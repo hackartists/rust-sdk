@@ -971,6 +971,11 @@ impl ApiModel<'_> {
                     self
                 }
 
+                /// Returns the size(i32) of the query
+                pub fn size(&self) -> i32 {
+                    self.size as i32
+                }
+
                 pub fn page(&self) -> i32 {
                     self.bookmark
                         .as_ref()
