@@ -50,10 +50,27 @@ pub fn api_model_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     tracing::trace!("Client impl: {}", client_impl.to_string());
     let input = parse_macro_input!(input_cloned as syn::ItemStruct);
     let stripped_input = strip_struct_attributes(&input);
+    let n = &model.name;
+    let struct_comment = format!(
+        r#"
+/// {n} is a generated struct that represents the model
+///
+/// For making API calls related to this model, use `{n}::get_client(endpoint: &str)`.
+/// It will returns {n}Client struct that implements the API calls.
+///
+/// In server side, you can use `{n}::get_repository()` to interact with the database.
+/// Recommend to use `{n}Repository` to insert or update the model.
+/// To query the model, use `{n}::query_builder()`.
+/// For more detail, refer to the documentation of the query builder.
+"#,
+    )
+    .parse::<proc_macro2::TokenStream>()
+    .unwrap();
 
     let output = quote! {
         #db_structs
 
+        #struct_comment
         #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default, Eq, PartialEq)]
         #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
         #stripped_input
