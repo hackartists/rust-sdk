@@ -1,3 +1,25 @@
+#![allow(non_snake_case)]
+use dioxus::prelude::*;
+
+#[derive(Debug, Clone)]
+pub struct ChartTheme {
+    pub stack_bar_color_pool: Vec<String>,
+}
+
+impl Default for ChartTheme {
+    fn default() -> Self {
+        ChartTheme {
+            stack_bar_color_pool: vec![
+                "#FF8585", "#FF9E37", "#FFDE61", "#9CEF69", "#AAFFEE", "#8D9EF6", "#B4B4B4",
+                "#7F7F7F", "#BCBD22", "#17BECF",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ColorTheme {
     pub background: String,
@@ -123,5 +145,21 @@ impl Default for InputColorTheme {
         InputColorTheme {
             primary: "#212231".to_string(),
         }
+    }
+}
+
+pub struct BiyardTheme;
+
+impl BiyardTheme {
+    pub fn init() {
+        use_context_provider(|| ChartTheme::default());
+        use_context_provider(|| ColorTheme::default());
+        use_context_provider(|| ServiceColorTheme::default());
+        use_context_provider(|| IconColorTheme::default());
+        use_context_provider(|| ButtonColorTheme::default());
+        use_context_provider(|| TextColorTheme::default());
+        use_context_provider(|| CardColorTheme::default());
+        use_context_provider(|| PopupColorTheme::default());
+        use_context_provider(|| InputColorTheme::default());
     }
 }

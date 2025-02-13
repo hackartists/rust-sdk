@@ -29,7 +29,6 @@ use dioxus::prelude::*;
 /// It also shows a shadow effect on the element starting with the class name "hover-effect".
 #[component]
 pub fn HoverEffects() -> Element {
-    #[cfg(feature = "web")]
     use_effect(move || {
         tracing::debug!("shadow mounted");
         use wasm_bindgen::prelude::*;
