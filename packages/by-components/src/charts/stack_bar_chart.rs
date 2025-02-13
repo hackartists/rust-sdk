@@ -36,7 +36,6 @@ pub fn StackBarChart(
 
     rsx! {
         div {
-            class: "w-full flex flex-col gap-[10px] rounded-[8px] overflow-hidden",
             id: "{id}",
             height,
             onmounted: move |_el| {
@@ -86,12 +85,22 @@ fn inject_d3_chart(
         prev_x
     });
 
-    //     Closure::wrap(Box::new(move |v: JsValue| -> i32 {
-    //     let data: StackBarData = from_value(v).unwrap_throw();
-    // }) as Box<dyn FnMut(JsValue) -> i32>);
+    let acc = Rc::new(RefCell::new(0));
+    let remained_width = Rc::new(RefCell::new(width));
 
     let handle_width = closure(move |data: StackBarData| -> i32 {
-        ((data.value as f32 / total as f32) * width as f32) as i32
+        let mut acc = acc.borrow_mut();
+        *acc += data.value;
+
+        let w = ((data.value as f32 / total as f32) * width as f32) as i32;
+        let mut full_width = remained_width.borrow_mut();
+
+        if *acc == total {
+            width - *full_width
+        } else {
+            *full_width -= w;
+            w
+        }
     });
 
     let handle_color = closure(move |_v: StackBarData| -> String {

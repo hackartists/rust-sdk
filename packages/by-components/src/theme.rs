@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 #[derive(Debug, Clone)]
 pub struct ChartTheme {
     pub stack_bar_color_pool: Vec<String>,
+    pub horizontal_bar_gradient_color: Vec<&'static str>,
 }
 
 impl Default for ChartTheme {
@@ -16,6 +17,7 @@ impl Default for ChartTheme {
             .iter()
             .map(|s| s.to_string())
             .collect(),
+            horizontal_bar_gradient_color: vec!["#85AEE2", "#2A60D3"],
         }
     }
 }
