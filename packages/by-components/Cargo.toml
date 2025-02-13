@@ -9,10 +9,12 @@ repository = "https://github.com/biyard/rust-sdk/tree/main/packages/by-component
 
 [dependencies]
 dioxus.workspace = true
-wasm-bindgen = { version = "0.2.*", optional = true }
-wasm-bindgen-futures = { version = "0.4.*", optional = true }
-web-sys = { version = "0.3.72", features=["Navigator", "HtmlCollection"], optional = true}
+wasm-bindgen = { version = "0.2.*", features = ["serde-serialize"] }
+wasm-bindgen-futures = { version = "0.4.*" }
+web-sys = { version = "0.3.*", features=["Navigator", "HtmlCollection","EventTarget"] }
 tracing = { version = "0.1.40" }
+serde_json.workspace = true
+serde.workspace = true
+js-sys = "0.3.77"
+serde-wasm-bindgen = "0.6.5"
 
-[features]
-web = ["web-sys", "wasm-bindgen", "wasm-bindgen-futures"]
