@@ -60,4 +60,10 @@ extern "C" {
 
     #[wasm_bindgen(method, js_name = duration)]
     pub fn duration(this: &D3Selection, time: i32) -> D3Selection;
+
+    #[wasm_bindgen(method, js_name = duration)]
+    pub fn duration_with_closure(this: &D3Selection, time: &Function) -> D3Selection;
+
+    #[wasm_bindgen(method, js_name = delay)]
+    pub fn delay(this: &D3Selection, time: &Function) -> D3Selection;
 }

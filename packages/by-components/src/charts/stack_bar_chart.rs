@@ -3,10 +3,13 @@
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use dioxus::prelude::*;
-use serde_wasm_bindgen::{from_value, to_value};
-use wasm_bindgen::{prelude::*, JsCast, JsValue};
+use serde_wasm_bindgen::to_value;
+use wasm_bindgen::JsCast;
 
-use crate::{charts::d3, theme::ChartTheme};
+use crate::{
+    charts::{d3, utils::closure},
+    theme::ChartTheme,
+};
 
 #[derive(Props, Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct StackBarData {
@@ -54,7 +57,7 @@ pub fn StackBarChart(
     }
 }
 
-pub fn inject_d3_chart(
+fn inject_d3_chart(
     id: &str,
     width: i32,
     height: i32,
@@ -74,34 +77,52 @@ pub fn inject_d3_chart(
     let index = Rc::new(RefCell::new(0));
     let colors = Arc::new(colors.clone());
     const TEXT_LEFT_PADDING: i32 = 17;
+    let duration = 1000;
 
-    let handle_start_offset = Closure::wrap(Box::new(move |v: JsValue| -> i32 {
-        let data: StackBarData = from_value(v).unwrap_throw();
+    let handle_start_offset = closure(move |data: StackBarData| -> i32 {
         let mut x_offset = x_offset.borrow_mut();
         let prev_x = *x_offset;
         *x_offset += ((data.value as f32 / total as f32) * width as f32) as i32;
         prev_x
-    }) as Box<dyn FnMut(JsValue) -> i32>);
+    });
 
-    let handle_width = Closure::wrap(Box::new(move |v: JsValue| -> i32 {
-        let data: StackBarData = from_value(v).unwrap_throw();
+    //     Closure::wrap(Box::new(move |v: JsValue| -> i32 {
+    //     let data: StackBarData = from_value(v).unwrap_throw();
+    // }) as Box<dyn FnMut(JsValue) -> i32>);
+
+    let handle_width = closure(move |data: StackBarData| -> i32 {
         ((data.value as f32 / total as f32) * width as f32) as i32
-    }) as Box<dyn FnMut(JsValue) -> i32>);
+    });
 
-    let handle_color = Closure::wrap(Box::new(move |_v: JsValue| -> String {
+    let handle_color = closure(move |_v: StackBarData| -> String {
         let mut i = index.borrow_mut();
         let color = colors[*i % colors.len()].clone();
         *i = (*i + 1) % colors.len();
         color
-    }) as Box<dyn FnMut(JsValue) -> String>);
+    });
 
-    let handle_text_offset = Closure::wrap(Box::new(move |v: JsValue| -> i32 {
-        let data: StackBarData = from_value(v).unwrap_throw();
+    let handle_text_offset = closure(move |data: StackBarData| -> i32 {
         let mut text_offset = text_offset.borrow_mut();
         let prev_x = *text_offset;
         *text_offset += ((data.value as f32 / total as f32) * width as f32) as i32;
         prev_x + TEXT_LEFT_PADDING
-    }) as Box<dyn FnMut(JsValue) -> i32>);
+    });
+
+    let sum = Rc::new(RefCell::new(0));
+    let handle_delay = closure(move |data: StackBarData| -> i32 {
+        let mut sum = sum.borrow_mut();
+        let delay_percent = *sum as f32 / total as f32;
+
+        *sum += data.value;
+
+        (duration as f32 * delay_percent) as i32
+    });
+
+    let handle_duration = closure(move |data: StackBarData| -> i32 {
+        let percent = data.value as f32 / total as f32;
+
+        (duration as f32 * percent) as i32
+    });
 
     let bars = svg
         .select_all("rect")
@@ -115,12 +136,11 @@ pub fn inject_d3_chart(
         .attr_with_i32("height", height);
 
     bars.transition()
-        .duration(1000) // Animation duration (1 second)
+        .delay(handle_delay.as_ref().unchecked_ref())
+        .duration_with_closure(handle_duration.as_ref().unchecked_ref())
         .attr_with_closure("width", handle_width.as_ref().unchecked_ref());
 
-    let handle_text = Closure::wrap(Box::new(|v: JsValue| -> String {
-        from_value::<StackBarData>(v).unwrap_throw().label
-    }) as Box<dyn FnMut(JsValue) -> String>);
+    let handle_text = closure(|data: StackBarData| -> String { data.label });
 
     let texts = svg
         .select_all("text")
@@ -138,13 +158,15 @@ pub fn inject_d3_chart(
 
     texts
         .transition()
-        .duration(1000)
+        .duration(duration)
         .attr_with_closure("x", handle_text_offset.as_ref().unchecked_ref());
 
     handle_start_offset.forget();
     handle_width.forget();
     handle_color.forget();
     handle_text.forget();
+    handle_duration.forget();
+    handle_delay.forget();
 
     svg.node().into()
 }
