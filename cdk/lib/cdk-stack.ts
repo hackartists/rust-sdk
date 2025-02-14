@@ -95,19 +95,22 @@ export class CdkStack extends cdk.Stack {
     }
 
     const hostedZoneDomainName = process.env.BASE_DOMAIN || "";
+    const hostzedZoneId = process.env.HOSTED_ZONE_ID || "";
 
-    const hostedZone = route53.HostedZone.fromLookup(this, "HostedZone", {
-      domainName: hostedZoneDomainName,
-    });
+    var hostedZone;
 
-    const zone = route53.HostedZone.fromHostedZoneAttributes(
-      this,
-      "zone-attribute",
-      {
-        zoneName: domain,
-        hostedZoneId: hostedZone.hostedZoneId,
-      },
-    );
+    if (hostzedZoneId !== "") {
+      hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, "HostedZone", {
+        hostedZoneId: hostzedZoneId,
+        zoneName: hostedZoneDomainName,
+      });
+    } else {
+       hostedZone  = route53.HostedZone.fromLookup(this, "HostedZone", {
+        domainName: hostedZoneDomainName,
+      });
+
+    }
+
 
     const certificate = new certificatemanager.DnsValidatedCertificate(
       this,
@@ -510,6 +513,22 @@ export class CdkStack extends cdk.Stack {
       this,
       "Distribution",
       distributionProps,
+    );
+
+    console.log(
+      {
+        zoneName: domain,
+        hostedZoneId: hostedZone.hostedZoneId,
+      },
+    )
+
+    const zone = route53.HostedZone.fromHostedZoneAttributes(
+      this,
+      "zone-attribute",
+      {
+        zoneName: domain,
+        hostedZoneId: hostedZone.hostedZoneId,
+      },
     );
 
     new route53.ARecord(this, "IpV4Record", {
