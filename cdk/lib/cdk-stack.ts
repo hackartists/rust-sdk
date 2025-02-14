@@ -515,13 +515,6 @@ export class CdkStack extends cdk.Stack {
       distributionProps,
     );
 
-    console.log(
-      {
-        zoneName: domain,
-        hostedZoneId: hostedZone.hostedZoneId,
-      },
-    )
-
     const zone = route53.HostedZone.fromHostedZoneAttributes(
       this,
       "zone-attribute",
