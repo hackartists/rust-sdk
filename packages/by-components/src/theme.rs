@@ -3,7 +3,11 @@ use dioxus::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct ChartTheme {
-    pub stack_bar_color_pool: Vec<String>,
+    pub stack_bar_color_pool: Vec<&'static str>,
+    pub horizontal_bar_gradient_colors: Vec<&'static str>,
+
+    // Pie chart renders each pie based on key color and adjust opacity.
+    pub pie_chart_colors: Vec<&'static str>,
 }
 
 impl Default for ChartTheme {
@@ -12,10 +16,9 @@ impl Default for ChartTheme {
             stack_bar_color_pool: vec![
                 "#FF8585", "#FF9E37", "#FFDE61", "#9CEF69", "#AAFFEE", "#8D9EF6", "#B4B4B4",
                 "#7F7F7F", "#BCBD22", "#17BECF",
-            ]
-            .iter()
-            .map(|s| s.to_string())
-            .collect(),
+            ],
+            horizontal_bar_gradient_colors: vec!["#85AEE2", "#2A60D3"],
+            pie_chart_colors: vec!["#D4DFF6", "#2A60D3"],
         }
     }
 }
