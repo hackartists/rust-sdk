@@ -25,7 +25,6 @@ impl StackBarData {
 
 #[component]
 pub fn StackBarChart(
-    id: String,
     height: String,
     data: Vec<StackBarData>,
     #[props(extends = GlobalAttributes)] attributes: Vec<Attribute>,
@@ -36,13 +35,11 @@ pub fn StackBarChart(
 
     rsx! {
         div {
-            id: "{id}",
             height,
             onmounted: move |_el| {
                 use dioxus::web::WebEventExt;
                 let el = _el.as_web_event();
                 let svg = inject_d3_chart(
-                    &id,
                     el.client_width(),
                     el.client_height(),
                     &color_pool,
@@ -57,16 +54,14 @@ pub fn StackBarChart(
 }
 
 fn inject_d3_chart(
-    id: &str,
     width: i32,
     height: i32,
-    colors: &Vec<String>,
+    colors: &Vec<&'static str>,
     data: &Vec<StackBarData>,
 ) -> web_sys::Node {
-    tracing::debug!("injecting d3 chart: {} {} {}", id, width, height);
+    tracing::debug!("injecting d3 chart:  {} {}", width, height);
     let total = data.iter().map(|d| d.value).sum::<i32>();
-    let svg = d3::select_svg(&format!("#{}", id))
-        .append("svg")
+    let svg = d3::create("svg")
         .attr_with_i32("width", width)
         .attr_with_i32("height", height);
     let data = to_value(&data).unwrap();
@@ -105,9 +100,9 @@ fn inject_d3_chart(
 
     let handle_color = closure(move |_v: StackBarData| -> String {
         let mut i = index.borrow_mut();
-        let color = colors[*i % colors.len()].clone();
+        let color = colors[*i % colors.len()];
         *i = (*i + 1) % colors.len();
-        color
+        color.to_string()
     });
 
     let handle_text_offset = closure(move |data: StackBarData| -> i32 {

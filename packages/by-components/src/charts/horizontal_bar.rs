@@ -5,7 +5,6 @@ use crate::{charts::d3, theme::ChartTheme};
 
 #[component]
 pub fn HorizontalBar(
-    id: String,
     value: i64,
     height: String,
     max_value: i64,
@@ -13,11 +12,10 @@ pub fn HorizontalBar(
     children: Element,
 ) -> Element {
     let chart_theme: ChartTheme = try_use_context().unwrap_or_default();
-    let colors = chart_theme.horizontal_bar_gradient_color;
+    let colors = chart_theme.horizontal_bar_gradient_colors;
 
     rsx! {
         div {
-            id: "{id}",
             height,
             onmounted: move |_el| {
                 use dioxus::web::WebEventExt;
@@ -26,7 +24,6 @@ pub fn HorizontalBar(
                 let height = el.client_height();
                 tracing::debug!("width: {}, height: {}", width, height);
                 let svg = inject_svg(
-                    &id,
                     value as f64 / max_value as f64 * width as f64,
                     height,
                     &colors,
@@ -39,15 +36,14 @@ pub fn HorizontalBar(
     }
 }
 
-fn inject_svg(id: &str, width: f64, height: i32, colors: &Vec<&'static str>) -> web_sys::Node {
-    let svg = d3::select_svg(&format!("#{}", id))
-        .append("svg")
+fn inject_svg(width: f64, height: i32, colors: &Vec<&'static str>) -> web_sys::Node {
+    let svg = d3::create("svg")
         .attr_with_f64("width", width)
         .attr_with_i32("height", height);
 
     let defs = svg.append("defs");
 
-    let clippath_id = format!("rounded-right-{}", id);
+    let clippath_id = "rounded-right";
     let clippath = defs.append("clipPath").attr_with_str("id", &clippath_id);
 
     let cliprect = clippath

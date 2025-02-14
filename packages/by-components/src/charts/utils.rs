@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use serde_wasm_bindgen::from_value;
 use wasm_bindgen::{prelude::Closure, JsValue, UnwrapThrowExt};
 
@@ -27,9 +29,56 @@ where
     I: serde::de::DeserializeOwned,
 {
     let h = Closure::wrap(Box::new(move |v: JsValue| -> JsValue {
+        // web_sys::console::log_1(&v);
         let data: I = from_value(v).unwrap_throw();
-        f(data).into()
+        let v = f(data).into();
+        // web_sys::console::log_1(&v);
+        v
     }) as Box<dyn FnMut(JsValue) -> JsValue>);
 
     h
+}
+
+pub fn closure_with_index<F, I, R>(mut f: F) -> Closure<dyn FnMut(JsValue, usize) -> JsValue>
+where
+    F: FnMut(I, usize) -> R + 'static,
+    R: Into<JsValue>,
+    I: serde::de::DeserializeOwned,
+{
+    let h = Closure::wrap(Box::new(move |v: JsValue, i: usize| -> JsValue {
+        let data: I = from_value(v).unwrap_throw();
+        f(data, i).into()
+    }) as Box<dyn FnMut(JsValue, usize) -> JsValue>);
+
+    h
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Color {
+    pub r: i32,
+    pub g: i32,
+    pub b: i32,
+    pub opacity: f32,
+}
+
+impl Color {
+    pub fn new(r: i32, g: i32, b: i32, opacity: f32) -> Self {
+        Self { r, g, b, opacity }
+    }
+
+    pub fn to_css(&self) -> String {
+        format!("rgba({}, {}, {}, {})", self.r, self.g, self.b, self.opacity)
+    }
+}
+
+impl FromStr for Color {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim_start_matches('#');
+        let r = i32::from_str_radix(&s[0..2], 16).map_err(|_| ())?;
+        let g = i32::from_str_radix(&s[2..4], 16).map_err(|_| ())?;
+        let b = i32::from_str_radix(&s[4..6], 16).map_err(|_| ())?;
+        Ok(Self::new(r, g, b, 1.0))
+    }
 }
