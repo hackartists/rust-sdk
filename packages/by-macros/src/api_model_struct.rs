@@ -3431,16 +3431,6 @@ COALESCE(
             Some(Relation::OneToMany { .. }) => return Some("GROUP BY p.id".to_string()),
             _ => None,
         }
-
-        // if self.aggregator.is_none() && self.rust_type.starts_with("Vec") {
-        //     match self.relation {
-        //         Some(Relation::ManyToMany { .. }) => return Some("GROUP BY p.id".to_string()),
-        //         Some(Relation::OneToMany { .. }) => return Some("GROUP BY p.id".to_string()),
-        //         _ => None,
-        //     }
-        // } else {
-        //     None
-        // }
     }
 
     /// It will be bound {bound_name.value}.
@@ -3449,51 +3439,14 @@ COALESCE(
             Some(Relation::OneToMany {
                 ref table_name,
                 ref foreign_key,
-            }) => {
-                //                 if self.aggregator.is_none() {
-                //                     let query = format!(
-                //                         r#"
-                // LEFT JOIN {} {} ON p.id = {}.{}
-                // "#,
-                //                         table_name, bound_name, bound_name, foreign_key,
-                //                     );
-                //                     return Some(query);
-                //                 }
-
-                (table_name, foreign_key)
-            }
+            }) => (table_name, foreign_key),
             Some(Relation::ManyToMany {
                 ref table_name,
                 ref foreign_table_name,
                 ref foreign_primary_key,
                 ref foreign_reference_key,
                 ..
-            }) => {
-                let joined_table_name = format!("{}j", bound_name);
-                //     if self.aggregator.is_none() {
-                //         let query = format!(
-                //             r#"
-                // LEFT JOIN {} {} ON p.id = {}.{}
-                // LEFT JOIN {} {} ON {}.{} = {}.id
-                // "#,
-                //             // reference
-                //             table_name,
-                //             joined_table_name,
-                //             joined_table_name,
-                //             foreign_reference_key,
-                //             // foreign
-                //             foreign_table_name,
-                //             bound_name,
-                //             joined_table_name,
-                //             foreign_primary_key,
-                //             bound_name,
-                //         );
-
-                //         return Some(query);
-                //     }
-
-                (table_name, foreign_reference_key)
-            }
+            }) => (table_name, foreign_reference_key),
             _ => return None,
         };
 
@@ -3504,11 +3457,9 @@ COALESCE(
             Some(Aggregator::Sum(ref field_name)) => format!("SUM({})", field_name),
             Some(Aggregator::Avg(ref field_name)) => format!("AVG({})", field_name),
             Some(Aggregator::Max(ref field_name)) => {
-                panic!("currently Max, Min aggregator are not correctly supported");
                 format!("MAX({})", field_name)
             }
             Some(Aggregator::Min(ref field_name)) => {
-                panic!("currently Max, Min aggregator are not correctly supported");
                 format!("MIN({})", field_name)
             }
             Some(Aggregator::Exist) => return None,
@@ -3963,14 +3914,16 @@ impl ApiField {
         let sql_field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
 
         match self.aggregator {
-            Some(Aggregator::Sum(_))
-            | Some(Aggregator::Avg(_))
-            | Some(Aggregator::Max(_))
-            | Some(Aggregator::Min(_)) => {
+            Some(Aggregator::Max(_)) | Some(Aggregator::Min(_)) => {
+                return quote! {
+                    #n: row.get::<i64, _>(#sql_field_name)
+                };
+            }
+            Some(Aggregator::Sum(_)) | Some(Aggregator::Avg(_)) => {
                 let rust_type = self.rust_type_id();
 
                 return quote! {
-                    #n: row.try_get::<bigdecimal::BigDecimal, _>(#sql_field_name).unwrap_or_default().to_string().parse::<#rust_type>().unwrap()
+                    #n: row.get::<bigdecimal::BigDecimal, _>(#sql_field_name).to_string().parse::<#rust_type>().unwrap()
                 };
             }
             _ => {}
@@ -3981,11 +3934,11 @@ impl ApiField {
         if &self.rust_type == "String" && &self.r#type != "TEXT" {
             if &self.r#type == "BIGINT" {
                 return quote! {
-                    #n: row.try_get::<i64, _>(#sql_field_name).unwrap_or_default().to_string()
+                    #n: row.get::<i64, _>(#sql_field_name).to_string()
                 };
             } else if &self.r#type == "INTEGER" {
                 return quote! {
-                    #n: row.try_get::<i32, _>(#sql_field_name).unwrap_or_default().to_string()
+                    #n: row.get::<i32, _>(#sql_field_name).to_string()
                 };
             }
         } else if (&self.rust_type == "u64" || &self.rust_type == "u32") {
@@ -3993,11 +3946,11 @@ impl ApiField {
 
             if &self.r#type == "BIGINT" {
                 return quote! {
-                    #n: row.try_get::<i64, _>(#sql_field_name).unwrap_or_default() as #ty
+                    #n: row.get::<i64, _>(#sql_field_name) as #ty
                 };
             } else if &self.r#type == "INTEGER" {
                 return quote! {
-                    #n: row.try_get::<i32, _>(#sql_field_name).unwrap_or_default() as #ty
+                    #n: row.get::<i32, _>(#sql_field_name) as #ty
                 };
             }
         }
@@ -4015,7 +3968,10 @@ impl ApiField {
                             vec![]
                         }
                     },
-                    _ => vec![]
+                    e => {
+                        tracing::debug!("empty vector for {}: {:?}", #field_name, e);
+                        vec![]
+                    }
                 }
             };
         }
