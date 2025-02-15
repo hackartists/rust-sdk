@@ -45,13 +45,15 @@ pub mod update_into_tests {
         #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=max(volumes))]
         pub max_volume_of_children: i64,
 
-        // #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=min(volumes))]
-        // pub min_volume_of_children: i64,
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=min(volumes))]
+        pub min_volume_of_children: i64,
+
         #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=avg(volumes))]
         pub avg_volume_of_children: f64,
 
-        // #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=exist)]
-        // pub has_children: bool,
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=exist)]
+        pub has_children: bool,
+
         #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=count)]
         pub num_of_children: i64,
     }
@@ -85,11 +87,11 @@ pub mod update_into_tests {
         #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=sum(volumes))]
         pub volume_of_children: i64,
 
-        // #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=max(volumes))]
-        // pub max_volume_of_children: i64,
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=max(volumes))]
+        pub max_volume_of_children: i64,
 
-        // #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=min(volumes))]
-        // pub min_volume_of_children: i64,
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=min(volumes))]
+        pub min_volume_of_children: i64,
         #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=avg(volumes))]
         pub avg_volume_of_children: i64,
 
@@ -440,11 +442,7 @@ pub mod update_into_tests {
         let docs: QueryModel = QueryModel::query_builder()
             .name_contains(test_name.clone())
             .query()
-            .map(|r: PgRow| {
-                use sqlx::Row;
-                let i: i64 = r.get("max_volume_of_children");
-                r.into()
-            })
+            .map(|r: PgRow| r.into())
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -452,7 +450,8 @@ pub mod update_into_tests {
         assert_eq!(docs.volume_of_children, 30);
         assert_eq!(docs.num_of_children, 3);
         assert_eq!(docs.max_volume_of_children, 15, "{:?}", test_name);
-        // assert_eq!(docs.min_volume_of_children, 5);
+        assert_eq!(docs.min_volume_of_children, 5);
+        assert_eq!(docs.has_children, true);
         assert_eq!(docs.avg_volume_of_children, 10.0);
         assert_eq!(docs.children.len(), 3);
 

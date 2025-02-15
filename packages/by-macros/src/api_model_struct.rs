@@ -110,7 +110,7 @@ impl ApiModel<'_> {
                 }
             }
 
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
             pub struct #client_name {
                 pub endpoint: String,
             }
@@ -255,7 +255,7 @@ impl ApiModel<'_> {
                 #[cfg(feature = "server")]
                 action_requests.push(quote! {
                     #validator_derive
-                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
                     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                     pub struct #request_struct_name {
                         #(#fields)*
@@ -274,7 +274,7 @@ impl ApiModel<'_> {
                 #[cfg(not(feature = "server"))]
                 action_requests.push(quote! {
                     #validator_derive
-                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
                     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                     pub struct #request_struct_name {
                         #(#fields)*
@@ -333,7 +333,7 @@ impl ApiModel<'_> {
         };
 
         let output = quote! {
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
             #[serde(rename_all = "snake_case")]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub enum #action_name {
@@ -550,7 +550,7 @@ impl ApiModel<'_> {
             );
             (
                 quote! {
-                    #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+                    #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
                     #[serde(rename_all = "kebab-case")]
                     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                     pub enum #read_action_enum_name {
@@ -567,7 +567,7 @@ impl ApiModel<'_> {
 
         quote! {
             #validator_derive
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq, by_macros::QueryDisplay)]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub struct #read_action_struct_name {
                 #read_action_type_field
@@ -612,7 +612,7 @@ impl ApiModel<'_> {
         });
 
         quote! {
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo, sqlx::FromRow))]
             pub struct #summary_name {
                 #(#fields)*
@@ -898,7 +898,7 @@ impl ApiModel<'_> {
             );
             (
                 quote! {
-                    #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+                    #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
                     #[serde(rename_all = "kebab-case")]
                     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                     pub enum #read_action_enum_name {
@@ -929,7 +929,7 @@ impl ApiModel<'_> {
 
         quote! {
             #validator_derive
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq, by_macros::QueryDisplay)]
             #[serde(rename_all = "kebab-case")]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub struct #query_name {
@@ -1087,7 +1087,7 @@ impl ApiModel<'_> {
 
                 action_requests.push(quote! {
                 #validator_derive
-                #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+                #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
                 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                 pub struct #request_struct_name {
                     #(#fields)*
@@ -1145,7 +1145,7 @@ impl ApiModel<'_> {
 
         quote! {
 
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
             #[serde(rename_all = "snake_case")]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub enum #action_name {
@@ -1344,7 +1344,7 @@ impl ApiModel<'_> {
         }
 
         let output = quote! {
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq, by_macros::QueryDisplay)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, by_macros::QueryDisplay)]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             #[serde(tag = "param-type", rename_all = "kebab-case")]
             pub enum #name {
@@ -3916,14 +3916,14 @@ impl ApiField {
         match self.aggregator {
             Some(Aggregator::Max(_)) | Some(Aggregator::Min(_)) => {
                 return quote! {
-                    #n: row.get::<i64, _>(#sql_field_name)
+                    #n: row.try_get::<i64, _>(#sql_field_name).unwrap_or_default()
                 };
             }
             Some(Aggregator::Sum(_)) | Some(Aggregator::Avg(_)) => {
                 let rust_type = self.rust_type_id();
 
                 return quote! {
-                    #n: row.get::<bigdecimal::BigDecimal, _>(#sql_field_name).to_string().parse::<#rust_type>().unwrap()
+                    #n: row.try_get::<bigdecimal::BigDecimal, _>(#sql_field_name).unwrap_or_default().to_string().parse::<#rust_type>().unwrap()
                 };
             }
             _ => {}
