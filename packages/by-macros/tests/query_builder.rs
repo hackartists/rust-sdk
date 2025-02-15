@@ -56,6 +56,55 @@ pub mod update_into_tests {
         pub num_of_children: i64,
     }
 
+    #[api_model(base = "/models", table = query_builder_test)]
+    pub struct QueryModelWithMany {
+        #[api_model(summary, primary_key, read_action = find_by_id)]
+        pub id: i64,
+        #[api_model(summary, auto = [insert])]
+        pub created_at: i64,
+        #[api_model(summary, auto = [insert, update])]
+        pub updated_at: i64,
+
+        #[api_model(summary, query_action = search)]
+        pub name: String,
+
+        #[api_model(query_action = search)]
+        pub description: String,
+
+        #[api_model(query_action = list_by_status)]
+        pub status: i32,
+
+        #[api_model(summary)]
+        pub num: i64,
+
+        pub is_like: bool,
+
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id)]
+        pub children: Vec<ChildModels>,
+
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=sum(volumes))]
+        pub volume_of_children: i64,
+
+        // #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=max(volumes))]
+        // pub max_volume_of_children: i64,
+
+        // #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=min(volumes))]
+        // pub min_volume_of_children: i64,
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=avg(volumes))]
+        pub avg_volume_of_children: i64,
+
+        // #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=exist)]
+        // pub has_children: bool,
+        #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=count)]
+        pub num_of_children: i64,
+
+        #[api_model(many_to_many = many_join_table, table_name = many_model_query_builder_test, foreign_reference_key = model_id, foreign_primary_key = many_id, aggregator=exist)]
+        pub has_many: bool,
+
+        #[api_model(many_to_many = many_join_table, foreign_table_name = many_model_query_builder_test, foreign_reference_key = model_id, foreign_primary_key = many_id)]
+        pub many: Vec<ManyModelsSummary>,
+    }
+
     #[api_model(base = "/:model-id/models", table = child_model_query_builder_test)]
     pub struct ChildModels {
         #[api_model(summary, primary_key, read_action = find_by_id)]
@@ -82,9 +131,10 @@ pub mod update_into_tests {
         #[api_model(summary, auto = [insert, update])]
         pub updated_at: i64,
 
-        #[api_model(summary, many_to_one = query_builder_test)]
-        pub model_id: i64,
+        #[api_model(many_to_many = many_join_table, foreign_table_name = query_builder_test, foreign_reference_key = many_id, foreign_primary_key = model_id)]
+        pub models: Vec<QueryModelWithManySummary>,
 
+        #[api_model(summary)]
         pub name: String,
     }
 
@@ -401,5 +451,57 @@ pub mod update_into_tests {
         // assert_eq!(docs.min_volume_of_children, 5);
         assert_eq!(docs.avg_volume_of_children, 10);
         assert_eq!(docs.children.len(), 3);
+
+        // Many to Many tests
+        let many_repo = ManyModels::get_repository(pool.clone());
+        let res = many_repo.create_table().await;
+        assert!(res.is_ok(), "{:?}", res);
+
+        let summary: QueryModelWithManySummary = QueryModelWithManySummary::query_builder()
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        let data: QueryModelWithMany = QueryModelWithMany::query_builder(0)
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(data.many.len(), 0);
+        assert_eq!(data.has_many, false);
+
+        many_repo
+            .insert_with_dependency(doc.id, "many-1".to_string())
+            .await
+            .unwrap();
+        many_repo
+            .insert_with_dependency(doc.id, "many-2".to_string())
+            .await
+            .unwrap();
+        let m = many_repo
+            .insert_with_dependency(doc.id, "many-3".to_string())
+            .await
+            .unwrap();
+
+        let data: QueryModelWithMany = QueryModelWithMany::query_builder(m.id)
+            .id_equals(doc.id)
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            data.many.len(),
+            3,
+            "many_id: {:?} model_id {:?}",
+            m.id,
+            doc.id
+        );
+        assert_eq!(data.has_many, true);
     }
 }
