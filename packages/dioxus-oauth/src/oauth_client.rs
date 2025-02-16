@@ -68,7 +68,6 @@ impl<'a> OAuthClient<'a> {
         let auth_url = auth_url.to_string();
         tracing::debug!("auth_url: {:?}", auth_url);
 
-        #[cfg(feature = "web")]
         {
             use wasm_bindgen::JsCast;
 
