@@ -233,7 +233,7 @@ pub fn verify_usersig(value: Option<&str>) -> Result<Authorization, StatusCode> 
 
         let msg = format!(
             "{}-{}",
-            option_env!("DOMAIN").expect("You must set DOMAIN environment"),
+            option_env!("AUTH_DOMAIN").expect("You must set AUTH_DOMAIN environment"),
             timestamp
         );
         let sig = rest_api::Signature::from_str(signature).map_err(|e| {
