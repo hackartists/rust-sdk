@@ -1,12 +1,16 @@
 use dioxus::prelude::*;
 
+use crate::theme::ColorTheme;
+
 #[component]
-pub fn CubeLoader(
-    #[props(default = "#3B3E59ff".to_string())] cube_color: String,
-    #[props(default = "#ffffffff".to_string())] cube_border_color: String,
-) -> Element {
+pub fn CubeLoader() -> Element {
+    let color: ColorTheme = try_use_context().unwrap_or_default();
+    let cube_color = &color.loader.primary;
+    let cube_border_color = &color.loader.secondary;
+
     let size = "80px";
     let css = include_str!("cube_loader.css");
+    let face_classes = ["shadow", "bottom", "top", "left", "right", "back", "front"];
 
     rsx! {
         style { "{css}" }
@@ -17,40 +21,12 @@ pub fn CubeLoader(
             div { class: "cube-wrapper",
                 div { class: "cube",
                     div { class: "cube-faces", width: size, height: size,
-                        div {
-                            class: "cube-face shadow",
-                            background: "{cube_color}",
-                            border: "solid 1px {cube_border_color}",
-                        }
-                        div {
-                            class: "cube-face bottom",
-                            background: "{cube_color}",
-                            border: "solid 1px {cube_border_color}",
-                        }
-                        div {
-                            class: "cube-face top",
-                            background: "{cube_color}",
-                            border: "solid 1px {cube_border_color}",
-                        }
-                        div {
-                            class: "cube-face left",
-                            background: "{cube_color}",
-                            border: "solid 1px {cube_border_color}",
-                        }
-                        div {
-                            class: "cube-face right",
-                            background: "{cube_color}",
-                            border: "solid 1px {cube_border_color}",
-                        }
-                        div {
-                            class: "cube-face back",
-                            background: "{cube_color}",
-                            border: "solid 1px {cube_border_color}",
-                        }
-                        div {
-                            class: "cube-face front",
-                            background: "{cube_color}",
-                            border: "solid 1px {cube_border_color}",
+                        for face_class in face_classes.iter() {
+                            div {
+                                class: "cube-face {face_class}",
+                                background: "{cube_color}",
+                                border: "solid 1px {cube_border_color}",
+                            }
                         }
                     }
                 }

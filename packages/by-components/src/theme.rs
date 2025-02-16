@@ -24,6 +24,21 @@ impl Default for ChartTheme {
 }
 
 #[derive(Debug, Clone)]
+pub struct LoaderColorTheme {
+    pub primary: String,
+    pub secondary: String,
+}
+
+impl Default for LoaderColorTheme {
+    fn default() -> Self {
+        LoaderColorTheme {
+            primary: "#3B3E59ff".to_string(),
+            secondary: "#ffffffff".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ColorTheme {
     pub background: String,
     pub icon: IconColorTheme,
@@ -33,6 +48,8 @@ pub struct ColorTheme {
     pub popup: PopupColorTheme,
     pub input: InputColorTheme,
     pub services: ServiceColorTheme,
+    pub loader: LoaderColorTheme,
+    pub chart: ChartTheme,
 }
 
 impl Default for ColorTheme {
@@ -46,6 +63,8 @@ impl Default for ColorTheme {
             popup: PopupColorTheme::default(),
             input: InputColorTheme::default(),
             services: ServiceColorTheme::default(),
+            loader: LoaderColorTheme::default(),
+            chart: ChartTheme::default(),
         }
     }
 }
@@ -157,12 +176,5 @@ impl BiyardTheme {
     pub fn init() {
         use_context_provider(|| ChartTheme::default());
         use_context_provider(|| ColorTheme::default());
-        use_context_provider(|| ServiceColorTheme::default());
-        use_context_provider(|| IconColorTheme::default());
-        use_context_provider(|| ButtonColorTheme::default());
-        use_context_provider(|| TextColorTheme::default());
-        use_context_provider(|| CardColorTheme::default());
-        use_context_provider(|| PopupColorTheme::default());
-        use_context_provider(|| InputColorTheme::default());
     }
 }

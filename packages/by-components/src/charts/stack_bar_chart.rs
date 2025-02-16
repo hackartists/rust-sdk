@@ -8,7 +8,7 @@ use wasm_bindgen::JsCast;
 
 use crate::{
     charts::{d3, utils::closure},
-    theme::ChartTheme,
+    theme::ColorTheme,
 };
 
 #[derive(Props, Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -30,8 +30,8 @@ pub fn StackBarChart(
     #[props(extends = GlobalAttributes)] attributes: Vec<Attribute>,
     children: Element,
 ) -> Element {
-    let chart_theme: ChartTheme = try_use_context().unwrap_or_default();
-    let color_pool = chart_theme.stack_bar_color_pool;
+    let color: ColorTheme = try_use_context().unwrap_or_default();
+    let color_pool = color.chart.stack_bar_color_pool;
 
     rsx! {
         div {

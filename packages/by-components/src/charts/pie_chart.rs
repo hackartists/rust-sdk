@@ -13,7 +13,7 @@ use crate::{
         d3::{self, D3Arc},
         utils::closure,
     },
-    theme::ChartTheme,
+    theme::ColorTheme,
 };
 
 #[component]
@@ -23,8 +23,8 @@ pub fn PieChart(
     #[props(extends = GlobalAttributes)] attributes: Vec<Attribute>,
     children: Element,
 ) -> Element {
-    let chart_theme: ChartTheme = try_use_context().unwrap_or_default();
-    let colors = chart_theme.pie_chart_colors;
+    let color: ColorTheme = try_use_context().unwrap_or_default();
+    let colors = color.chart.pie_chart_colors;
 
     rsx! {
         div {
