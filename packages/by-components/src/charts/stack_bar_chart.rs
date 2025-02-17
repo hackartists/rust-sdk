@@ -25,6 +25,7 @@ impl StackBarData {
 
 #[component]
 pub fn StackBarChart(
+    id: String,
     height: String,
     data: Vec<StackBarData>,
     #[props(extends = GlobalAttributes)] attributes: Vec<Attribute>,
@@ -33,23 +34,27 @@ pub fn StackBarChart(
     let chart_theme: ChartTheme = try_use_context().unwrap_or_default();
     let color_pool = chart_theme.stack_bar_color_pool;
 
-    rsx! {
-        div {
-            height,
-            onmounted: move |_el| {
-                use dioxus::web::WebEventExt;
-                let el = _el.as_web_event();
-                let svg = inject_d3_chart(
-                    el.client_width(),
-                    el.client_height(),
-                    &color_pool,
-                    &data,
-                );
-                el.append_child(&svg).unwrap();
-            },
-            ..attributes,
-            {children}
+    use_effect({
+        let id = id.clone();
+        move || {
+            let el = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id(&id)
+                .unwrap();
+            let svg = inject_d3_chart(
+                el.client_width(),
+                el.client_height(),
+                &color_pool,
+                data.clone(),
+            );
+            el.append_child(&svg).unwrap();
         }
+    });
+
+    rsx! {
+        div { id, height, ..attributes, {children} }
     }
 }
 
@@ -57,9 +62,9 @@ fn inject_d3_chart(
     width: i32,
     height: i32,
     colors: &Vec<&'static str>,
-    data: &Vec<StackBarData>,
+    data: Vec<StackBarData>,
 ) -> web_sys::Node {
-    tracing::debug!("injecting d3 chart:  {} {}", width, height);
+    tracing::debug!("injecting d3 chart:  {} {} {:?}", width, height, data);
     let total = data.iter().map(|d| d.value).sum::<i32>();
     let svg = d3::create("svg")
         .attr_with_i32("width", width)
@@ -90,10 +95,16 @@ fn inject_d3_chart(
         let w = ((data.value as f32 / total as f32) * width as f32) as i32;
         let mut full_width = remained_width.borrow_mut();
 
-        if *acc == total {
+        tracing::debug!("this line come11 : {} {} {}", *acc, *full_width, width);
+
+        if width == *full_width {
+            width
+        } else if *acc == total {
+            tracing::debug!("this line come1 : {} {}", width, *full_width);
             width - *full_width
         } else {
             *full_width -= w;
+            tracing::debug!("this line come2 : {}", w);
             w
         }
     });

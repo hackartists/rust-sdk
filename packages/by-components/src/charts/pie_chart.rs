@@ -18,6 +18,7 @@ use crate::{
 
 #[component]
 pub fn PieChart(
+    id: String,
     height: String,
     data: Vec<PieChartData>,
     #[props(extends = GlobalAttributes)] attributes: Vec<Attribute>,
@@ -26,26 +27,36 @@ pub fn PieChart(
     let chart_theme: ChartTheme = try_use_context().unwrap_or_default();
     let colors = chart_theme.pie_chart_colors;
 
-    rsx! {
-        div {
-            height,
-            onmounted: move |_el| {
-                use dioxus::web::WebEventExt;
-                let el = _el.as_web_event();
-                let width = el.client_width();
-                let height = el.client_height();
-                tracing::debug!("width: {}, height: {}", width, height);
-                let svg = inject_svg(
-                    width,
-                    height,
-                    data.clone(),
-                    colors.iter().map(|e| e.to_string()).collect::<Vec<_>>(),
-                );
-                el.append_child(&svg).unwrap();
-            },
-            ..attributes,
-            {children}
+    use_effect(use_reactive(&data, {
+        let id = id.clone();
+        let colors = colors.clone();
+        move |data| {
+            let el = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id(&id)
+                .unwrap();
+
+            while let Some(child) = el.first_child() {
+                el.remove_child(&child).unwrap();
+            }
+
+            let width = el.client_width();
+            let height = el.client_height();
+
+            let svg = inject_svg(
+                width,
+                height,
+                data.clone(),
+                colors.iter().map(|e| e.to_string()).collect::<Vec<_>>(),
+            );
+            el.append_child(&svg).unwrap();
         }
+    }));
+
+    rsx! {
+        div { id, height, ..attributes, {children} }
     }
 }
 

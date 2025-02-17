@@ -5,6 +5,7 @@ use crate::{charts::d3, theme::ChartTheme};
 
 #[component]
 pub fn HorizontalBar(
+    id: String,
     value: i64,
     height: String,
     max_value: i64,
@@ -14,25 +15,34 @@ pub fn HorizontalBar(
     let chart_theme: ChartTheme = try_use_context().unwrap_or_default();
     let colors = chart_theme.horizontal_bar_gradient_colors;
 
-    rsx! {
-        div {
-            height,
-            onmounted: move |_el| {
-                use dioxus::web::WebEventExt;
-                let el = _el.as_web_event();
-                let width = el.client_width();
-                let height = el.client_height();
-                tracing::debug!("width: {}, height: {}", width, height);
-                let svg = inject_svg(
-                    value as f64 / max_value as f64 * width as f64,
-                    height,
-                    &colors,
-                );
-                el.append_child(&svg).unwrap();
-            },
-            ..attributes,
-            {children}
+    use_effect(use_reactive((&value, &max_value), {
+        let id = id.clone();
+        move |(value, max_value)| {
+            let el = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id(&id)
+                .unwrap();
+
+            while let Some(child) = el.first_child() {
+                el.remove_child(&child).unwrap();
+            }
+
+            let width = el.client_width();
+            let height = el.client_height();
+
+            let svg = inject_svg(
+                value as f64 / max_value as f64 * width as f64,
+                height,
+                &colors,
+            );
+            el.append_child(&svg).unwrap();
         }
+    }));
+
+    rsx! {
+        div { id, height, ..attributes, {children} }
     }
 }
 
