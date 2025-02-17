@@ -32,12 +32,17 @@ pub fn HorizontalBar(
             let width = el.client_width();
             let height = el.client_height();
 
-            let svg = inject_svg(
-                value as f64 / max_value as f64 * width as f64,
-                height,
-                &colors,
-            );
-            el.append_child(&svg).unwrap();
+            if max_value <= 0 {
+                let svg = inject_svg(0.0, height, &colors);
+                el.append_child(&svg).unwrap();
+            } else {
+                let svg = inject_svg(
+                    value as f64 / max_value as f64 * width as f64,
+                    height,
+                    &colors,
+                );
+                el.append_child(&svg).unwrap();
+            }
         }
     }));
 

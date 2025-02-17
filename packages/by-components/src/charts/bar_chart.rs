@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use crate::{charts::d3, theme::ChartTheme};
+use crate::{charts::d3, theme::ColorTheme};
 use dioxus::prelude::*;
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
@@ -15,8 +15,8 @@ pub fn BarChart(
     #[props(extends = GlobalAttributes)] attributes: Vec<Attribute>,
     children: Element,
 ) -> Element {
-    let chart_theme: ChartTheme = try_use_context().unwrap_or_default();
-    let colors = chart_theme.bar_chart_colors;
+    let color: ColorTheme = try_use_context().unwrap_or_default();
+    let colors = color.chart.bar_chart_colors;
 
     rsx! {
         div {

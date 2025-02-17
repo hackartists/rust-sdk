@@ -95,16 +95,12 @@ fn inject_d3_chart(
         let w = ((data.value as f32 / total as f32) * width as f32) as i32;
         let mut full_width = remained_width.borrow_mut();
 
-        tracing::debug!("this line come11 : {} {} {}", *acc, *full_width, width);
-
         if width == *full_width {
             width
         } else if *acc == total {
-            tracing::debug!("this line come1 : {} {}", width, *full_width);
             width - *full_width
         } else {
             *full_width -= w;
-            tracing::debug!("this line come2 : {}", w);
             w
         }
     });
