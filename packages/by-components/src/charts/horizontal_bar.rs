@@ -36,11 +36,8 @@ pub fn HorizontalBar(
                 let svg = inject_svg(0.0, height, &colors);
                 el.append_child(&svg).unwrap();
             } else {
-                let svg = inject_svg(
-                    value as f64 / max_value as f64 * width as f64,
-                    height,
-                    &colors,
-                );
+                let bar_width = (value as f64 / max_value as f64).min(1.0) * width as f64;
+                let svg = inject_svg(bar_width, height, &colors);
                 el.append_child(&svg).unwrap();
             }
         }
@@ -54,7 +51,8 @@ pub fn HorizontalBar(
 fn inject_svg(width: f64, height: i32, colors: &Vec<&'static str>) -> web_sys::Node {
     let svg = d3::create("svg")
         .attr_with_f64("width", width)
-        .attr_with_i32("height", height);
+        .attr_with_i32("height", height)
+        .attr_with_str("viewBox", &format!("0 0 {} {}", width, height));
 
     let defs = svg.append("defs");
 
@@ -75,6 +73,7 @@ fn inject_svg(width: f64, height: i32, colors: &Vec<&'static str>) -> web_sys::N
         .attr_with_str("x2", "100%")
         .attr_with_str("y2", "0%");
 
+    // Adding color stops for the gradient
     for (i, color) in colors.into_iter().enumerate() {
         let pos = format!("{}%", (100 * i) / (colors.len().saturating_sub(1)).max(1));
         tracing::debug!("Gradient color stop {} at {}", color, pos);
@@ -85,14 +84,17 @@ fn inject_svg(width: f64, height: i32, colors: &Vec<&'static str>) -> web_sys::N
             .attr_with_str("stop-color", color);
     }
 
+    // Creating the actual bar
     let bars = svg
         .append("rect")
         .attr_with_i32("x", 0)
         .attr_with_i32("y", 0)
         .attr_with_i32("height", height)
-        .attr_with_str("fill", "url(#barGradientColor)")
-        .attr_with_str("clip-path", format!("url(#{clippath_id})").as_str());
+        .attr_with_str("fill", "url(#barGradientColor)");
+    // clip-path 제거
+    //.attr_with_str("clip-path", format!("url(#{clippath_id})").as_str());
 
+    // Animate the width of the bar
     bars.transition()
         .duration(1000)
         .attr_with_f64("width", width);
