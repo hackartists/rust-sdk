@@ -36,11 +36,8 @@ pub fn HorizontalBar(
                 let svg = inject_svg(0.0, height, &colors);
                 el.append_child(&svg).unwrap();
             } else {
-                let svg = inject_svg(
-                    value as f64 / max_value as f64 * width as f64,
-                    height,
-                    &colors,
-                );
+                let bar_width = (value as f64 / max_value as f64).min(1.0) * width as f64;
+                let svg = inject_svg(bar_width, height, &colors);
                 el.append_child(&svg).unwrap();
             }
         }
@@ -54,7 +51,8 @@ pub fn HorizontalBar(
 fn inject_svg(width: f64, height: i32, colors: &Vec<&'static str>) -> web_sys::Node {
     let svg = d3::create("svg")
         .attr_with_f64("width", width)
-        .attr_with_i32("height", height);
+        .attr_with_i32("height", height)
+        .attr_with_str("viewBox", &format!("0 0 {} {}", width, height));
 
     let defs = svg.append("defs");
 
@@ -90,8 +88,7 @@ fn inject_svg(width: f64, height: i32, colors: &Vec<&'static str>) -> web_sys::N
         .attr_with_i32("x", 0)
         .attr_with_i32("y", 0)
         .attr_with_i32("height", height)
-        .attr_with_str("fill", "url(#barGradientColor)")
-        .attr_with_str("clip-path", format!("url(#{clippath_id})").as_str());
+        .attr_with_str("fill", "url(#barGradientColor)");
 
     bars.transition()
         .duration(1000)
