@@ -12,7 +12,7 @@ use simple_asn1::{
 
 pub const IDENTITY_KEY: &str = "identity";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FirebaseWallet {
     pub principal: Option<String>,
     pub firebase: FirebaseService,

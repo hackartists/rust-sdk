@@ -100,7 +100,7 @@ pub fn PopupZone() -> Element {
             },
             if popup.is_opened() {
                 div {
-                    class: "relative rounded-[12px] border-[#292B3C] border-[1px] p-[25px] min-w-[350px]",
+                    class: "relative rounded-[12px] border-[#292B3C] border-[1px] p-[25px] min-w-[350px] max-[500px]:w-full max-[500px]:mx-[20px]",
                     background: "{color_theme.popup.background}",
                     onclick: move |e| {
                         e.stop_propagation();

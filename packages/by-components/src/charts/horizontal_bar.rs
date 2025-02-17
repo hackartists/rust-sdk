@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 
-use crate::{charts::d3, theme::ChartTheme};
+use crate::{charts::d3, theme::ColorTheme};
 
 #[component]
 pub fn HorizontalBar(
@@ -12,8 +12,8 @@ pub fn HorizontalBar(
     #[props(extends = GlobalAttributes)] attributes: Vec<Attribute>,
     children: Element,
 ) -> Element {
-    let chart_theme: ChartTheme = try_use_context().unwrap_or_default();
-    let colors = chart_theme.horizontal_bar_gradient_colors;
+    let color: ColorTheme = try_use_context().unwrap_or_default();
+    let colors = color.chart.horizontal_bar_gradient_colors;
 
     use_effect(use_reactive((&value, &max_value), {
         let id = id.clone();

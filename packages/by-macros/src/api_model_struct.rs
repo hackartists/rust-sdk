@@ -110,7 +110,7 @@ impl ApiModel<'_> {
                 }
             }
 
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
             pub struct #client_name {
                 pub endpoint: String,
             }
@@ -255,7 +255,7 @@ impl ApiModel<'_> {
                 #[cfg(feature = "server")]
                 action_requests.push(quote! {
                     #validator_derive
-                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
                     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                     pub struct #request_struct_name {
                         #(#fields)*
@@ -274,7 +274,7 @@ impl ApiModel<'_> {
                 #[cfg(not(feature = "server"))]
                 action_requests.push(quote! {
                     #validator_derive
-                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
                     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                     pub struct #request_struct_name {
                         #(#fields)*
@@ -333,7 +333,7 @@ impl ApiModel<'_> {
         };
 
         let output = quote! {
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
             #[serde(rename_all = "snake_case")]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub enum #action_name {
@@ -550,7 +550,7 @@ impl ApiModel<'_> {
             );
             (
                 quote! {
-                    #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+                    #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
                     #[serde(rename_all = "kebab-case")]
                     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                     pub enum #read_action_enum_name {
@@ -567,7 +567,7 @@ impl ApiModel<'_> {
 
         quote! {
             #validator_derive
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq, by_macros::QueryDisplay)]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub struct #read_action_struct_name {
                 #read_action_type_field
@@ -612,7 +612,7 @@ impl ApiModel<'_> {
         });
 
         quote! {
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo, sqlx::FromRow))]
             pub struct #summary_name {
                 #(#fields)*
@@ -898,7 +898,7 @@ impl ApiModel<'_> {
             );
             (
                 quote! {
-                    #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+                    #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
                     #[serde(rename_all = "kebab-case")]
                     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                     pub enum #read_action_enum_name {
@@ -929,7 +929,7 @@ impl ApiModel<'_> {
 
         quote! {
             #validator_derive
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, by_macros::QueryDisplay)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq, by_macros::QueryDisplay)]
             #[serde(rename_all = "kebab-case")]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub struct #query_name {
@@ -1087,7 +1087,7 @@ impl ApiModel<'_> {
 
                 action_requests.push(quote! {
                 #validator_derive
-                #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+                #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
                 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
                 pub struct #request_struct_name {
                     #(#fields)*
@@ -1145,7 +1145,7 @@ impl ApiModel<'_> {
 
         quote! {
 
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
             #[serde(rename_all = "snake_case")]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub enum #action_name {
@@ -1344,7 +1344,7 @@ impl ApiModel<'_> {
         }
 
         let output = quote! {
-            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq, by_macros::QueryDisplay)]
+            #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, by_macros::QueryDisplay)]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             #[serde(tag = "param-type", rename_all = "kebab-case")]
             pub enum #name {
@@ -3215,44 +3215,90 @@ impl ApiField {
 
     pub fn aggregate_expose_query(&self, bound_name: &str) -> Option<String> {
         match self.aggregator {
-            Some(Aggregator::Exist) => Some(format!(
-                r#"
+            Some(Aggregator::Exist) => match &self.relation {
+                Some(Relation::ManyToMany {
+                    ref table_name,
+                    ref foreign_primary_key,
+                    ref foreign_reference_key,
+                    ..
+                }) => Some(format!(
+                    r#"
 CASE
-    WHEN COALESCE({}.value, 0) > 0 THEN true
+    WHEN EXISTS (
+        SELECT 1 FROM {} WHERE {} = p.id AND {} = {{}}
+    ) THEN true
     ELSE false
-END AS {}"#,
-                bound_name, bound_name
-            )),
+END AS {}
+"#,
+                    table_name, foreign_reference_key, foreign_primary_key, bound_name,
+                )),
+
+                Some(Relation::OneToMany {
+                    ref table_name,
+                    ref foreign_key,
+                }) => Some(format!(
+                    r#"
+CASE
+    WHEN EXISTS (
+        SELECT 1 FROM {} WHERE {} = p.id
+    ) THEN true
+    ELSE false
+END AS {}
+"#,
+                    table_name, foreign_key, bound_name,
+                )),
+                _ => panic!(
+                    "exists aggregator supports only `one_to_many` and `many_to_many` relations"
+                ),
+            },
             Some(_) => Some(format!(
                 "COALESCE(MAX({}.value), 0) AS {}",
                 bound_name, bound_name
             )),
 
             None => match &self.relation {
-                Some(Relation::ManyToMany { .. }) => {
+                Some(Relation::ManyToMany {
+                    table_name,
+                    foreign_table_name,
+                    foreign_primary_key,
+                    foreign_reference_key,
+                    ..
+                }) => {
                     if self.rust_type.starts_with("Vec") {
                         Some(format!(
                             r#"
 COALESCE(
-    jsonb_agg(to_jsonb({})) FILTER (WHERE {}.id IS NOT NULL), '[]'
-) AS {}
-"#,
-                            bound_name, bound_name, bound_name
+  (SELECT jsonb_agg(to_jsonb(m))
+     FROM (
+       SELECT DISTINCT ON (f.id) f.*
+         FROM {foreign_table_name} f
+              JOIN {table_name} j ON f.id = j.{foreign_primary_key}
+        WHERE j.{foreign_reference_key} = p.id
+     ) m
+  ), '[]'
+) AS {bound_name}"#,
                         ))
                     } else {
                         None
                     }
                 }
 
-                Some(Relation::OneToMany { .. }) => {
+                Some(Relation::OneToMany {
+                    table_name,
+                    foreign_key,
+                }) => {
                     if self.rust_type.starts_with("Vec") {
                         Some(format!(
                             r#"
 COALESCE(
-    jsonb_agg(to_jsonb({})) FILTER (WHERE {}.id IS NOT NULL), '[]'
-) AS {}
-"#,
-                            bound_name, bound_name, bound_name
+  (SELECT jsonb_agg(to_jsonb(m))
+     FROM (
+       SELECT DISTINCT ON (f.id) f.*
+         FROM {table_name} f
+        WHERE f.{foreign_key} = p.id
+     ) m
+  ), '[]'
+) AS {bound_name}"#,
                         ))
                     } else {
                         None
@@ -3385,16 +3431,6 @@ COALESCE(
             Some(Relation::OneToMany { .. }) => return Some("GROUP BY p.id".to_string()),
             _ => None,
         }
-
-        // if self.aggregator.is_none() && self.rust_type.starts_with("Vec") {
-        //     match self.relation {
-        //         Some(Relation::ManyToMany { .. }) => return Some("GROUP BY p.id".to_string()),
-        //         Some(Relation::OneToMany { .. }) => return Some("GROUP BY p.id".to_string()),
-        //         _ => None,
-        //     }
-        // } else {
-        //     None
-        // }
     }
 
     /// It will be bound {bound_name.value}.
@@ -3403,48 +3439,14 @@ COALESCE(
             Some(Relation::OneToMany {
                 ref table_name,
                 ref foreign_key,
-            }) => {
-                if self.aggregator.is_none() {
-                    let query = format!(
-                        r#"
-LEFT JOIN {} {} ON p.id = {}.{}
-"#,
-                        table_name, bound_name, bound_name, foreign_key,
-                    );
-                    return Some(query);
-                }
-
-                (table_name, foreign_key)
-            }
+            }) => (table_name, foreign_key),
             Some(Relation::ManyToMany {
                 ref table_name,
                 ref foreign_table_name,
                 ref foreign_primary_key,
                 ref foreign_reference_key,
                 ..
-            }) => {
-                if self.aggregator.is_none() {
-                    let query = format!(
-                        r#"
-LEFT JOIN {} j ON p.id = j.{}
-LEFT JOIN {} {} ON j.{} = {}.id
-"#,
-                        // reference
-                        table_name,
-                        foreign_reference_key,
-                        // foreign
-                        foreign_table_name,
-                        bound_name,
-                        foreign_primary_key,
-                        bound_name,
-                    );
-
-                    return Some(query);
-                }
-
-                (table_name, foreign_reference_key)
-            }
-
+            }) => (table_name, foreign_reference_key),
             _ => return None,
         };
 
@@ -3455,30 +3457,12 @@ LEFT JOIN {} {} ON j.{} = {}.id
             Some(Aggregator::Sum(ref field_name)) => format!("SUM({})", field_name),
             Some(Aggregator::Avg(ref field_name)) => format!("AVG({})", field_name),
             Some(Aggregator::Max(ref field_name)) => {
-                panic!("currently Max, Min aggregator are not correctly supported");
                 format!("MAX({})", field_name)
             }
             Some(Aggregator::Min(ref field_name)) => {
-                panic!("currently Max, Min aggregator are not correctly supported");
                 format!("MIN({})", field_name)
             }
-            Some(Aggregator::Exist) => {
-                let foreign_primary_key = match self.relation {
-                    Some(Relation::ManyToMany {
-                        ref foreign_primary_key,
-                        ..
-                    }) => foreign_primary_key,
-
-                    // Some(Relation::OneToMany {
-                    //     ref foreign_key, ..
-                    // }) => foreign_key,
-                    _ => return None,
-                };
-
-                where_clause = format!("WHERE {foreign_primary_key} = {{}}");
-
-                format!("COUNT({})", foreign_primary_key,)
-            }
+            Some(Aggregator::Exist) => return None,
             None => return None,
         };
 
@@ -3930,10 +3914,12 @@ impl ApiField {
         let sql_field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
 
         match self.aggregator {
-            Some(Aggregator::Sum(_))
-            | Some(Aggregator::Avg(_))
-            | Some(Aggregator::Max(_))
-            | Some(Aggregator::Min(_)) => {
+            Some(Aggregator::Max(_)) | Some(Aggregator::Min(_)) => {
+                return quote! {
+                    #n: row.try_get::<i64, _>(#sql_field_name).unwrap_or_default()
+                };
+            }
+            Some(Aggregator::Sum(_)) | Some(Aggregator::Avg(_)) => {
                 let rust_type = self.rust_type_id();
 
                 return quote! {
@@ -3948,11 +3934,11 @@ impl ApiField {
         if &self.rust_type == "String" && &self.r#type != "TEXT" {
             if &self.r#type == "BIGINT" {
                 return quote! {
-                    #n: row.try_get::<i64, _>(#sql_field_name).unwrap_or_default().to_string()
+                    #n: row.get::<i64, _>(#sql_field_name).to_string()
                 };
             } else if &self.r#type == "INTEGER" {
                 return quote! {
-                    #n: row.try_get::<i32, _>(#sql_field_name).unwrap_or_default().to_string()
+                    #n: row.get::<i32, _>(#sql_field_name).to_string()
                 };
             }
         } else if (&self.rust_type == "u64" || &self.rust_type == "u32") {
@@ -3960,11 +3946,11 @@ impl ApiField {
 
             if &self.r#type == "BIGINT" {
                 return quote! {
-                    #n: row.try_get::<i64, _>(#sql_field_name).unwrap_or_default() as #ty
+                    #n: row.get::<i64, _>(#sql_field_name) as #ty
                 };
             } else if &self.r#type == "INTEGER" {
                 return quote! {
-                    #n: row.try_get::<i32, _>(#sql_field_name).unwrap_or_default() as #ty
+                    #n: row.get::<i32, _>(#sql_field_name) as #ty
                 };
             }
         }
@@ -3982,7 +3968,10 @@ impl ApiField {
                             vec![]
                         }
                     },
-                    _ => vec![]
+                    e => {
+                        tracing::debug!("empty vector for {}: {:?}", #field_name, e);
+                        vec![]
+                    }
                 }
             };
         }
@@ -4167,7 +4156,7 @@ impl ApiField {
 
         tracing::trace!("aggregator: {:?}", aggregator);
 
-        Self {
+        let ret = Self {
             name,
             primary_key,
             relation,
@@ -4189,8 +4178,91 @@ impl ApiField {
 
             table,
             rename,
-        }
+        };
+
+        // ret.check_error();
+        ret
     }
+
+    //     fn check_error(&self) {
+    //         let this_table = &self.table;
+    //         if let Some(Relation::ManyToMany {
+    //             ref table_name,
+    //             ref foreign_table_name,
+    //             ref foreign_primary_key,
+    //             ref foreign_reference_key,
+    //             ..
+    //         }) = self.relation
+    //         {
+    //             if self.summary {
+    //                 tracing::error!("Recommend that {} field should not have summary attribute. It may be empty when retrieved by other models", self.name);
+    //             }
+
+    //             let exists = Some(Aggregator::Exist) == self.aggregator;
+
+    //             if !exists && !self.rust_type.replace(" ", "").ends_with("Summary>") {
+    //                 tracing::error!("type: {}", self.rust_type);
+    //                 tracing::error!(
+    //                     r#"
+    // Recommend to use summary model instead of a full model. if you need to contain full model, you must add `#[serde(default)]` to {foreign_primary_key} if the foreign model have the field.
+
+    // Note that {foreign_reference_key} field will be empty when retrieved by other many_to_many model.
+
+    // For example,
+
+    // ❌ Bad Example
+    // #[api_model(table = {foreign_table_name})]
+    // pub struct ForeignModel {{
+    //     #[api_model(summary, primary_key)]
+    //     pub id: i64,
+    //     #[api_model(summary, auto = insert)]
+    //     pub created_at: i64,
+    //     #[api_model(auto = [insert,update])]
+    //     pub updated_at: i64,
+
+    //     #[api_model(summary, many_to_many = {table_name}, foreign_table_name = {this_table}, foreign_primary_key = {foreign_reference_key}, foreign_reference_key = {foreign_primary_key})]
+    //     #[serde(default)]
+    //     pub {foreign_reference_key}: i64,
+    // }}
+
+    // ✅ Good Example
+    // #[api_model(table = {foreign_table_name})]
+    // pub struct ForeignModel {{
+    //     #[api_model(summary, primary_key)]
+    //     pub id: i64,
+    //     #[api_model(summary, auto = insert)]
+    //     pub created_at: i64,
+    //     #[api_model(auto = [insert,update])]
+    //     pub updated_at: i64,
+
+    //     #[api_model(many_to_many = {table_name}, foreign_table_name = {this_table}, foreign_primary_key = {foreign_reference_key}, foreign_reference_key = {foreign_primary_key})]
+    //     #[serde(default)]
+    //     pub foreign_models: Vec<ForeignModel>,
+    // }}
+
+    // "#
+    //                 );
+    //             }
+
+    //             if &self.rust_type == "i64" && self.aggregator.is_none() {
+    //                 tracing::warn!(
+    //                     "Recommended to use a type of a foreign model directly, instead of id types"
+    //                 )
+    //             }
+    //         } else if let Some(Relation::OneToMany { .. }) = self.relation {
+    //             if self.aggregator.is_none() {
+    //                 if self.summary {
+    //                     tracing::warn!("Recommend that {} field should not have summary attribute. It may be empty when retrieved by other models ", self.name);
+    //                 }
+
+    //                 if &self.rust_type == "i64" {
+    //                     tracing::warn!(
+    //                     "Recommended to use a type of a foreign model directly, instead of id types"
+    //                 )
+    //                 }
+    //             }
+    //         }
+    //     }
 }
 
 #[cfg(feature = "server")]
