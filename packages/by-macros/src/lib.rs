@@ -186,11 +186,8 @@ pub fn derive_dioxus_controller(input: TokenStream) -> TokenStream {
                 );
 
                 let t: proc_macro2::TokenStream = if field_type.starts_with("Signal") {
-                    field_type
-                        .trim_start_matches("Signal<")
-                        .trim_end_matches(">")
-                        .parse()
-                        .unwrap()
+                    let t = field_type.trim_start_matches("Signal<");
+                    t[..t.len() - 1].parse().unwrap()
                 } else {
                     continue;
                 };
