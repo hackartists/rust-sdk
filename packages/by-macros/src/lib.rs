@@ -14,8 +14,8 @@ use api_model::api_model_impl;
 use enum_prop::enum_prop_impl;
 use proc_macro::TokenStream;
 use query_display::query_display_impl;
-use quote::quote;
-use syn::{parse_macro_input, Data, DataEnum, DeriveInput};
+use quote::{quote, ToTokens};
+use syn::{parse_macro_input, Data, DataEnum, DeriveInput, Fields};
 
 #[proc_macro_derive(QueryDisplay)]
 pub fn query_display_derive(input: TokenStream) -> TokenStream {
@@ -153,4 +153,107 @@ pub fn derive_api_model(input: TokenStream) -> TokenStream {
     tracing::trace!("ApiModel expanded: {}", expanded.to_string());
 
     TokenStream::from(expanded)
+}
+
+#[proc_macro_derive(DioxusController)]
+pub fn derive_dioxus_controller(input: TokenStream) -> TokenStream {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_file(true)
+        .with_line_number(true)
+        .with_thread_ids(true)
+        .with_target(false)
+        .try_init();
+
+    tracing::trace!("starting derive_dioxus_controller");
+    let input = parse_macro_input!(input as DeriveInput);
+    let struct_name = &input.ident;
+
+    let mut generated_methods = vec![];
+
+    if let Data::Struct(data_struct) = input.data {
+        if let Fields::Named(fields) = data_struct.fields {
+            tracing::trace!("starting parsing fields");
+            for field in fields.named {
+                let field_name = &field.ident.unwrap();
+                let field_type = field.ty.to_token_stream().to_string();
+                let field_type = field_type.trim().replace(" ", "");
+
+                tracing::trace!(
+                    "field_name: {}, field_type: {}",
+                    field_name.to_string(),
+                    field_type
+                );
+
+                let t: proc_macro2::TokenStream = if field_type.starts_with("Signal") {
+                    field_type
+                        .trim_start_matches("Signal<")
+                        .trim_end_matches(">")
+                        .parse()
+                        .unwrap()
+                } else {
+                    continue;
+                };
+
+                let method = quote! {
+                    pub fn #field_name(&self) -> #t {
+                        (self.#field_name)()
+                    }
+                };
+
+                tracing::trace!("method: {}", method.to_string());
+
+                generated_methods.push(method);
+            }
+        }
+    }
+
+    let expanded = quote! {
+        impl #struct_name {
+            #(#generated_methods)*
+        }
+    };
+
+    save_file(struct_name.to_string().as_str(), &expanded.to_string());
+
+    expanded.into()
+}
+
+pub(crate) fn save_file(st_name: &str, output: &str) {
+    let dir_path = match option_env!("API_MODEL_ARTIFACT_DIR") {
+        Some(dir) => dir.to_string(),
+        None => {
+            let current_dir = std::env::current_dir().unwrap();
+            format!(
+                "{}",
+                current_dir
+                    .join(".build/generated_api_models")
+                    .to_str()
+                    .unwrap()
+            )
+        }
+    };
+    use convert_case::Casing;
+
+    let file_path = format!(
+        "{}/{}.rs",
+        dir_path,
+        st_name.to_case(convert_case::Case::Snake)
+    );
+
+    let dir = std::path::Path::new(&dir_path);
+
+    use std::fs;
+
+    if !dir.exists() {
+        if let Err(e) = fs::create_dir_all(dir) {
+            tracing::error!("Failed to create directory: {}", e);
+        }
+    }
+
+    if let Err(e) = fs::write(&file_path, output.to_string()) {
+        tracing::error!("Failed to write file: {}", e);
+    } else {
+        tracing::info!("generated code {} into {}", st_name, file_path);
+    }
 }
