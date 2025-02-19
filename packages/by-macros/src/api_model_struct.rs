@@ -7,7 +7,10 @@ use convert_case::{Case, Casing};
 use indexmap::IndexMap;
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
-use std::{collections::HashSet, convert::From};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::From,
+};
 use syn::*;
 use tracing::instrument;
 
@@ -76,7 +79,280 @@ impl std::fmt::Debug for ApiModel<'_> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum JsonMeta {
+    Enum(Vec<String>),
+    Default(String),
+    Description(String),
+}
+
+fn object_field(
+    var_name: String,
+    var_type: String,
+    meta: Vec<JsonMeta>,
+) -> proc_macro2::TokenStream {
+    let var_name = syn::LitStr::new(&var_name, proc_macro2::Span::call_site());
+    let var_type = match var_type.as_str() {
+        "i64" | "i32" | "u64" | "u32" => "Integer",
+        "String" => "String",
+        "bool" => "Boolean",
+        e => {
+            let ty = syn::Ident::new(e, proc_macro2::Span::call_site());
+
+            let out = quote! {
+                schema_obj
+                    .object()
+                    .properties
+                    .insert(#var_name.to_string(), #ty::json_schema(_gen));
+            };
+
+            return out;
+        }
+    };
+    let var_type = syn::Ident::new(var_type, proc_macro2::Span::call_site());
+    let mut enum_values = quote! {};
+    let mut description = quote! {};
+    let mut defaults = quote! {};
+
+    for m in meta {
+        match m {
+            JsonMeta::Enum(values) => {
+                let values = values
+                    .iter()
+                    .map(|v| syn::LitStr::new(v, proc_macro2::Span::call_site()));
+
+                enum_values = quote! {
+                    enum_values: Some(vec![
+                        #(serde_json::Value::String(#values.to_string()),)*
+                    ]),
+                };
+            }
+            JsonMeta::Description(desc) => {
+                let desc = syn::LitStr::new(&desc, proc_macro2::Span::call_site());
+                description = quote! {
+                    description: Some(#desc.to_string()),
+                };
+            }
+            JsonMeta::Default(v) => {
+                // FIXME: This does not work properly
+                let v = syn::LitStr::new(&v, proc_macro2::Span::call_site());
+                defaults = quote! {
+                    default: Some(serde_json::Value::String(#v.to_string())),
+                };
+            }
+        }
+    }
+
+    quote! {
+        schema_obj.object().properties.insert(
+            #var_name.to_string(),
+            schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+                metadata: Some(Box::new(schemars::schema::Metadata {
+                    #description
+                    #defaults
+
+                    ..Default::default()
+                })),
+                instance_type: Some(schemars::schema::InstanceType::#var_type.into()),
+
+                #enum_values
+
+                ..Default::default()
+            }),
+        );
+
+    }
+}
+
 impl ApiModel<'_> {
+    pub fn generate_jsonschema_for_param(&self) -> proc_macro2::TokenStream {
+        let name = syn::Ident::new(&format!("{}Param", self.name), self.name_id.span());
+        let name_str = syn::LitStr::new(&name.to_string(), name.span());
+        let title = syn::LitStr::new(&format!("{} Query Parameters", self.name), name.span());
+        let query_actions = &self.query_action_names;
+        let mut actions = HashSet::new();
+
+        #[derive(Clone, Debug)]
+        struct Schema {
+            ty: String,
+            meta: Vec<JsonMeta>,
+            actions: Vec<String>,
+        }
+
+        let mut fields: IndexMap<String, Schema> = IndexMap::new();
+        fields.insert(
+            "size".to_string(),
+            Schema {
+                ty: "i32".to_string(),
+                meta: vec![JsonMeta::Description(
+                    "Number of items to return".to_string(),
+                )],
+                actions: vec![],
+            },
+        );
+
+        fields.insert(
+            "bookmark".to_string(),
+            Schema {
+                ty: "String".to_string(),
+                meta: vec![
+                    JsonMeta::Description(
+                        "bookmark of page number. Note that you must stringify page number."
+                            .to_string(),
+                    ),
+                    JsonMeta::Default("1".to_string()),
+                ],
+                actions: vec![],
+            },
+        );
+
+        for f in self.queryable_fields.iter() {
+            let name = f.ident.to_token_stream().to_string();
+            let ty = f.ty.to_token_stream().to_string();
+
+            fields.insert(
+                name,
+                Schema {
+                    ty,
+                    meta: vec![],
+                    actions: vec![],
+                },
+            );
+        }
+
+        for (action, f) in self.query_action_names.iter() {
+            actions.insert(action.to_string());
+            if let ActionField::Fields(v) = f {
+                for field in v.iter() {
+                    let name = field.ident.to_token_stream().to_string();
+                    let ty = field.ty.to_token_stream().to_string();
+                    let meta = vec![];
+
+                    if fields.contains_key(&name) {
+                        fields
+                            .get_mut(&name)
+                            .unwrap()
+                            .actions
+                            .push(action.to_string());
+                    } else {
+                        fields.insert(
+                            name,
+                            Schema {
+                                ty,
+                                meta,
+                                actions: vec![action.to_string()],
+                            },
+                        );
+                    }
+                }
+            }
+            // TODO: Support related fields. Query Jsonschema must be flattened. At this point, we cannot know the whole fields of related struct.
+        }
+
+        for (action, f) in self.read_action_names.iter() {
+            actions.insert(action.to_string());
+            if let ActionField::Fields(v) = f {
+                for field in v.iter() {
+                    let name = field.ident.to_token_stream().to_string();
+                    let ty = field.ty.to_token_stream().to_string();
+                    let meta = vec![];
+
+                    if fields.contains_key(&name) {
+                        fields
+                            .get_mut(&name)
+                            .unwrap()
+                            .actions
+                            .push(action.to_string());
+                    } else {
+                        fields.insert(
+                            name,
+                            Schema {
+                                ty,
+                                meta,
+                                actions: vec![action.to_string()],
+                            },
+                        );
+                    }
+                }
+            }
+            // TODO: Support related fields. Query Jsonschema must be flattened. At this point, we cannot know the whole fields of related struct.
+        }
+
+        for (action, action_fields) in self.actions.read_actions.iter() {
+            actions.insert(action.to_string());
+            for field in action_fields.iter() {
+                let name = field.name.clone();
+                let ty = field.r#type.clone();
+                let meta = vec![];
+
+                if fields.contains_key(&name) {
+                    fields
+                        .get_mut(&name)
+                        .unwrap()
+                        .actions
+                        .push(action.to_string());
+                } else {
+                    fields.insert(
+                        name,
+                        Schema {
+                            ty,
+                            meta,
+                            actions: vec![action.to_string()],
+                        },
+                    );
+                }
+            }
+        }
+
+        let mut objs = vec![];
+
+        if actions.len() > 0 {
+            objs.push(object_field(
+                "action".to_string(),
+                "String".to_string(),
+                vec![
+                    JsonMeta::Description("request action type".to_string()),
+                    JsonMeta::Enum(actions.iter().cloned().collect()),
+                ],
+            ));
+        }
+
+        for (n, v) in fields {
+            let mut meta = v.meta.clone();
+            if v.actions.len() > 0 {
+                meta.push(JsonMeta::Description(format!(
+                    "This field is used in the following actions: {}",
+                    v.actions.join(", ")
+                )));
+            }
+
+            objs.push(object_field(n, v.ty, meta));
+        }
+
+        quote! {
+            #[cfg(feature = "server")]
+            impl schemars::JsonSchema for #name {
+                fn schema_name() -> String {
+                    #name_str.to_string()
+                }
+
+                fn json_schema(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+                    let mut schema_obj = schemars::schema::SchemaObject::default();
+                    schema_obj.metadata = Some(Box::new(schemars::schema::Metadata {
+                        title: Some(#title.to_string()),
+                        ..Default::default()
+                    }));
+
+                    #(#objs)*
+
+                    schema_obj.object().required.insert("size".to_string());
+
+                    schemars::schema::Schema::Object(schema_obj)
+                }
+            }
+        }
+    }
+
     pub fn generate_client_impl(&self) -> proc_macro2::TokenStream {
         let struct_name = self.name_id;
         let base_endpoint = &self.base;
@@ -1343,13 +1619,17 @@ impl ApiModel<'_> {
             });
         }
 
+        let json_schema = self.generate_jsonschema_for_param();
+
         let output = quote! {
             #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, by_macros::QueryDisplay)]
-            #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
+            #[cfg_attr(feature = "server", derive(aide::OperationIo))]
             #[serde(tag = "param-type", rename_all = "kebab-case")]
             pub enum #name {
                 #(#enums)*
             }
+
+            #json_schema
         };
 
         output.into()
