@@ -198,12 +198,8 @@ pub fn derive_dioxus_controller(input: TokenStream) -> TokenStream {
                     let t: proc_macro2::TokenStream = t[..t.len() - 1].parse().unwrap();
 
                     quote! {
-                        pub fn #field_name(&self) -> #t {
-                            if let Some(v) = self.#field_name.value()() {
-                                v
-                            } else {
-                                Default::default()
-                            }
+                        pub fn #field_name(&self) -> std::result::Result<#t, RenderError> {
+                            self.#field_name.suspend()?()
                         }
                     }
                 } else {
