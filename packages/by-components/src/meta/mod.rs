@@ -9,6 +9,7 @@ pub fn MetaSeoTemplate(
     #[props(default = "index, follow".to_string())] robots: String,
     url: String,
     canonical: String,
+    twitter_id: Option<String>,
 ) -> Element {
     rsx! {
         if let Some(keywords) = keywords {
@@ -21,6 +22,10 @@ pub fn MetaSeoTemplate(
         document::Link { rel: "canonical", href: "{canonical}" }
         document::Meta { property: "og:site_name", content: "{title}" }
         document::Meta { property: "og:url", content: "{url}" }
+        if let Some(twitter_id) = twitter_id {
+            document::Meta { property: "twitter:site", content: "{twitter_id}" }
+            document::Meta { property: "twitter:creator", content: "{twitter_id}" }
+        }
     }
 }
 
@@ -35,9 +40,13 @@ pub fn MetaPage(
     audio: Option<String>,
 
     #[props(default = "summary_large_image".to_string())] twitter_card: String,
-    twitter_site: Option<String>,
-    twitter_creator: Option<String>,
+    twitter_id: Option<String>,
 ) -> Element {
+    let twitter_id = match twitter_id {
+        Some(id) => Some(format!("@{}", id.trim_start_matches("@"))),
+        None => None,
+    };
+
     rsx! {
         // metadata for SEO
         document::Title { "{title}" }
@@ -53,12 +62,9 @@ pub fn MetaPage(
         document::Meta { property: "twitter:card", content: "{twitter_card}" }
 
         // metadata for Twitter
-        if let Some(twitter_site) = twitter_site {
-            document::Meta { property: "twitter:site", content: "{twitter_site}" }
-        }
-
-        if let Some(twitter_creator) = twitter_creator {
-            document::Meta { property: "twitter:creator", content: "{twitter_creator}" }
+        if let Some(twitter_id) = twitter_id {
+            document::Meta { property: "twitter:site", content: "{twitter_id}" }
+            document::Meta { property: "twitter:creator", content: "{twitter_id}" }
         }
 
         if let Some(image) = image {
