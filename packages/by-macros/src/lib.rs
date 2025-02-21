@@ -199,7 +199,7 @@ pub fn derive_dioxus_controller(input: TokenStream) -> TokenStream {
 
                     quote! {
                         pub fn #field_name(&self) -> std::result::Result<#t, RenderError> {
-                            self.#field_name.suspend()?()
+                            Ok(self.#field_name.suspend()?())
                         }
                     }
                 } else {
