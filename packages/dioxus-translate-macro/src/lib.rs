@@ -170,19 +170,26 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
     let mut from_str_arms = Vec::new();
 
     let mut idents: Vec<Ident> = Vec::new();
+    let mut unit_variants = Vec::new();
 
     for variant in variants {
+        let mut field_names = vec![];
+        let mut tuple_len = 0;
+
         match variant.fields {
             Fields::Unit => {
                 idents.push(variant.ident.clone());
+                unit_variants.push(variant.ident.clone());
             }
-            _ => {
-                return syn::Error::new_spanned(
-                    enum_name,
-                    "Translate can only be derived for enums with unit variants",
-                )
-                .to_compile_error()
-                .into();
+            Fields::Named(ref f) => {
+                idents.push(variant.ident.clone());
+                for field in f.named.iter() {
+                    field_names.push(field.ident.clone().unwrap());
+                }
+            }
+            Fields::Unnamed(ref f) => {
+                idents.push(variant.ident.clone());
+                tuple_len = f.unnamed.len();
             }
         }
         let variant_ident = &variant.ident;
@@ -224,27 +231,59 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
             &variant_ident.to_string().to_lowercase(),
             proc_macro2::Span::call_site(),
         );
+        let arm_name = if field_names.len() > 0 {
+            quote! {
+                #enum_name::#variant_ident { .. }
+            }
+        } else if tuple_len > 0 {
+            quote! {
+                #enum_name::#variant_ident(..)
+            }
+        } else {
+            quote! {
+                #enum_name::#variant_ident
+            }
+        };
+
+        let assigner = if field_names.len() > 0 {
+            quote! {
+                #enum_name::#variant_ident { #(#field_names: Default::default(),)* }
+            }
+        } else if tuple_len > 0 {
+            let mut defaults = vec![];
+            for _ in 0..tuple_len {
+                defaults.push(quote! { Default::default() });
+            }
+            quote! {
+                #enum_name::#variant_ident( #(#defaults,)* )
+            }
+        } else {
+            quote! {
+                #enum_name::#variant_ident
+            }
+        };
 
         en_arms.push(quote! {
-            #enum_name::#variant_ident => #en_str,
-        });
-        #[cfg(feature = "ko")]
-        ko_arms.push(quote! {
-            #enum_name::#variant_ident => #ko_str,
+            #arm_name => #en_str,
         });
 
         display_arms.push(quote! {
-            #enum_name::#variant_ident => write!(f, #lower_name),
+            #arm_name => write!(f, #lower_name),
         });
 
         #[cfg(not(feature = "ko"))]
         from_str_arms.push(quote! {
-            #en_str | #lower_name => Ok(#enum_name::#variant_ident),
+            #en_str | #lower_name => Ok(#assigner),
         });
         #[cfg(feature = "ko")]
-        from_str_arms.push(quote! {
-            #en_str | #ko_str | #lower_name => Ok(#enum_name::#variant_ident),
-        });
+        {
+            ko_arms.push(quote! {
+                #arm_name => #ko_str,
+            });
+            from_str_arms.push(quote! {
+                #en_str | #ko_str | #lower_name => Ok(#assigner),
+            });
+        }
     }
 
     #[cfg(feature = "ko")]
@@ -268,7 +307,7 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
                 }
             }
 
-            pub const VARIANTS: &'static [Self] = &[ #(#enum_name::#idents,)* ];
+            pub const VARIANTS: &'static [Self] = &[ #(#enum_name::#unit_variants,)* ];
             pub fn variants(lang: &dioxus_translate::Language) -> Vec<String> {
                 Self::VARIANTS.iter().map(|v| v.translate(&lang).to_string()).collect::<Vec<_>>()
             }
