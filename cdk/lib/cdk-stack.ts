@@ -2,7 +2,7 @@ import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 
 import "dotenv/config";
-import * as rds from 'aws-cdk-lib/aws-rds';
+import * as rds from "aws-cdk-lib/aws-rds";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -66,6 +66,7 @@ export class CdkStack extends cdk.Stack {
     let enableRds = process.env.ENABLE_RDS === "true";
     let createRds = process.env.CREATE_RDS === "true";
     let enableCron = process.env.ENABLE_CRON === "true";
+    let enableCdn = process.env.ENABLE_CDN !== "false";
     let opensearchCollections = [
       {
         name: `${project}-${env}`,
@@ -86,56 +87,61 @@ export class CdkStack extends cdk.Stack {
       if (version === "") {
         continue;
       }
-      let endpoint = process.env[`${version.toUpperCase()}_ENDPOINT`]
+      let endpoint = process.env[`${version.toUpperCase()}_ENDPOINT`];
       if (endpoint === undefined) {
         console.error(`${version.toUpperCase()}_ENDPOINT is required`);
         process.exit(1);
       }
-      endpoints.push({version, endpoint});
+      endpoints.push({ version, endpoint });
     }
 
     const hostedZoneDomainName = process.env.BASE_DOMAIN || "";
     const hostzedZoneId = process.env.HOSTED_ZONE_ID || "";
 
-    var hostedZone;
-
-    if (hostzedZoneId !== "") {
-      hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, "HostedZone", {
-        hostedZoneId: hostzedZoneId,
-        zoneName: hostedZoneDomainName,
-      });
-    } else {
-       hostedZone  = route53.HostedZone.fromLookup(this, "HostedZone", {
-        domainName: hostedZoneDomainName,
-      });
-
-    }
-
-
-    const certificate = new certificatemanager.DnsValidatedCertificate(
-      this,
-      "SiteCertificate",
-      {
-        domainName: domain,
-        hostedZone,
-        region: "us-east-1",
-      },
-    );
-
+    var hostedZone: any;
     let func: any;
+    var certificate: any;
+    var distributionProps: any;
 
-    let distributionProps: any = {
-      defaultBehavior: {
-        origin: new origins.HttpOrigin(""),
-        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
-        originRequestPolicy:
-          cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-      },
-      domainNames: [domain],
-      certificate,
-    };
+    if (enableCdn) {
+      if (hostzedZoneId !== "") {
+        hostedZone = route53.HostedZone.fromHostedZoneAttributes(
+          this,
+          "HostedZone",
+          {
+            hostedZoneId: hostzedZoneId,
+            zoneName: hostedZoneDomainName,
+          },
+        );
+      } else {
+        hostedZone = route53.HostedZone.fromLookup(this, "HostedZone", {
+          domainName: hostedZoneDomainName,
+        });
+      }
+
+      certificate = new certificatemanager.DnsValidatedCertificate(
+        this,
+        "SiteCertificate",
+        {
+          domainName: domain,
+          hostedZone,
+          region: "us-east-1",
+        },
+      );
+
+      distributionProps = {
+        defaultBehavior: {
+          origin: new origins.HttpOrigin(""),
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+          originRequestPolicy:
+            cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        },
+        domainNames: [domain],
+        certificate,
+      };
+    }
 
     if (enableLambda) {
       func = new lambda.Function(this, "Function", {
@@ -160,7 +166,9 @@ export class CdkStack extends cdk.Stack {
         const schedule = process.env.SCHEDULE || "";
 
         if (schedule === "") {
-          console.error("SCHEDULE is required ex. SCHEDULE='cron(0 15 * * ? *)'");
+          console.error(
+            "SCHEDULE is required ex. SCHEDULE='cron(0 15 * * ? *)'",
+          );
           process.exit(1);
         }
 
@@ -399,7 +407,7 @@ export class CdkStack extends cdk.Stack {
 
     if (createRds) {
       const adminPassword = process.env.RDS_ADMIN_PASSWORD || "";
-      if (adminPassword ==="") {
+      if (adminPassword === "") {
         console.error("RDS_ADMIN_PASSWORD is required");
         process.exit(1);
       }
@@ -407,17 +415,21 @@ export class CdkStack extends cdk.Stack {
       const vpc = ec2.Vpc.fromLookup(this, "Vpc", {
         vpcId,
       });
-      const securityGroup = new ec2.SecurityGroup(this, 'AuroraSecurityGroup', {
+      const securityGroup = new ec2.SecurityGroup(this, "AuroraSecurityGroup", {
         vpc,
         allowAllOutbound: true,
       });
-      securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(5432), 'Allow PostgreSQL access from anywhere');
+      securityGroup.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        ec2.Port.tcp(5432),
+        "Allow PostgreSQL access from anywhere",
+      );
 
-      const cluster = new rds.DatabaseCluster(this, 'Database', {
+      const cluster = new rds.DatabaseCluster(this, "Database", {
         engine: rds.DatabaseClusterEngine.auroraPostgres({
           version: rds.AuroraPostgresEngineVersion.VER_16_4,
         }),
-        writer: rds.ClusterInstance.serverlessV2('writer'),
+        writer: rds.ClusterInstance.serverlessV2("writer"),
         // readers: [
         //   rds.ClusterInstance.serverlessV2('reader'),
         // ],
@@ -428,36 +440,44 @@ export class CdkStack extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.RETAIN,
         securityGroups: [securityGroup],
         defaultDatabaseName: `${project}`,
-        credentials: rds.Credentials.fromPassword(project, cdk.SecretValue.unsafePlainText(adminPassword)),
-        deletionProtection:true,
+        credentials: rds.Credentials.fromPassword(
+          project,
+          cdk.SecretValue.unsafePlainText(adminPassword),
+        ),
+        deletionProtection: true,
       });
 
-      cluster.metricServerlessDatabaseCapacity({
-        period: Duration.minutes(10),
-      }).createAlarm(this, 'capacity', {
-        threshold: 1.5,
-        evaluationPeriods: 3,
-      });
-      cluster.metricACUUtilization({
-        period: Duration.minutes(10),
-      }).createAlarm(this, 'alarm', {
-        evaluationPeriods: 3,
-        threshold: 90,
-      });
+      cluster
+        .metricServerlessDatabaseCapacity({
+          period: Duration.minutes(10),
+        })
+        .createAlarm(this, "capacity", {
+          threshold: 1.5,
+          evaluationPeriods: 3,
+        });
+      cluster
+        .metricACUUtilization({
+          period: Duration.minutes(10),
+        })
+        .createAlarm(this, "alarm", {
+          evaluationPeriods: 3,
+          threshold: 90,
+        });
 
-      new cdk.CfnOutput(this, 'AuroraEndpoint', {
+      new cdk.CfnOutput(this, "AuroraEndpoint", {
         value: cluster.clusterEndpoint.hostname,
-        description: 'The endpoint of the Aurora PostgreSQL cluster',
+        description: "The endpoint of the Aurora PostgreSQL cluster",
       });
-
     }
 
     if (!createRds && enableRds) {
-      console.error("creating an individual db cluster for service is not recommended. Instead of it, you manually create a table in `ENV` database cluster. If you want to create a new individual db cluster, set CREATE_RDS=true")
+      console.error(
+        "creating an individual db cluster for service is not recommended. Instead of it, you manually create a table in `ENV` database cluster. If you want to create a new individual db cluster, set CREATE_RDS=true",
+      );
       process.exit(1);
 
       const adminPassword = process.env.RDS_ADMIN_PASSWORD || "";
-      if (adminPassword ==="") {
+      if (adminPassword === "") {
         console.error("RDS_ADMIN_PASSWORD is required");
         process.exit(1);
       }
@@ -465,17 +485,21 @@ export class CdkStack extends cdk.Stack {
       const vpc = ec2.Vpc.fromLookup(this, "Vpc", {
         vpcId,
       });
-      const securityGroup = new ec2.SecurityGroup(this, 'AuroraSecurityGroup', {
+      const securityGroup = new ec2.SecurityGroup(this, "AuroraSecurityGroup", {
         vpc,
         allowAllOutbound: true,
       });
-      securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(5432), 'Allow PostgreSQL access from anywhere');
+      securityGroup.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        ec2.Port.tcp(5432),
+        "Allow PostgreSQL access from anywhere",
+      );
 
-      const cluster = new rds.DatabaseCluster(this, 'Database', {
+      const cluster = new rds.DatabaseCluster(this, "Database", {
         engine: rds.DatabaseClusterEngine.auroraPostgres({
           version: rds.AuroraPostgresEngineVersion.VER_16_4,
         }),
-        writer: rds.ClusterInstance.serverlessV2('writer'),
+        writer: rds.ClusterInstance.serverlessV2("writer"),
         // readers: [
         //   rds.ClusterInstance.serverlessV2('reader'),
         // ],
@@ -486,52 +510,65 @@ export class CdkStack extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.RETAIN,
         securityGroups: [securityGroup],
         defaultDatabaseName: `${project}`.replace("-", "").replace("_", ""),
-        credentials: rds.Credentials.fromPassword(project.replace("-", "").replace("_", ""), cdk.SecretValue.unsafePlainText(adminPassword)),
-        deletionProtection:true,
+        credentials: rds.Credentials.fromPassword(
+          project.replace("-", "").replace("_", ""),
+          cdk.SecretValue.unsafePlainText(adminPassword),
+        ),
+        deletionProtection: true,
       });
 
-      cluster.metricServerlessDatabaseCapacity({
-        period: Duration.minutes(10),
-      }).createAlarm(this, 'capacity', {
-        threshold: 1.5,
-        evaluationPeriods: 3,
-      });
-      cluster.metricACUUtilization({
-        period: Duration.minutes(10),
-      }).createAlarm(this, 'alarm', {
-        evaluationPeriods: 3,
-        threshold: 90,
-      });
+      cluster
+        .metricServerlessDatabaseCapacity({
+          period: Duration.minutes(10),
+        })
+        .createAlarm(this, "capacity", {
+          threshold: 1.5,
+          evaluationPeriods: 3,
+        });
+      cluster
+        .metricACUUtilization({
+          period: Duration.minutes(10),
+        })
+        .createAlarm(this, "alarm", {
+          evaluationPeriods: 3,
+          threshold: 90,
+        });
 
-      new cdk.CfnOutput(this, 'AuroraEndpoint', {
+      new cdk.CfnOutput(this, "AuroraEndpoint", {
         value: cluster.clusterEndpoint.hostname,
-        description: 'The endpoint of the Aurora PostgreSQL cluster',
+        description: "The endpoint of the Aurora PostgreSQL cluster",
       });
     }
 
-    const cf = new cloudfront.Distribution(
-      this,
-      "Distribution",
-      distributionProps,
-    );
+    if (enableCdn) {
+      const cf = new cloudfront.Distribution(
+        this,
+        "Distribution",
+        distributionProps,
+      );
 
-    const zone = route53.HostedZone.fromHostedZoneAttributes(
-      this,
-      "zone-attribute",
-      {
-        zoneName: domain,
-        hostedZoneId: hostedZone.hostedZoneId,
-      },
-    );
+      const zone = route53.HostedZone.fromHostedZoneAttributes(
+        this,
+        "zone-attribute",
+        {
+          zoneName: domain,
+          hostedZoneId: hostedZone.hostedZoneId,
+        },
+      );
 
-    new route53.ARecord(this, "IpV4Record", {
-      zone,
-      target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(cf)),
-    });
+      new route53.ARecord(this, "IpV4Record", {
+        zone,
+        target: route53.RecordTarget.fromAlias(
+          new targets.CloudFrontTarget(cf),
+        ),
+      });
 
-    new route53.AaaaRecord(this, "IpV6Record", {
-      zone,
-      target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(cf)),
-    });
+      new route53.AaaaRecord(this, "IpV6Record", {
+        zone,
+        target: route53.RecordTarget.fromAlias(
+          new targets.CloudFrontTarget(cf),
+        ),
+      });
+    }
   }
 }
