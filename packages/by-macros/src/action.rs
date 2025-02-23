@@ -7,7 +7,6 @@ pub struct ActionRequestField {
     pub r#type: String,
 }
 
-#[cfg(feature = "server")]
 impl ActionRequestField {
     pub fn ty(&self) -> proc_macro2::TokenStream {
         self.r#type
