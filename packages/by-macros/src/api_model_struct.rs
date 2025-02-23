@@ -34,6 +34,8 @@ pub struct ApiModel<'a> {
     #[cfg(feature = "server")]
     pub database: Option<Database>,
 
+    pub result_type: proc_macro2::TokenStream,
+
     pub name: String,
     pub name_id: &'a syn::Ident,
     pub actions: Actions,
@@ -378,6 +380,7 @@ impl ApiModel<'_> {
         });
         let parent_names_for_get = parent_names.clone();
         let parent_params_for_get = parent_params.clone();
+        let rt = &self.result_type;
 
         quote! {
             impl #struct_name {
@@ -396,14 +399,14 @@ impl ApiModel<'_> {
                     &self,
                     #(#parent_params)*
                     params: #query_name,
-                ) -> crate::Result<#iter_type_tokens> {
+                ) -> #rt<#iter_type_tokens> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}", self.endpoint, path);
                     let query = format!("{}?{}", endpoint, #param_name::Query(params));
                     rest_api::get(&query).await
                 }
 
-                pub async fn get(&self, #(#parent_params_for_get)* id: i64) -> crate::Result<#struct_name> {
+                pub async fn get(&self, #(#parent_params_for_get)* id: i64) -> #rt<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names_for_get)*);
                     let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                     rest_api::get(&endpoint).await
@@ -451,6 +454,7 @@ impl ApiModel<'_> {
         } else {
             quote! {}
         };
+        let rt = &self.result_type;
 
         for (k, v) in actions.iter() {
             let act = syn::Ident::new(&k.to_case(Case::Pascal), struct_name.span());
@@ -565,7 +569,7 @@ impl ApiModel<'_> {
 
                 // FIXME: fix when supporting additional primary key type
                 cli_actions.push(quote! {
-                    pub async fn #cli_act(&self, #(#parent_params)* id: i64, #(#params)*) -> crate::Result<#struct_name> {
+                    pub async fn #cli_act(&self, #(#parent_params)* id: i64, #(#params)*) -> #rt<#struct_name> {
                         let path = format!(#base_endpoint_lit, #(#parent_names)*);
                         let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                         let req = #action_name::#act(#request_struct_name {
@@ -582,7 +586,7 @@ impl ApiModel<'_> {
 
                 // FIXME: fix when supporting additional primary key type
                 cli_actions.push(quote! {
-                pub async fn #cli_act(&self, #(#parent_params)* id: i64, request: #req_type) -> crate::Result<#struct_name> {
+                pub async fn #cli_act(&self, #(#parent_params)* id: i64, request: #req_type) -> #rt<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}/{}", self.endpoint, path, id);
 
@@ -607,6 +611,7 @@ impl ApiModel<'_> {
         } else {
             quote! {}
         };
+        let rt = &self.result_type;
 
         let output = quote! {
             #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -621,7 +626,7 @@ impl ApiModel<'_> {
             #(#action_requests)*
 
             impl #client_name {
-                pub async fn act_by_id(&self, #(#parent_params)* id: i64, params: #action_name) -> crate::Result<#struct_name> {
+                pub async fn act_by_id(&self, #(#parent_params)* id: i64, params: #action_name) -> #rt<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                     rest_api::post(&endpoint, params).await
@@ -675,6 +680,8 @@ impl ApiModel<'_> {
         let mut query_fields = vec![];
         let mut read_action_types = vec![];
         let mut parsers = vec![];
+
+        let rt = &self.result_type;
 
         for (read_action, fields) in read_actions {
             let mut params = vec![];
@@ -802,7 +809,7 @@ impl ApiModel<'_> {
                     &self,
                     #(#parent_params)*
                     #(#function_params)*
-                ) -> crate::Result<#struct_name> {
+                ) -> #rt<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}", self.endpoint, path);
                     let params = #read_action_struct_name::new()
@@ -935,6 +942,7 @@ impl ApiModel<'_> {
         let mut query_builder_functions = vec![];
         let mut cli_read_action_functions = vec![];
         let mut parsers = vec![];
+        let rt = &self.result_type;
 
         for field in queryable_fields {
             let field_name = &field.ident;
@@ -1151,7 +1159,7 @@ impl ApiModel<'_> {
                     bookmark: Option<String>,
                     #(#parent_params)*
                     #(#function_params)*
-                ) -> crate::Result<#iter_type_tokens> {
+                ) -> #rt<#iter_type_tokens> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}", self.endpoint, path);
                     let params = #param_name::Query(#query_name {
@@ -1310,6 +1318,7 @@ impl ApiModel<'_> {
             quote! {}
         };
         let mut validates = vec![];
+        let rt = &self.result_type;
 
         for (k, v) in actions.iter() {
             tracing::trace!("Processing action: {}", k);
@@ -1378,7 +1387,7 @@ impl ApiModel<'_> {
                 });
 
                 cli_actions.push(quote! {
-                pub async fn #cli_act(&self, #(#parent_params)* #(#params)*) -> crate::Result<#struct_name> {
+                pub async fn #cli_act(&self, #(#parent_params)* #(#params)*) -> #rt<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}", self.endpoint, path);
 
@@ -1395,7 +1404,7 @@ impl ApiModel<'_> {
                 let req_type = syn::Ident::new(&st, struct_name.span());
 
                 cli_actions.push(quote! {
-                pub async fn #cli_act(&self, #(#parent_params)* request: #req_type) -> crate::Result<#struct_name> {
+                pub async fn #cli_act(&self, #(#parent_params)* request: #req_type) -> #rt<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}", self.endpoint, path);
 
@@ -1437,7 +1446,7 @@ impl ApiModel<'_> {
             #(#action_requests)*
 
             impl #client_name {
-                pub async fn act(&self, #(#parent_params)* params: #action_name) -> crate::Result<#struct_name> {
+                pub async fn act(&self, #(#parent_params)* params: #action_name) -> #rt<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}", self.endpoint, path);
                     rest_api::post(&endpoint, params).await
@@ -1858,9 +1867,10 @@ impl ApiModel<'_> {
                 let q = sqlx::query(&query).bind(param.size as i32).bind(offset);
             }
         };
+        let rt = &self.result_type;
 
         let output = quote! {
-            pub async fn find(&self, param: &#query_struct) -> Result<#name> {
+            pub async fn find(&self, param: &#query_struct) -> #rt<#name> {
                 #declare_where_clause
                 #(#where_clause)*
 
@@ -2193,8 +2203,10 @@ impl ApiModel<'_> {
             }
         };
 
+        let rt = &self.result_type;
+
         let output = quote! {
-            pub async fn find_one(&self, #(#aggregate_args)* param: &#read_action) -> Result<#name> {
+            pub async fn find_one(&self, #(#aggregate_args)* param: &#read_action) -> #rt<#name> {
                 #for_where
                 query.push_str(" ");
                 query.push_str(#name::group_by().as_str());
@@ -2433,9 +2445,10 @@ impl ApiModel<'_> {
             ),
             proc_macro2::Span::call_site(),
         );
+        let rt = &self.result_type;
 
         quote! {
-            pub async fn insert_with_dependency(&self, #(#dep_args),*, #(#args),*) -> Result<#name> {
+            pub async fn insert_with_dependency(&self, #(#dep_args),*, #(#args),*) -> #rt<#name> {
                 use sqlx::Row;
                 use sqlx::postgres::PgRow;
                 let mut tx = self.pool.begin().await?;
@@ -2856,9 +2869,11 @@ impl ApiModel<'_> {
             proc_macro2::Span::call_site(),
         );
 
+        let rt = &self.result_type;
+
         // FIXME: fix when supporting additional primary key type
         let output = quote! {
-            pub async fn update(&self, id: i64, #st_var_name: #update_req_st_name) -> Result<#name> {
+            pub async fn update(&self, id: i64, #st_var_name: #update_req_st_name) -> #rt<#name> {
                 let mut i = 1;
                 let mut update_values = vec![];
 
@@ -2890,9 +2905,10 @@ impl ApiModel<'_> {
             &format!("DELETE FROM {} WHERE id = $1", self.table_name),
             proc_macro2::Span::call_site(),
         );
+        let rt = &self.result_type;
 
         quote! {
-            pub async fn delete(&self, id: i64) -> Result<()> {
+            pub async fn delete(&self, id: i64) -> #rt<()> {
                 sqlx::query(#query)
                     .bind(id)
                     .execute(&self.pool)
@@ -3066,8 +3082,9 @@ impl ApiModel<'_> {
             )
         };
 
+        let rt = &self.result_type;
         let output = quote! {
-            pub async fn insert(&self, #(#args),*) -> Result<#name> {
+            pub async fn insert(&self, #(#args),*) -> #rt<#name> {
                 #inner
                 .fetch_one(&self.pool)
                         .await?;
@@ -3075,7 +3092,7 @@ impl ApiModel<'_> {
                 Ok(row)
             }
 
-            pub async fn insert_with_tx<'e, 'c: 'e, E>(&self, tx: E, #(#args),*) -> Result<Option<#name>>
+            pub async fn insert_with_tx<'e, 'c: 'e, E>(&self, tx: E, #(#args),*) -> #rt<Option<#name>>
             where
                 E: sqlx::Executor<'c, Database = sqlx::postgres::Postgres>,
             {
@@ -3086,7 +3103,7 @@ impl ApiModel<'_> {
                 Ok(row)
             }
 
-            pub async fn insert_without_returning(&self, #(#args),*) -> Result<()> {
+            pub async fn insert_without_returning(&self, #(#args),*) -> #rt<()> {
                 #without_inner
                 .execute(&self.pool)
                         .await?;
@@ -3109,9 +3126,10 @@ impl ApiModel<'_> {
             &format!("SELECT * FROM {} LIMIT 1", self.table_name),
             proc_macro2::Span::call_site(),
         );
+        let rt = &self.result_type;
 
         let output = quote! {
-        //         pub async fn select_by_id(&self, id: i64) -> Result<#name> {
+        //         pub async fn select_by_id(&self, id: i64) -> #rt<#name> {
         //             let row = sqlx::query_as!(#name, "SELECT * FROM {} WHERE id = $1", id)
         //                 .fetch_one(&self.pool)
         //                 .await?;
@@ -3119,7 +3137,7 @@ impl ApiModel<'_> {
         //             Ok(row)
         //         }
 
-                pub async fn find_one(&self, param: #read_action) -> Result<#name> {
+                pub async fn find_one(&self, param: #read_action) -> #rt<#name> {
                     let rows = sqlx::query("SELECT * FROM $1 LIMIT 1 OFFSET $3", size, (page - 1) * size)
                         .fetch_all(&self.pool)
                         .await?;
@@ -3173,6 +3191,7 @@ impl<'a> ApiModel<'a> {
         let mut base = String::new();
         let mut parent_ids = Vec::new();
         let mut iter_type = "by_types::QueryResponse".to_string();
+        let mut result_type: proc_macro2::TokenStream = "crate::Result".parse().unwrap();
         let mut read_action_names = IndexMap::<String, ActionField>::new();
         let actions = attr
             .to_string()
@@ -3203,6 +3222,9 @@ impl<'a> ApiModel<'a> {
                             .join("/");
                     }
                     "iter_type" => iter_type = value.to_string(),
+                    "result_type" => {
+                        result_type = value.to_string().parse().expect("invalid result type.")
+                    }
                     // "read_action" => {
                     //     let value = value
                     //         .trim_matches('[')
@@ -3410,6 +3432,8 @@ impl<'a> ApiModel<'a> {
             database,
             #[cfg(feature = "server")]
             primary_key,
+
+            result_type,
 
             name,
             name_id,
