@@ -519,7 +519,7 @@ impl ApiModel<'_> {
 
                 for field in self.actions.action_by_id.get(k).clone().unwrap_or(&vec![]) {
                     let field_name = syn::Ident::new(&field.name, struct_name.span());
-                    let field_type = syn::Ident::new(&field.r#type, struct_name.span());
+                    let field_type = field.ty();
 
                     fields.push(quote! {
                         pub #field_name: #field_type,
@@ -1274,6 +1274,7 @@ impl ApiModel<'_> {
     }
 
     pub fn generate_action_struct(&self) -> proc_macro2::TokenStream {
+        tracing::trace!("Generating action struct for {}", self.name_id);
         let struct_name = self.name_id;
         let base_endpoint = &self.base;
         let parent_ids = &self.parent_ids;
@@ -1311,6 +1312,7 @@ impl ApiModel<'_> {
         let mut validates = vec![];
 
         for (k, v) in actions.iter() {
+            tracing::trace!("Processing action: {}", k);
             let act = syn::Ident::new(&k.to_case(Case::Pascal), struct_name.span());
             let cli_act = syn::Ident::new(&k.to_case(Case::Snake), struct_name.span());
             let request_struct_name = match v {
@@ -1352,7 +1354,7 @@ impl ApiModel<'_> {
 
                 for field in self.actions.actions.get(k).clone().unwrap_or(&vec![]) {
                     let field_name = syn::Ident::new(&field.name, struct_name.span());
-                    let field_type = syn::Ident::new(&field.r#type, struct_name.span());
+                    let field_type = field.ty();
 
                     fields.push(quote! {
                         pub #field_name: #field_type,
@@ -1403,6 +1405,8 @@ impl ApiModel<'_> {
             })
             }
         }
+
+        tracing::trace!("Finished parsing actions");
 
         let validate_function = if has_validator {
             quote! {

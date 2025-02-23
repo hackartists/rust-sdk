@@ -7,6 +7,15 @@ pub struct ActionRequestField {
     pub r#type: String,
 }
 
+#[cfg(feature = "server")]
+impl ActionRequestField {
+    pub fn ty(&self) -> proc_macro2::TokenStream {
+        self.r#type
+            .parse()
+            .expect(format!("invalid type of {}: {}", self.name, self.r#type).as_str())
+    }
+}
+
 /// The Actions struct holds three groups of action requests:
 /// - `actions`: for the "action" key
 /// - `read_actions`: for the "read_action" key
@@ -127,7 +136,7 @@ fn parse_action_value(s: &str) -> Result<IndexMap<String, Vec<ActionRequestField
     let mut actions = Vec::new();
     let mut token = String::new();
     let mut paren_depth = 0;
-    let mut angle_depth = 0;
+    // let mut angle_depth = 0;
     for c in s.chars() {
         match c {
             '(' => {
@@ -141,18 +150,18 @@ fn parse_action_value(s: &str) -> Result<IndexMap<String, Vec<ActionRequestField
                 paren_depth -= 1;
                 token.push(c);
             }
-            '<' => {
-                angle_depth += 1;
-                token.push(c);
-            }
-            '>' => {
-                if angle_depth == 0 {
-                    return Err("Unmatched '>' in action value".to_string());
-                }
-                angle_depth -= 1;
-                token.push(c);
-            }
-            ',' if paren_depth == 0 && angle_depth == 0 => {
+            // '<' => {
+            //     angle_depth += 1;
+            //     token.push(c);
+            // }
+            // '>' => {
+            //     if angle_depth == 0 {
+            //         return Err("Unmatched '>' in action value".to_string());
+            //     }
+            //     angle_depth -= 1;
+            //     token.push(c);
+            // }
+            ',' if paren_depth == 0 => {
                 if !token.trim().is_empty() {
                     actions.push(token.trim().to_string());
                 }
@@ -189,21 +198,21 @@ fn parse_action_value(s: &str) -> Result<IndexMap<String, Vec<ActionRequestField
 fn parse_fields(s: &str) -> Result<Vec<ActionRequestField>, String> {
     let mut fields = Vec::new();
     let mut token = String::new();
-    let mut angle_depth = 0;
+    // let mut angle_depth = 0;
     for c in s.chars() {
         match c {
-            '<' => {
-                angle_depth += 1;
-                token.push(c);
-            }
-            '>' => {
-                if angle_depth == 0 {
-                    return Err("Unmatched '>' in field definition".to_string());
-                }
-                angle_depth -= 1;
-                token.push(c);
-            }
-            ',' if angle_depth == 0 => {
+            // '<' => {
+            //     angle_depth += 1;
+            //     token.push(c);
+            // }
+            // '>' => {
+            //     if angle_depth == 0 {
+            //         return Err("Unmatched '>' in field definition".to_string());
+            //     }
+            //     angle_depth -= 1;
+            //     token.push(c);
+            // }
+            ',' => {
                 if !token.trim().is_empty() {
                     let field = parse_field(&token)?;
                     fields.push(field);
@@ -326,7 +335,7 @@ mod tests {
     fn test_actions_from_str_full() {
         let input = r#"
             base = "/auth/v1",
-            action = [signup(code = String, param = u64), login],
+            action = [signup(code = String, param = u64), login(test = Vec<String>)],
             read_action = read_data,
             action_by_id = [get_data, update_data]
         "#;
@@ -346,7 +355,13 @@ mod tests {
                 },
             ],
         );
-        expected_actions.insert("login".to_string(), Vec::new());
+        expected_actions.insert(
+            "login".to_string(),
+            vec![ActionRequestField {
+                name: "test".to_string(),
+                r#type: "Vec<String>".to_string(),
+            }],
+        );
 
         let mut expected_read_actions = IndexMap::new();
         expected_read_actions.insert("read_data".to_string(), Vec::new());
