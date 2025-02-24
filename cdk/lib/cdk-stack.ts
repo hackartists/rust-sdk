@@ -217,9 +217,26 @@ export class CdkStack extends cdk.Stack {
     }
 
     if (enableS3) {
+      var allowedOrigins = ["https://" + domain];
+      if (env !== "prod") {
+        allowedOrigins.push("http://localhost:8080");
+      }
+
       const assetsBucket = new s3.Bucket(this, "Bucket", {
         bucketName: domain,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
+        cors: [
+          {
+            allowedHeaders: ["*"],
+            allowedMethods: [
+              s3.HttpMethods.PUT,
+              s3.HttpMethods.POST,
+              s3.HttpMethods.DELETE,
+            ],
+            allowedOrigins,
+            exposedHeaders: [],
+          },
+        ],
       });
 
       const s3Origin = new origins.S3Origin(assetsBucket);
