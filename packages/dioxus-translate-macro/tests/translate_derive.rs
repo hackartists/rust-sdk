@@ -4,11 +4,15 @@ use std::str::FromStr;
 #[derive(Debug, Translate, PartialEq, Eq)]
 pub enum ProjectArea {
     #[translate(ko = "경제")]
-    Economy = 1,
+    Economy,
     #[translate(ko = "사회")]
-    Society = 2,
+    Society,
     #[translate(ko = "기술")]
-    Technology = 8,
+    Technology,
+    #[translate(ko = "구조체")]
+    Struct { a: String, b: i32 },
+    #[translate(ko = "튜플")]
+    Tuple(String, i32),
 }
 
 #[test]
@@ -24,6 +28,30 @@ fn test_translation() {
         "Technology"
     );
     assert_eq!(ProjectArea::Technology.translate(&Language::Ko), "기술");
+    assert_eq!(
+        ProjectArea::Struct {
+            a: "abg".to_string(),
+            b: 3
+        }
+        .translate(&Language::Ko),
+        "구조체"
+    );
+    assert_eq!(
+        ProjectArea::Struct {
+            a: "abg".to_string(),
+            b: 3
+        }
+        .translate(&Language::En),
+        "Struct"
+    );
+    assert_eq!(
+        ProjectArea::Tuple("abg".to_string(), 3).translate(&Language::Ko),
+        "튜플"
+    );
+    assert_eq!(
+        ProjectArea::Tuple("abg".to_string(), 3).translate(&Language::En),
+        "Tuple"
+    );
 }
 
 #[test]
@@ -31,6 +59,20 @@ fn test_display() {
     assert_eq!(format!("{}", ProjectArea::Economy), "economy");
     assert_eq!(format!("{}", ProjectArea::Society), "society");
     assert_eq!(format!("{}", ProjectArea::Technology), "technology");
+    assert_eq!(
+        format!(
+            "{}",
+            ProjectArea::Struct {
+                a: "abg".to_string(),
+                b: 3
+            }
+        ),
+        "struct"
+    );
+    assert_eq!(
+        format!("{}", ProjectArea::Tuple("abg".to_string(), 3)),
+        "tuple"
+    );
 }
 
 #[test]
@@ -55,6 +97,18 @@ fn test_from_str() {
         ProjectArea::from_str("technology"),
         Ok(ProjectArea::Technology)
     );
+    let res = ProjectArea::from_str("구조체");
+    assert!(res.is_ok());
+    assert_eq!(
+        res.unwrap(),
+        ProjectArea::Struct {
+            a: "".to_string(),
+            b: 0
+        }
+    );
+    let res = ProjectArea::from_str("튜플");
+    assert!(res.is_ok());
+    assert_eq!(res.unwrap(), ProjectArea::Tuple("".to_string(), 0));
 
     // Test invalid input
     assert!(ProjectArea::from_str("invalid_field").is_err());
