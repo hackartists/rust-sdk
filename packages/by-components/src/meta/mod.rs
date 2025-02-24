@@ -1,14 +1,17 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
+use dioxus_translate::*;
 
 #[component]
 pub fn MetaSeoTemplate(
+    lang: Language,
     title: String,
     keywords: Option<String>,
     author: Option<String>,
     #[props(default = "index, follow".to_string())] robots: String,
     url: String,
     canonical: String,
+    logo_url: String,
     twitter_id: Option<String>,
 ) -> Element {
     rsx! {
@@ -22,6 +25,8 @@ pub fn MetaSeoTemplate(
         document::Link { rel: "canonical", href: "{canonical}" }
         document::Meta { property: "og:site_name", content: "{title}" }
         document::Meta { property: "og:url", content: "{url}" }
+        document::Meta { property: "og:logo", content: "{logo_url}" }
+        document::Meta { property: "og:locale", content: "{lang.open_graph_locale()}" }
         if let Some(twitter_id) = twitter_id {
             document::Meta { property: "twitter:site", content: "{twitter_id}" }
             document::Meta { property: "twitter:creator", content: "{twitter_id}" }
@@ -40,13 +45,7 @@ pub fn MetaPage(
     audio: Option<String>,
 
     #[props(default = "summary_large_image".to_string())] twitter_card: String,
-    twitter_id: Option<String>,
 ) -> Element {
-    let twitter_id = match twitter_id {
-        Some(id) => Some(format!("@{}", id.trim_start_matches("@"))),
-        None => None,
-    };
-
     rsx! {
         // metadata for SEO
         document::Title { "{title}" }
@@ -60,12 +59,6 @@ pub fn MetaPage(
         document::Meta { property: "og:title", content: "{title}" }
         document::Meta { property: "og:type", content: "website" }
         document::Meta { property: "twitter:card", content: "{twitter_card}" }
-
-        // metadata for Twitter
-        if let Some(twitter_id) = twitter_id {
-            document::Meta { property: "twitter:site", content: "{twitter_id}" }
-            document::Meta { property: "twitter:creator", content: "{twitter_id}" }
-        }
 
         if let Some(image) = image {
             document::Meta { property: "og:image", content: "{image}" }

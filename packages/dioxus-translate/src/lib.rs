@@ -49,6 +49,14 @@ impl Language {
         #[allow(unreachable_code)]
         Language::En
     }
+
+    pub fn open_graph_locale(&self) -> String {
+        match self {
+            #[cfg(feature = "ko")]
+            Language::Ko => "ko_KR".to_string(),
+            Language::En => "en_US".to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for Language {
