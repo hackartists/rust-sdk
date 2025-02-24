@@ -241,6 +241,10 @@ export class CdkStack extends cdk.Stack {
 
       const s3Origin = new origins.S3Origin(assetsBucket);
       distributionProps.additionalBehaviors = {
+        "/metadata/*": {
+          origin: s3Origin,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
         "/assets/*": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
