@@ -2,17 +2,20 @@
 use dioxus::html::HasFileData;
 use dioxus::prelude::*;
 
+pub type FileExtension = String;
+
 #[component]
 pub fn DropZone(
     oncomplete: Option<EventHandler<Vec<String>>>,
     onclick: Option<EventHandler<Event<MouseData>>>,
-    onupload: EventHandler<Vec<u8>>,
+    onupload: EventHandler<(Vec<u8>, FileExtension)>,
     #[props(extends = GlobalAttributes)] attributes: Vec<Attribute>,
     children: Element,
     onchange: Option<EventHandler<bool>>,
     #[props(default = "image/*".to_string())] accept: String,
     #[props(default = false)] multiple: bool,
 ) -> Element {
+    let mut file_input: Signal<Option<web_sys::Element>> = use_signal(|| None);
     rsx! {
         button {
             ondragover: move |e| {
@@ -40,8 +43,9 @@ pub fn DropZone(
                     let filenames = file_engine.files();
                     for i in 0..filenames.len() {
                         let filename = &filenames[i];
+                        let ext = filename.split('.').last().unwrap_or_default();
                         if let Some(contents) = file_engine.read_file(filename).await {
-                            onupload(contents);
+                            onupload((contents, ext.to_string()));
                         }
                     }
                 }
@@ -51,20 +55,20 @@ pub fn DropZone(
             },
             onclick: move |_| {
                 use wasm_bindgen::JsCast;
-                let input = web_sys::window()
-                    .unwrap()
-                    .document()
-                    .unwrap()
-                    .get_element_by_id("drop-zone-file-selector")
-                    .unwrap();
-                input.dyn_ref::<web_sys::HtmlInputElement>().unwrap().click();
+                if let Some(file_input) = file_input() {
+                    file_input.dyn_ref::<web_sys::HtmlInputElement>().unwrap().click();
+                }
             },
             ..attributes,
             {children}
         }
         input {
-            id: "drop-zone-file-selector",
             class: "hidden",
+            onmounted: move |el| {
+                use dioxus::web::WebEventExt;
+                let w = el.as_web_event();
+                file_input.set(Some(w));
+            },
             accept,
             multiple,
             r#type: "file",
@@ -75,8 +79,9 @@ pub fn DropZone(
                     let filenames = file_engine.files();
                     for i in 0..filenames.len() {
                         let filename = &filenames[i];
+                        let ext = filename.split('.').last().unwrap_or_default();
                         if let Some(contents) = file_engine.read_file(filename).await {
-                            onupload(contents);
+                            onupload((contents, ext.to_string()));
                         }
                     }
                 }
