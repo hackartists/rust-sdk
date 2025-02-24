@@ -2,3 +2,4 @@ target/
 /cdk/cdk.context.json
 /.build/
 /cdk/.projectile
+.build/
