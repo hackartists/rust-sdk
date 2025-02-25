@@ -1,14 +1,10 @@
 use dioxus::prelude::*;
 #[component]
 pub fn Scissors(
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "".to_string())]
-    class: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "".to_string())] class: String,
 ) -> Element {
     rsx! {
         svg {
@@ -54,14 +50,10 @@ pub fn Scissors(
 }
 #[component]
 pub fn Delete1(
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    height: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] height: String,
 ) -> Element {
     rsx! {
         svg {
@@ -97,14 +89,10 @@ pub fn Delete1(
 }
 #[component]
 pub fn FlipVertical(
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] width: String,
 ) -> Element {
     rsx! {
         svg {
@@ -133,14 +121,10 @@ pub fn FlipVertical(
 }
 #[component]
 pub fn PushPin(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
 ) -> Element {
     rsx! {
         svg {
@@ -168,14 +152,10 @@ pub fn PushPin(
 }
 #[component]
 pub fn FlipHorizontal(
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "".to_string())]
-    class: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "".to_string())] class: String,
 ) -> Element {
     rsx! {
         svg {
@@ -204,14 +184,11 @@ pub fn FlipHorizontal(
 }
 #[component]
 pub fn Search(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "none".to_string())]
-    fill: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "black".to_string())] color: String,
 ) -> Element {
     rsx! {
         svg {
@@ -242,14 +219,10 @@ pub fn Search(
 }
 #[component]
 pub fn Edit1(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "none".to_string())]
-    fill: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "none".to_string())] fill: String,
 ) -> Element {
     rsx! {
         svg {
@@ -271,14 +244,10 @@ pub fn Edit1(
 }
 #[component]
 pub fn FlipHorizontal2(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
 ) -> Element {
     rsx! {
         svg {
@@ -314,14 +283,10 @@ pub fn FlipHorizontal2(
 }
 #[component]
 pub fn Eye(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "none".to_string())]
-    fill: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "none".to_string())] fill: String,
 ) -> Element {
     rsx! {
         svg {
@@ -349,14 +314,10 @@ pub fn Eye(
 }
 #[component]
 pub fn Brush(
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] width: String,
 ) -> Element {
     rsx! {
         svg {
@@ -385,14 +346,10 @@ pub fn Brush(
 }
 #[component]
 pub fn MoveUp(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "none".to_string())]
-    fill: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "none".to_string())] fill: String,
 ) -> Element {
     rsx! {
         svg {
@@ -441,14 +398,10 @@ pub fn MoveUp(
 }
 #[component]
 pub fn Delete(
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "none".to_string())]
-    fill: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
 ) -> Element {
     rsx! {
         svg {
@@ -498,14 +451,10 @@ pub fn Delete(
 }
 #[component]
 pub fn FlipHorizontal1(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
 ) -> Element {
     rsx! {
         svg {
@@ -533,14 +482,10 @@ pub fn FlipHorizontal1(
 }
 #[component]
 pub fn EditContent(
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    height: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] height: String,
 ) -> Element {
     rsx! {
         svg {
@@ -583,14 +528,10 @@ pub fn EditContent(
 }
 #[component]
 pub fn Delete3(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "none".to_string())]
-    fill: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "none".to_string())] fill: String,
 ) -> Element {
     rsx! {
         svg {
@@ -626,14 +567,10 @@ pub fn Delete3(
 }
 #[component]
 pub fn PickerOff(
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "none".to_string())]
-    fill: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "none".to_string())] fill: String,
 ) -> Element {
     rsx! {
         svg {
@@ -661,14 +598,10 @@ pub fn PickerOff(
 }
 #[component]
 pub fn FlipVertical1(
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "".to_string())]
-    class: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "".to_string())] class: String,
 ) -> Element {
     rsx! {
         svg {
@@ -696,14 +629,10 @@ pub fn FlipVertical1(
 }
 #[component]
 pub fn ZoomIn(
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    height: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] height: String,
 ) -> Element {
     rsx! {
         svg {
@@ -741,14 +670,10 @@ pub fn ZoomIn(
 }
 #[component]
 pub fn Edit2(
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] width: String,
 ) -> Element {
     rsx! {
         svg {
@@ -777,14 +702,10 @@ pub fn Edit2(
 }
 #[component]
 pub fn Crop(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "none".to_string())]
-    fill: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "none".to_string())] fill: String,
 ) -> Element {
     rsx! {
         svg {
@@ -812,14 +733,10 @@ pub fn Crop(
 }
 #[component]
 pub fn EyeOff(
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    height: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] height: String,
 ) -> Element {
     rsx! {
         svg {
@@ -846,14 +763,10 @@ pub fn EyeOff(
 }
 #[component]
 pub fn MoveDown(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
 ) -> Element {
     rsx! {
         svg {
@@ -902,14 +815,10 @@ pub fn MoveDown(
 }
 #[component]
 pub fn Picker(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
 ) -> Element {
     rsx! {
         svg {
@@ -931,14 +840,10 @@ pub fn Picker(
 }
 #[component]
 pub fn FlipVertical2(
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    width: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] width: String,
 ) -> Element {
     rsx! {
         svg {
@@ -974,14 +879,10 @@ pub fn FlipVertical2(
 }
 #[component]
 pub fn Delete2(
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    height: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] height: String,
 ) -> Element {
     rsx! {
         svg {
@@ -1031,14 +932,10 @@ pub fn Delete2(
 }
 #[component]
 pub fn Brush1(
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "none".to_string())]
-    fill: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
 ) -> Element {
     rsx! {
         svg {
@@ -1067,14 +964,10 @@ pub fn Brush1(
 }
 #[component]
 pub fn ZoomOut(
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "".to_string())]
-    class: String,
-    #[props(default = "none".to_string())]
-    fill: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
 ) -> Element {
     rsx! {
         svg {
@@ -1112,14 +1005,10 @@ pub fn ZoomOut(
 }
 #[component]
 pub fn Edit(
-    #[props(default = "24".to_string())]
-    width: String,
-    #[props(default = "none".to_string())]
-    fill: String,
-    #[props(default = "24".to_string())]
-    height: String,
-    #[props(default = "".to_string())]
-    class: String,
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "".to_string())] class: String,
 ) -> Element {
     rsx! {
         svg {
