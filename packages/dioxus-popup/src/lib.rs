@@ -79,7 +79,10 @@ pub fn default() -> Element {
 }
 
 #[component]
-pub fn PopupZone() -> Element {
+pub fn PopupZone(
+    #[props(default = "".to_string())] background_color: String,
+    #[props(default = "border-[#292B3C] border-[1px]".to_string())] border_class: String,
+) -> Element {
     let mut popup: PopupService = use_context();
     let mut hover_close = use_signal(|| false);
     let color_theme = try_use_context::<ColorTheme>().unwrap_or_default();
@@ -100,8 +103,11 @@ pub fn PopupZone() -> Element {
             },
             if popup.is_opened() {
                 div {
-                    class: "relative rounded-[12px] border-[#292B3C] border-[1px] p-[25px] min-w-[350px] max-[500px]:w-full max-[500px]:mx-[20px]",
-                    background: "{color_theme.popup.background}",
+                    class: format!(
+                        "relative rounded-[12px] {} p-[25px] min-w-[350px] max-[500px]:w-full max-[500px]:mx-[20px]",
+                        border_class,
+                    ),
+                    background: if background_color == "" { "{color_theme.popup.background}" } else { background_color },
                     onclick: move |e| {
                         e.stop_propagation();
                     },
