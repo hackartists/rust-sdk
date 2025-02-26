@@ -271,14 +271,18 @@ pub fn Kaia(#[props(default = 35)] size: i64) -> Element {
 }
 
 #[component]
-pub fn OpenSea(#[props(default = "#0086FF".to_string())] color: String) -> Element {
+pub fn OpenSea(
+    #[props(default = 20)] size: u64,
+
+    #[props(default = "#0086FF".to_string())] color: String,
+) -> Element {
     rsx! {
         div {
             svg {
                 fill: "none",
-                height: "360",
+                height: "{size}",
                 view_box: "0 0 360 360",
-                width: "360",
+                width: "{size}",
                 xmlns: "http://www.w3.org/2000/svg",
                 g { clip_path: "url(#clip0_3_64)",
                     g { clip_path: "url(#clip1_3_64)",
