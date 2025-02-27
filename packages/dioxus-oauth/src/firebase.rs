@@ -1,3 +1,4 @@
+#[cfg(feature = "web")]
 use dioxus::prelude::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
