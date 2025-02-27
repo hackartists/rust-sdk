@@ -201,6 +201,14 @@ pub fn derive_dioxus_controller(input: TokenStream) -> TokenStream {
                             (self.#field_name)()
                         }
                     }
+                } else if field_type.starts_with("Memo") {
+                    let t = field_type.trim_start_matches("Memo<");
+                    let t: proc_macro2::TokenStream = t[..t.len() - 1].parse().unwrap();
+                    quote! {
+                        pub fn #field_name(&self) -> #t {
+                            (self.#field_name)()
+                        }
+                    }
                 } else if field_type.starts_with("Resource<") {
                     let t = field_type.trim_start_matches("Resource<");
                     let t: proc_macro2::TokenStream = t[..t.len() - 1].parse().unwrap();
