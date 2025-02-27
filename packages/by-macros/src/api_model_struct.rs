@@ -3799,6 +3799,10 @@ LEFT JOIN (
     }
 
     pub fn can_query(&self) -> bool {
+        if self.aggregator.is_some() {
+            return true;
+        }
+
         match self.relation {
             Some(Relation::ManyToMany { .. }) => false,
             Some(Relation::OneToMany { .. }) => false,
