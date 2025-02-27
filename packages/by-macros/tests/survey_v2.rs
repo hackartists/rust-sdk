@@ -69,7 +69,6 @@ mod empty_param_tests {
     }
 
     #[derive(Debug, Clone, Eq, PartialEq, Default, ApiModel)]
-    #[serde(rename_all = "snake_case")]
     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
     pub enum ProjectType {
         #[default]
@@ -78,7 +77,6 @@ mod empty_param_tests {
     }
 
     #[derive(Debug, Clone, Eq, PartialEq, Default, ApiModel, Copy)]
-    #[serde(rename_all = "snake_case")]
     #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
     pub enum ProjectArea {
         #[default]

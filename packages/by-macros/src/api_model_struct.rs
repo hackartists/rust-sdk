@@ -4092,6 +4092,12 @@ END $$;
                 foreign_table_name,
                 ..
             }) => {
+                if foreign_table_name.is_empty() {
+                    panic!(
+                        "[{} / {}] describe `foreign_table_name` or `table_name` in many_to_many field",
+                        self.name, self.table,
+                    );
+                }
                 tracing::trace!("additional query for many to many relation: {var_name}");
                 let q = format!(
                     r#"
