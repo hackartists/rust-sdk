@@ -182,7 +182,7 @@ impl FirebaseService {
                 let user = cred.user();
 
                 Credential {
-                    id_token,
+                    id_token: self.get_user_id_token().await.unwrap_or_default(),
                     access_token,
                     display_name: user.display_name(),
                     email: user.email(),
