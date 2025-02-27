@@ -385,6 +385,24 @@ impl ApiModel<'_> {
 
         let mut custom_query = quote! {};
 
+        if let Some(q) = self.custom_query_type() {
+            let parent_names = parent_names.clone();
+            let parent_params = parent_params.clone();
+
+            custom_query = quote! {
+                pub async fn query_by_custom(
+                    &self,
+                    #(#parent_params)*
+                    params: #q,
+                ) -> #rt<#iter_type_tokens> {
+                    let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                    let endpoint = format!("{}{}", self.endpoint, path);
+                    let query = format!("{}?{}", endpoint, #param_name::Custom(params));
+                    rest_api::get(&query).await
+                }
+            };
+        }
+
         quote! {
             impl #struct_name {
                 pub fn get_client(endpoint: &str) -> #client_name {
@@ -408,6 +426,8 @@ impl ApiModel<'_> {
                     let query = format!("{}?{}", endpoint, #param_name::Query(params));
                     rest_api::get(&query).await
                 }
+
+                #custom_query
 
                 pub async fn get(&self, #(#parent_params_for_get)* id: i64) -> #rt<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names_for_get)*);
