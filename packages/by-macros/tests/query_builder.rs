@@ -100,7 +100,7 @@ pub mod update_into_tests {
         #[api_model(summary, one_to_many = child_model_query_builder_test, foreign_key = model_id, aggregator=count)]
         pub num_of_children: i64,
 
-        #[api_model(many_to_many = many_join_table, table_name = many_model_query_builder_test, foreign_reference_key = model_id, foreign_primary_key = many_id, aggregator=exist)]
+        #[api_model(many_to_many = many_join_table, foreign_table_name = many_model_query_builder_test, foreign_reference_key = model_id, foreign_primary_key = many_id, aggregator=exist)]
         pub has_many: bool,
 
         #[api_model(many_to_many = many_join_table, foreign_table_name = many_model_query_builder_test, foreign_reference_key = model_id, foreign_primary_key = many_id)]
