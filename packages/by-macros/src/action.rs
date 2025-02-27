@@ -23,6 +23,7 @@ impl ActionRequestField {
 pub struct Actions {
     pub actions: IndexMap<String, Vec<ActionRequestField>>,
     pub read_actions: IndexMap<String, Vec<ActionRequestField>>,
+    pub query_actions: IndexMap<String, Vec<ActionRequestField>>,
     pub action_by_id: IndexMap<String, Vec<ActionRequestField>>,
 }
 
@@ -36,6 +37,7 @@ impl FromStr for Actions {
         // Prepare maps for each category.
         let mut actions: IndexMap<String, Vec<ActionRequestField>> = IndexMap::new();
         let mut read_actions: IndexMap<String, Vec<ActionRequestField>> = IndexMap::new();
+        let mut query_actions: IndexMap<String, Vec<ActionRequestField>> = IndexMap::new();
         let mut action_by_id: IndexMap<String, Vec<ActionRequestField>> = IndexMap::new();
 
         for (key, value) in pairs {
@@ -44,6 +46,8 @@ impl FromStr for Actions {
                 actions = parse_action_value(&value)?;
             } else if key_lower == "read_action" {
                 read_actions = parse_action_value(&value)?;
+            } else if key_lower == "query_action" {
+                query_actions = parse_action_value(&value)?;
             } else if key_lower == "action_by_id" {
                 action_by_id = parse_action_value(&value)?;
             }
@@ -52,6 +56,7 @@ impl FromStr for Actions {
         Ok(Actions {
             actions,
             read_actions,
+            query_actions,
             action_by_id,
         })
     }
