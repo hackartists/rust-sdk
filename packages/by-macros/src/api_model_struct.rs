@@ -4094,7 +4094,7 @@ END $$;
             }) => {
                 if foreign_table_name.is_empty() {
                     panic!(
-                        "[{} / {}] describe `foreign_table_name` in many_to_many field",
+                        "[{} / {}] describe `foreign_table_name` or `table_name` in many_to_many field",
                         self.name, self.table,
                     );
                 }
