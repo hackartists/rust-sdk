@@ -46,7 +46,7 @@ extern "C" {
     pub type GoogleAuthUser;
 
     #[wasm_bindgen(method, js_name = getIdToken)]
-    pub fn get_id_token(this: &GoogleAuthUser, token: bool) -> String;
+    pub async fn get_id_token(this: &GoogleAuthUser) -> JsValue;
 }
 
 #[wasm_bindgen]
@@ -182,7 +182,7 @@ impl FirebaseService {
                 let user = cred.user();
 
                 Credential {
-                    id_token,
+                    id_token: self.get_user_id_token().await.unwrap_or_default(),
                     access_token,
                     display_name: user.display_name(),
                     email: user.email(),
@@ -196,5 +196,21 @@ impl FirebaseService {
         };
 
         cred
+    }
+
+    pub async fn get_user_id_token(&self) -> Option<String> {
+        let auth = get_auth();
+        let user = auth.current_user();
+        if user.is_none() {
+            tracing::error!("No user found");
+            return None;
+        }
+
+        let user = user.unwrap();
+        let id_token = user.get_id_token().await;
+        let id_token = id_token.as_string().unwrap_or_default();
+        tracing::debug!("id_token: {id_token}");
+
+        Some(id_token)
     }
 }
