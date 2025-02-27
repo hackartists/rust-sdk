@@ -76,8 +76,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
     "#;
+    sqlx::query(query).execute(&pool).await.unwrap();
 
-        sqlx::query(query).execute(&pool).await.unwrap();
 
         let query = r#"
 CREATE OR REPLACE FUNCTION set_created_at()
