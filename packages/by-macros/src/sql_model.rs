@@ -200,7 +200,7 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             "foreign_key" => {
                                 opened = OpenedOffset::ForeignKey;
                             }
-                            "foreign_table_name" => {
+                            "foreign_table_name" | "table_name" => {
                                 opened = OpenedOffset::ForeignTableName;
                             }
                             "foreign_key_type" => {
