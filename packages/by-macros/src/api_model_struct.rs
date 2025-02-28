@@ -42,6 +42,7 @@ pub struct ApiModel<'a> {
 
     pub has_validator: bool,
     pub iter_type: String,
+    pub custom_query_type: Option<String>,
     pub base: String,
     pub parent_ids: Vec<String>,
     pub summary_fields: Vec<Field>,
@@ -382,6 +383,26 @@ impl ApiModel<'_> {
         let parent_params_for_get = parent_params.clone();
         let rt = &self.result_type;
 
+        let mut custom_query = quote! {};
+
+        if let Some(q) = self.custom_query_type() {
+            let parent_names = parent_names.clone();
+            let parent_params = parent_params.clone();
+
+            custom_query = quote! {
+                pub async fn query_by_custom(
+                    &self,
+                    #(#parent_params)*
+                    params: #q,
+                ) -> #rt<#iter_type_tokens> {
+                    let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                    let endpoint = format!("{}{}", self.endpoint, path);
+                    let query = format!("{}?{}", endpoint, #param_name::Custom(params));
+                    rest_api::get(&query).await
+                }
+            };
+        }
+
         quote! {
             impl #struct_name {
                 pub fn get_client(endpoint: &str) -> #client_name {
@@ -406,10 +427,18 @@ impl ApiModel<'_> {
                     rest_api::get(&query).await
                 }
 
+                #custom_query
+
                 pub async fn get(&self, #(#parent_params_for_get)* id: i64) -> #rt<#struct_name> {
                     let path = format!(#base_endpoint_lit, #(#parent_names_for_get)*);
                     let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                     rest_api::get(&endpoint).await
+                }
+            }
+
+            impl #struct_name {
+                pub fn url() -> String {
+                    #base_endpoint_lit.to_string()
                 }
             }
         }
@@ -1604,6 +1633,16 @@ impl ApiModel<'_> {
         )
     }
 
+    pub fn custom_query_type(&self) -> Option<proc_macro2::TokenStream> {
+        if self.custom_query_type.is_none() {
+            return None;
+        }
+
+        let custom_query_type = self.custom_query_type.as_ref().unwrap();
+
+        custom_query_type.parse::<proc_macro2::TokenStream>().ok()
+    }
+
     pub fn iter_type_name(&self) -> proc_macro2::TokenStream {
         if self.should_have_summary() {
             format!("{}<{}Summary>", self.iter_type, self.name)
@@ -1629,6 +1668,12 @@ impl ApiModel<'_> {
         if self.should_have_read_action() {
             enums.push(quote! {
                 Read(#read),
+            });
+        }
+
+        if let Some(t) = self.custom_query_type() {
+            enums.push(quote! {
+                Custom(#t),
             });
         }
 
@@ -3191,6 +3236,7 @@ impl<'a> ApiModel<'a> {
         let mut base = String::new();
         let mut parent_ids = Vec::new();
         let mut iter_type = "by_types::QueryResponse".to_string();
+        let mut custom_query_type = None;
         let mut result_type: proc_macro2::TokenStream = "crate::Result".parse().unwrap();
         let mut read_action_names = IndexMap::<String, ActionField>::new();
         let actions = attr
@@ -3222,6 +3268,7 @@ impl<'a> ApiModel<'a> {
                             .join("/");
                     }
                     "iter_type" => iter_type = value.to_string(),
+                    "custom_query_type" => custom_query_type = Some(value.to_string()),
                     "result_type" => {
                         result_type = value.to_string().parse().expect("invalid result type.")
                     }
@@ -3438,6 +3485,7 @@ impl<'a> ApiModel<'a> {
             name,
             name_id,
             iter_type,
+            custom_query_type,
             base,
             read_action_names,
             parent_ids,
@@ -3799,6 +3847,10 @@ LEFT JOIN (
     }
 
     pub fn can_query(&self) -> bool {
+        if self.aggregator.is_some() {
+            return true;
+        }
+
         match self.relation {
             Some(Relation::ManyToMany { .. }) => false,
             Some(Relation::OneToMany { .. }) => false,

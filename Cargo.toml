@@ -5,19 +5,7 @@ members = [
   "examples/auth",
   "examples/basic",
 
-  "packages/by-axum",
-  "packages/rest-api",
-  "packages/by-types",
-  "packages/by-macros",
-  "packages/dioxus-popup",
-  "packages/google-wallet",
-  "packages/dioxus-oauth",
-  "packages/dioxus-translate-macro",
-  "packages/dioxus-translate",
-  "packages/dioxus-translate-types",
-  "packages/by-components",
-  "packages/dioxus-aws",
-  "packages/easy-dynamodb",
+  "packages/*"
 ]
 resolver = "2"
 
