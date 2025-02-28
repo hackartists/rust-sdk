@@ -12,7 +12,7 @@ use dioxus::prelude::*;
 /// - mobile-first: 320.0(mobile)-don't use, 768.0(tablet), 1024.0(desktop)
 ///
 /// # Example
-/// ```rust
+/// ```no_run
 /// use by_components::responsive::Responsive;
 /// use dioxus::prelude::*;
 ///
