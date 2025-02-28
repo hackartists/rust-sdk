@@ -793,6 +793,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "btracing"
+version = "0.1.0"
+dependencies = [
+ "btracing-macros",
+ "dioxus",
+ "dioxus-toast",
+ "tracing",
+]
+
+[[package]]
+name = "btracing-macros"
+version = "0.1.0"
+dependencies = [
+ "bigdecimal",
+ "by-axum",
+ "by-types",
+ "convert_case 0.7.1",
+ "indexmap",
+ "lazy_static",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "reqwest",
+ "rest-api",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sqlx",
+ "syn 2.0.96",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "validator",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -844,6 +881,17 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "by-db"
+version = "0.1.0"
+dependencies = [
+ "by-types",
+ "easy-dynamodb",
+ "slog",
+ "sqlx",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -1732,6 +1780,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-toast"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c424116e781a685f2e0ff3f290a509d7746688b619bb342a753063e1d81bc6a"
+dependencies = [
+ "chrono",
+ "dioxus",
+ "gloo-timers",
+]
+
+[[package]]
 name = "dioxus-translate"
 version = "0.1.3"
 dependencies = [
@@ -2213,6 +2272,18 @@ dependencies = [
  "thiserror 1.0.69",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]
