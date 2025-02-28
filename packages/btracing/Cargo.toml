@@ -9,4 +9,3 @@ license.workspace = true
 dioxus.workspace = true
 dioxus-toast = { version = "0.6.0", default-features = false, features = ["web"] }
 tracing = "0.1.41"
-btracing-macros.workspace = true

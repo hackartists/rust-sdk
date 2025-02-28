@@ -796,37 +796,9 @@ dependencies = [
 name = "btracing"
 version = "0.1.0"
 dependencies = [
- "btracing-macros",
  "dioxus",
  "dioxus-toast",
  "tracing",
-]
-
-[[package]]
-name = "btracing-macros"
-version = "0.1.0"
-dependencies = [
- "bigdecimal",
- "by-axum",
- "by-types",
- "convert_case 0.7.1",
- "indexmap",
- "lazy_static",
- "proc-macro2",
- "quote",
- "regex",
- "reqwest",
- "rest-api",
- "schemars",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "sqlx",
- "syn 2.0.96",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "validator",
 ]
 
 [[package]]

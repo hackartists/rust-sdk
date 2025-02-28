@@ -25,7 +25,6 @@ easy-dynamodb = { path = "packages/easy-dynamodb", version = "0.1.*" }
 dioxus-translate = { path = "packages/dioxus-translate", version = "0.1.*" }
 dioxus-translate-types = { path = "packages/dioxus-translate-types", version = "0.1.*" }
 dioxus-translate-macro = { path = "packages/dioxus-translate-macro", version = "0.1.*" }
-btracing-macros = { path = "packages/btracing-macros", version = "0.1.*" }
 by-macros = { path = "packages/by-macros", version = "0.6.*" }
 
 aide = { version = "0.14.0", features = ["axum", "axum-query", "axum-extra", "axum-extra-headers", "axum-extra-query", "axum-json", "swagger", "redoc", "scalar", "macros"] }
