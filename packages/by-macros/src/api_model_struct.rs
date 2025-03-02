@@ -596,9 +596,10 @@ impl ApiModel<'_> {
                 let parent_params = parent_params.clone();
                 let parent_names = parent_names.clone();
 
-                // FIXME: fix when supporting additional primary key type
+                let res_type = self.get_reponse_type(&k.to_case(Case::Snake));
+
                 cli_actions.push(quote! {
-                    pub async fn #cli_act(&self, #(#parent_params)* id: i64, #(#params)*) -> #rt<#struct_name> {
+                    pub async fn #cli_act(&self, #(#parent_params)* id: i64, #(#params)*) -> #rt<#res_type> {
                         let path = format!(#base_endpoint_lit, #(#parent_names)*);
                         let endpoint = format!("{}{}/{}", self.endpoint, path, id);
                         let req = #action_name::#act(#request_struct_name {
@@ -613,16 +614,16 @@ impl ApiModel<'_> {
                 let parent_names = parent_names.clone();
                 let req_type = syn::Ident::new(&st, struct_name.span());
 
-                // FIXME: fix when supporting additional primary key type
+                let res_type = self.get_reponse_type(&k.to_case(Case::Snake));
+
                 cli_actions.push(quote! {
-                pub async fn #cli_act(&self, #(#parent_params)* id: i64, request: #req_type) -> #rt<#struct_name> {
-                    let path = format!(#base_endpoint_lit, #(#parent_names)*);
-                    let endpoint = format!("{}{}/{}", self.endpoint, path, id);
+                    pub async fn #cli_act(&self, #(#parent_params)* id: i64, request: #req_type) -> #rt<#res_type> {
+                        let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                        let endpoint = format!("{}{}/{}", self.endpoint, path, id);
 
-                    rest_api::post(&endpoint, request).await
-                }
-
-            })
+                        rest_api::post(&endpoint, request).await
+                    }
+                })
             }
         }
 
@@ -832,13 +833,14 @@ impl ApiModel<'_> {
 
             let parent_params = parent_params.clone();
             let parent_names = parent_names.clone();
+            let res_type = self.get_reponse_type(&read_action.to_case(Case::Snake));
 
             cli_read_action_functions.push(quote! {
                 pub async fn #function_name(
                     &self,
                     #(#parent_params)*
                     #(#function_params)*
-                ) -> #rt<#struct_name> {
+                ) -> #rt<#res_type> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}", self.endpoint, path);
                     let params = #read_action_struct_name::new()
@@ -955,7 +957,6 @@ impl ApiModel<'_> {
         let parent_ids = &self.parent_ids;
         let read_actions = &self.query_action_names;
         let has_validator = self.has_validator;
-        let iter_type = &self.iter_type;
         let queryable_fields = &self.queryable_fields;
 
         let summary_name = syn::Ident::new(&format!("{}Summary", struct_name), struct_name.span());
@@ -963,8 +964,6 @@ impl ApiModel<'_> {
         let query_name = syn::Ident::new(&format!("{}Query", struct_name), struct_name.span());
         let param_name = syn::Ident::new(&format!("{}Param", struct_name), struct_name.span());
         let base_endpoint_lit = syn::LitStr::new(base_endpoint, struct_name.span());
-        let iter_type_with_summary = format!("{}<{}>", iter_type, summary_name);
-        let iter_type_tokens: proc_macro2::TokenStream = iter_type_with_summary.parse().unwrap();
 
         let mut hashed_fields = HashSet::new();
         let mut query_fields = vec![];
@@ -1181,6 +1180,8 @@ impl ApiModel<'_> {
                 let id = syn::Ident::new(id, struct_name.span());
                 quote! { #id, }
             });
+            let iter_type_tokens = self.get_iter_reponse_type(&read_action.to_case(Case::Snake));
+
             cli_read_action_functions.push(quote! {
                 pub async fn #function_name(
                     &self,
@@ -1310,6 +1311,35 @@ impl ApiModel<'_> {
         }
     }
 
+    pub fn get_iter_reponse_type(&self, action_name: &str) -> proc_macro2::TokenStream {
+        if let Some(resp) = self.actions.responses.get(action_name) {
+            if resp.len() == 1 {
+                return resp[0].name.parse().unwrap();
+            } else {
+                panic!(
+                    "`response` must be formed as `response = [action_name(CustomResponseType)]`"
+                );
+            }
+        }
+
+        self.iter_type_name()
+    }
+
+    pub fn get_reponse_type(&self, action_name: &str) -> proc_macro2::TokenStream {
+        if let Some(resp) = self.actions.responses.get(action_name) {
+            if resp.len() == 1 {
+                return resp[0].name.parse().unwrap();
+            } else {
+                panic!(
+                    "`response` must be formed as `response = [action_name(CustomResponseType)]`"
+                );
+            }
+        }
+        let resp_name = self.name_id;
+
+        resp_name.to_token_stream()
+    }
+
     pub fn generate_action_struct(&self) -> proc_macro2::TokenStream {
         tracing::trace!("Generating action struct for {}", self.name_id);
         let struct_name = self.name_id;
@@ -1415,25 +1445,27 @@ impl ApiModel<'_> {
                     #action_name::#act(req) => req.validate(),
                 });
 
+                let res_type = self.get_reponse_type(&k.to_case(Case::Snake));
                 cli_actions.push(quote! {
-                pub async fn #cli_act(&self, #(#parent_params)* #(#params)*) -> #rt<#struct_name> {
-                    let path = format!(#base_endpoint_lit, #(#parent_names)*);
-                    let endpoint = format!("{}{}", self.endpoint, path);
+                    pub async fn #cli_act(&self, #(#parent_params)* #(#params)*) -> #rt<#res_type> {
+                        let path = format!(#base_endpoint_lit, #(#parent_names)*);
+                        let endpoint = format!("{}{}", self.endpoint, path);
 
-                    let req = #action_name::#act(#request_struct_name {
-                        #(#field_names)*
-                    });
-                    rest_api::post(&endpoint, req).await
-                }
+                        let req = #action_name::#act(#request_struct_name {
+                            #(#field_names)*
+                        });
+                        rest_api::post(&endpoint, req).await
+                    }
 
-            })
+                })
             } else if let ActionField::Related(st) = v {
                 let parent_params = parent_params.clone();
                 let parent_names = parent_names.clone();
                 let req_type = syn::Ident::new(&st, struct_name.span());
+                let res_type = self.get_reponse_type(&k.to_case(Case::Snake));
 
                 cli_actions.push(quote! {
-                pub async fn #cli_act(&self, #(#parent_params)* request: #req_type) -> #rt<#struct_name> {
+                pub async fn #cli_act(&self, #(#parent_params)* request: #req_type) -> #rt<#res_type> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}", self.endpoint, path);
 
