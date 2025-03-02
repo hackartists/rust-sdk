@@ -24,6 +24,7 @@ pub struct Actions {
     pub actions: IndexMap<String, Vec<ActionRequestField>>,
     pub read_actions: IndexMap<String, Vec<ActionRequestField>>,
     pub action_by_id: IndexMap<String, Vec<ActionRequestField>>,
+    pub responses: IndexMap<String, Vec<ActionRequestField>>,
 }
 
 impl FromStr for Actions {
@@ -37,6 +38,7 @@ impl FromStr for Actions {
         let mut actions: IndexMap<String, Vec<ActionRequestField>> = IndexMap::new();
         let mut read_actions: IndexMap<String, Vec<ActionRequestField>> = IndexMap::new();
         let mut action_by_id: IndexMap<String, Vec<ActionRequestField>> = IndexMap::new();
+        let mut responses: IndexMap<String, Vec<ActionRequestField>> = IndexMap::new();
 
         for (key, value) in pairs {
             let key_lower = key.trim().to_lowercase();
@@ -46,6 +48,8 @@ impl FromStr for Actions {
                 read_actions = parse_action_value(&value)?;
             } else if key_lower == "action_by_id" {
                 action_by_id = parse_action_value(&value)?;
+            } else if key_lower == "response" {
+                responses = parse_action_value(&value)?;
             }
         }
 
@@ -53,6 +57,7 @@ impl FromStr for Actions {
             actions,
             read_actions,
             action_by_id,
+            responses,
         })
     }
 }
@@ -231,13 +236,19 @@ fn parse_fields(s: &str) -> Result<Vec<ActionRequestField>, String> {
 /// Parses a single field of the form "name = Type" into an ActionRequestField.
 fn parse_field(s: &str) -> Result<ActionRequestField, String> {
     let parts: Vec<&str> = s.split('=').collect();
-    if parts.len() != 2 {
-        return Err(format!("Invalid field format: '{}'", s));
+    if parts.len() == 1 {
+        Ok(ActionRequestField {
+            name: parts[0].trim().to_string(),
+            r#type: "".to_string(),
+        })
+    } else if parts.len() == 2 {
+        Ok(ActionRequestField {
+            name: parts[0].trim().to_string(),
+            r#type: parts[1].trim().to_string(),
+        })
+    } else {
+        return Err(format!("Invalid field definition: '{}'", s));
     }
-    Ok(ActionRequestField {
-        name: parts[0].trim().to_string(),
-        r#type: parts[1].trim().to_string(),
-    })
 }
 
 #[cfg(test)]
@@ -336,7 +347,8 @@ mod tests {
             base = "/auth/v1",
             action = [signup(code = String, param = u64), login(test = Vec<String>)],
             read_action = read_data,
-            action_by_id = [get_data, update_data]
+            action_by_id = [get_data, update_data],
+            response = [signup(UserResponse)]
         "#;
         let actions = input.parse::<Actions>().unwrap();
 
@@ -369,10 +381,20 @@ mod tests {
         expected_action_by_id.insert("get_data".to_string(), Vec::new());
         expected_action_by_id.insert("update_data".to_string(), Vec::new());
 
+        let mut expected_responses = IndexMap::new();
+        expected_responses.insert(
+            "signup".to_string(),
+            vec![ActionRequestField {
+                name: "UserResponse".to_string(),
+                r#type: "".to_string(),
+            }],
+        );
+
         let expected = Actions {
             actions: expected_actions,
             read_actions: expected_read_actions,
             action_by_id: expected_action_by_id,
+            responses: expected_responses,
         };
 
         assert_eq!(actions, expected);
