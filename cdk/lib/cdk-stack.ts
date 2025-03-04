@@ -314,10 +314,33 @@ export class CdkStack extends cdk.Stack {
         vpc,
       });
 
+      const taskExecutionRole = new iam.Role(this, "MyEcsTaskExecutionRole", {
+        assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+      });
+
+      taskExecutionRole.addManagedPolicy(
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          "service-role/AmazonECSTaskExecutionRolePolicy",
+        ),
+      );
+
+      taskExecutionRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: [
+            "ecr:GetAuthorizationToken",
+            "ecr:BatchCheckLayerAvailability",
+            "ecr:GetDownloadUrlForLayer",
+            "ecr:BatchGetImage",
+          ],
+          resources: ["*"],
+        }),
+      );
+
       const taskDefinition = new TaskDefinition(this, "FargateTask", {
         compatibility: Compatibility.FARGATE,
         cpu: "256",
         memoryMiB: "512",
+        executionRole: taskExecutionRole,
       });
 
       const container = taskDefinition.addContainer("Container", {
