@@ -4332,11 +4332,11 @@ impl ApiField {
         if &self.rust_type == "String" && &self.r#type != "TEXT" {
             if &self.r#type == "BIGINT" {
                 return quote! {
-                    #n: row.get::<i64, _>(#sql_field_name).to_string()
+                    #n: row.try_get::<i64, _>(#sql_field_name).unwrap_or_default().to_string()
                 };
             } else if &self.r#type == "INTEGER" {
                 return quote! {
-                    #n: row.get::<i32, _>(#sql_field_name).to_string()
+                    #n: row.try_get::<i32, _>(#sql_field_name).unwrap_or_default().to_string()
                 };
             }
         } else if (&self.rust_type == "u64" || &self.rust_type == "u32") {
@@ -4344,11 +4344,11 @@ impl ApiField {
 
             if &self.r#type == "BIGINT" {
                 return quote! {
-                    #n: row.get::<i64, _>(#sql_field_name) as #ty
+                    #n: row.try_get::<i64, _>(#sql_field_name).unwrap_or_default() as #ty
                 };
             } else if &self.r#type == "INTEGER" {
                 return quote! {
-                    #n: row.get::<i32, _>(#sql_field_name) as #ty
+                    #n: row.try_get::<i32, _>(#sql_field_name).unwrap_or_default() as #ty
                 };
             }
         }
