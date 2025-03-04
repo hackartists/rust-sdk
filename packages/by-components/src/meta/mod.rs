@@ -21,8 +21,6 @@ pub fn MetaSeoTemplate(
         if let Some(author) = author {
             document::Meta { name: "author", content: "{author}" }
         }
-        document::Meta { name: "robots", content: "{robots}" }
-        document::Link { rel: "canonical", href: "{canonical}" }
         document::Meta { property: "og:site_name", content: "{title}" }
         document::Meta { property: "og:url", content: "{url}" }
         document::Meta { property: "og:logo", content: "{logo_url}" }
