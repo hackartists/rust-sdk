@@ -2,17 +2,12 @@
 
 // pub use btracing_macros::*;
 use dioxus::prelude::*;
-pub use dioxus_toast::*;
-
-pub static TOAST: GlobalSignal<ToastManager> = Global::new(|| ToastManager::default());
 
 #[component]
 pub fn ToastTracing() -> Element {
     // FIXME: DioxusToast does not consider contents size when fixed.
     rsx! {
-        div { class: "fixed max-w-full w-[300px] top-0 right-0 z-[100]",
-            dioxus_toast::ToastFrame { manager: TOAST.signal() }
-        }
+        div { class: "fixed max-w-full w-[300px] top-0 right-0 z-[100]" }
     }
 }
 
@@ -23,15 +18,14 @@ macro_rules! info {
             tracing::info!($($arg)*);
             let msg = format!($($arg)*);
 
-            let p = $crate::ToastInfo {
-                heading: None,
-                context: msg,
-                allow_toast_close: true,
-                position: $crate::Position::TopRight,
-                icon: None,
-                hide_after: Some(6),
-            };
-            $crate::TOAST.signal().write().popup(p);
+            // let p = $crate::ToastInfo {
+            //     heading: None,
+            //     context: msg,
+            //     allow_toast_close: true,
+            //     position: $crate::Position::TopRight,
+            //     icon: None,
+            //     hide_after: Some(6),
+            // };
         }
     }
 }
@@ -43,15 +37,14 @@ macro_rules! error {
             tracing::error!($($arg)*);
             let msg = format!($($arg)*);
 
-            let p = $crate::ToastInfo {
-                heading: None,
-                context: msg,
-                allow_toast_close: true,
-                position: $crate::Position::TopRight,
-                icon: None,
-                hide_after: Some(6),
-            };
-            $crate::TOAST.signal().write().popup(p);
+            // let p = $crate::ToastInfo {
+            //     heading: None,
+            //     context: msg,
+            //     allow_toast_close: true,
+            //     position: $crate::Position::TopRight,
+            //     icon: None,
+            //     hide_after: Some(6),
+            // };
         }
     }
 }
@@ -63,15 +56,14 @@ macro_rules! warn {
             tracing::warn!($($arg)*);
             let msg = format!($($arg)*);
 
-            let p = $crate::ToastInfo {
-                heading: None,
-                context: msg,
-                allow_toast_close: true,
-                position: $crate::Position::TopRight,
-                icon: None,
-                hide_after: Some(6),
-            };
-            $crate::TOAST.signal().write().popup(p);
+            // let p = $crate::ToastInfo {
+            //     heading: None,
+            //     context: msg,
+            //     allow_toast_close: true,
+            //     position: $crate::Position::TopRight,
+            //     icon: None,
+            //     hide_after: Some(6),
+            // };
         }
     }
 }
