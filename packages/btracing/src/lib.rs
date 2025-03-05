@@ -1,17 +1,76 @@
 #![allow(non_snake_case)]
 
-// pub use btracing_macros::*;
 use dioxus::prelude::*;
-pub use dioxus_toast::*;
 
-pub static TOAST: GlobalSignal<ToastManager> = Global::new(|| ToastManager::default());
+pub static TOAST: GlobalSignal<Option<ToastMessage>> = Global::new(|| None);
 
+#[derive(Debug, Clone, Copy)]
+pub enum ToastType {
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Debug, Clone)]
+pub struct ToastMessage {
+    pub toast_type: ToastType,
+    pub message: String,
+}
+
+/// children should be symbol logo
 #[component]
-pub fn ToastTracing() -> Element {
-    // FIXME: DioxusToast does not consider contents size when fixed.
+pub fn ToastTracing(
+    children: Element,
+    #[props(default = "#181B20".to_string())] background: String,
+    #[props(default = "#F75C14".to_string())] warn: String,
+    #[props(default = "#428EFF".to_string())] info: String,
+    #[props(default = "#FF4242".to_string())] error: String,
+) -> Element {
+    let css = include_str!("./btracing.css");
+    let mut toast = TOAST.signal();
+
     rsx! {
-        div { class: "fixed max-w-full w-[300px] top-0 right-0 z-[100]",
-            dioxus_toast::ToastFrame { manager: TOAST.signal() }
+        style { "{css}" }
+        div {
+            class: "btracing-toast",
+            id: "btracing-toast-template",
+            width: "100px",
+            onclick: move |_| {
+                *toast.write() = None;
+            },
+            div {
+                class: "btracing-toast-inner",
+                right: if toast().is_some() { "0px" } else { "-300px" },
+                div { class: "btracing-toast-level-bar-container",
+                    if let Some(ToastMessage { ref toast_type, .. }) = toast() {
+                        div {
+                            class: "btracing-toast-level-bar",
+                            background_color: match toast_type {
+                                ToastType::Info => info.clone(),
+                                ToastType::Warn => warn.clone(),
+                                ToastType::Error => error.clone(),
+                            },
+                        }
+                    }
+                }
+                div { class: "btracing-toast-content",
+                    div { class: "btracing-toast-header",
+                        {children}
+                        h3 { class: "btracing-toast-header-text", "Your app is being rebuilt." }
+                    }
+                    if let Some(ToastMessage { ref message, .. }) = toast() {
+                        p { class: "btracing-toast-msg", "{message}" }
+                    }
+                }
+            }
+        }
+        if toast().is_some() {
+            div {
+                onmounted: move |_| async move {
+                    gloo_timers::future::TimeoutFuture::new(2000).await;
+                    *TOAST.signal().write() = None;
+                },
+            }
         }
     }
 }
@@ -21,17 +80,13 @@ macro_rules! info {
     ($($arg:tt)*) => {
         if tracing::event_enabled!(tracing::Level::INFO) {
             tracing::info!($($arg)*);
-            let msg = format!($($arg)*);
+            let message = format!($($arg)*);
 
-            let p = $crate::ToastInfo {
-                heading: None,
-                context: msg,
-                allow_toast_close: true,
-                position: $crate::Position::TopRight,
-                icon: None,
-                hide_after: Some(6),
+            let p = $crate::ToastMessage {
+                toast_type: $crate::ToastType::Info,
+                message,
             };
-            $crate::TOAST.signal().write().popup(p);
+            *$crate::TOAST.signal().write() = Some(p);
         }
     }
 }
@@ -41,17 +96,13 @@ macro_rules! error {
     ($($arg:tt)*) => {
         if tracing::event_enabled!(tracing::Level::ERROR) {
             tracing::error!($($arg)*);
-            let msg = format!($($arg)*);
+            let message = format!($($arg)*);
 
-            let p = $crate::ToastInfo {
-                heading: None,
-                context: msg,
-                allow_toast_close: true,
-                position: $crate::Position::TopRight,
-                icon: None,
-                hide_after: Some(6),
+            let p = $crate::ToastMessage {
+                toast_type: $crate::ToastType::Error,
+                message,
             };
-            $crate::TOAST.signal().write().popup(p);
+            *$crate::TOAST.signal().write() = Some(p);
         }
     }
 }
@@ -61,17 +112,13 @@ macro_rules! warn {
     ($($arg:tt)*) => {
         if tracing::event_enabled!(tracing::Level::WARN) {
             tracing::warn!($($arg)*);
-            let msg = format!($($arg)*);
+            let message = format!($($arg)*);
 
-            let p = $crate::ToastInfo {
-                heading: None,
-                context: msg,
-                allow_toast_close: true,
-                position: $crate::Position::TopRight,
-                icon: None,
-                hide_after: Some(6),
+            let p = $crate::ToastMessage {
+                toast_type: $crate::ToastType::Warn,
+                message,
             };
-            $crate::TOAST.signal().write().popup(p);
+            *$crate::TOAST.signal().write() = Some(p);
         }
     }
 }
