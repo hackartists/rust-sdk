@@ -25,6 +25,7 @@ pub fn ToastTracing(
     #[props(default = "#F75C14".to_string())] warn: String,
     #[props(default = "#428EFF".to_string())] info: String,
     #[props(default = "#FF4242".to_string())] error: String,
+    #[props(default = 5000)] interval: u32,
 ) -> Element {
     let css = include_str!("./btracing.css");
     let mut toast = TOAST.signal();
@@ -67,7 +68,7 @@ pub fn ToastTracing(
         if toast().is_some() {
             div {
                 onmounted: move |_| async move {
-                    gloo_timers::future::TimeoutFuture::new(2000).await;
+                    gloo_timers::future::TimeoutFuture::new(interval).await;
                     *TOAST.signal().write() = None;
                 },
             }
