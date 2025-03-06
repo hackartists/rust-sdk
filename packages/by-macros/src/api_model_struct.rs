@@ -2948,26 +2948,41 @@ impl ApiModel<'_> {
 
         let rt = &self.result_type;
 
-        // FIXME: fix when supporting additional primary key type
+        let inner = quote! {
+            let mut i = 1;
+            let mut update_values = vec![];
+
+            #(#option_condition)*
+
+            let query = format!(
+                #q,
+                update_values.join(", "),
+            );
+            tracing::trace!("insert query: {}", query);
+            let mut q = sqlx::query(&query)
+                .bind(id);
+            #(#option_binds)*
+            let row = q
+                #call_map
+        };
+
         let output = quote! {
             pub async fn update(&self, id: i64, #st_var_name: #update_req_st_name) -> #rt<#name> {
-                let mut i = 1;
-                let mut update_values = vec![];
-
-                #(#option_condition)*
-
-                let query = format!(
-                    #q,
-                    update_values.join(", "),
-                );
-                tracing::trace!("insert query: {}", query);
-                let mut q = sqlx::query(&query)
-                    .bind(id);
-                #(#option_binds)*
-                let row = q
-                    #call_map
+                #inner
                 .fetch_one(&self.pool)
                     .await?;
+
+                Ok(row)
+            }
+
+
+            pub async fn update_with_tx<'e, 'c: 'e, E>(&self, tx: E, id: i64, #st_var_name: #update_req_st_name) -> #rt<Option<#name>>
+            where
+                E: sqlx::Executor<'c, Database = sqlx::postgres::Postgres>,
+            {
+                #inner
+                .fetch_optional(tx)
+                        .await?;
 
                 Ok(row)
             }
@@ -2978,20 +2993,35 @@ impl ApiModel<'_> {
 
     pub fn delete_function(&self) -> proc_macro2::TokenStream {
         let repo_name = self.repository_struct_name();
+        let name = self.name_id;
         let query = syn::LitStr::new(
-            &format!("DELETE FROM {} WHERE id = $1", self.table_name),
+            &format!("DELETE FROM {} WHERE id = $1 RETURNING *", self.table_name),
             proc_macro2::Span::call_site(),
         );
         let rt = &self.result_type;
 
         quote! {
-            pub async fn delete(&self, id: i64) -> #rt<()> {
-                sqlx::query(#query)
+            pub async fn delete(&self, id: i64) -> #rt<#name> {
+                let res = sqlx::query(#query)
                     .bind(id)
-                    .execute(&self.pool)
+                    .map(#name::from)
+                    .fetch_one(&self.pool)
                     .await?;
 
-                Ok(())
+                Ok(res)
+            }
+
+            pub async fn delete_with_tx<'e, 'c: 'e, E>(&self, tx: E, id: i64) -> #rt<Option<#name>>
+            where
+                E: sqlx::Executor<'c, Database = sqlx::postgres::Postgres>,
+            {
+                let res = sqlx::query(#query)
+                    .bind(id)
+                    .map(#name::from)
+                    .fetch_optional(tx)
+                    .await?;
+
+                Ok(res)
             }
         }
     }
