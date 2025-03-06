@@ -73,24 +73,22 @@ pub async fn authorization_middleware(
             let ext = match scheme.unwrap_or_default().to_lowercase().as_str() {
                 "usersig" => {
                     tracing::debug!("User signature");
-                    let sig = verify_usersig(value)?;
-                    Some(sig)
+                    verify_usersig(value).ok()
                 }
                 "bearer" => {
                     tracing::debug!("Bearer token");
-                    let claims = verify_jwt(value)?;
-                    Some(claims)
+                    verify_jwt(value).ok()
                 }
                 "secret" => {
                     if option_env!("ENV").unwrap_or("local") == "prod" {
                         None
                     } else {
-                        Some(verify_secret(value)?)
+                        verify_secret(value).ok()
                     }
                 }
                 "x-server-key" => {
                     tracing::debug!("server key");
-                    Some(verify_server_key(value)?)
+                    verify_server_key(value).ok()
                 }
                 _ => {
                     tracing::debug!("Unknown scheme: {}", scheme.unwrap_or_default());
