@@ -10,8 +10,6 @@ pub fn MetaSeoTemplate(
     author: Option<String>,
     #[props(default = "index, follow".to_string())] robots: String,
     url: String,
-    canonical: String,
-    logo_url: String,
     twitter_id: Option<String>,
 ) -> Element {
     rsx! {
@@ -23,7 +21,6 @@ pub fn MetaSeoTemplate(
         }
         document::Meta { property: "og:site_name", content: "{title}" }
         document::Meta { property: "og:url", content: "{url}" }
-        document::Meta { property: "og:logo", content: "{logo_url}" }
         document::Meta { property: "og:locale", content: "{lang.open_graph_locale()}" }
         if let Some(twitter_id) = twitter_id {
             document::Meta { property: "twitter:site", content: "{twitter_id}" }
