@@ -77,6 +77,7 @@ pub enum SqlAttributeKey {
     SqlType,
     Relation,
     Unique,
+    Skip,
     Auto,
     Version,
     Nullable,
@@ -128,6 +129,7 @@ pub enum SqlAttribute {
         foreign_key: String,
     },
     Unique,
+    Skip,
     Auto(Vec<AutoOperation>),
     Version(String),
     Nullable,
@@ -185,6 +187,10 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             "unique" => {
                                 field_attrs.insert(SqlAttributeKey::Unique, SqlAttribute::Unique);
                             }
+                            "skip" => {
+                                field_attrs.insert(SqlAttributeKey::Skip, SqlAttribute::Skip);
+                            }
+
                             "type" => {
                                 opened = OpenedOffset::Type;
                             }
