@@ -1904,7 +1904,7 @@ impl ApiModel<'_> {
             });
 
             where_clause.push(quote! {
-                if let Some(#f) = &param.#f {
+                if let Some(_) = &param.#f {
                     i += 1;
                     where_clause.push(format!("{} = ${}", #fname, i));
                 }
@@ -1950,7 +1950,7 @@ impl ApiModel<'_> {
         let rt = &self.result_type;
 
         let output = quote! {
-            #[deprecated(note = "Use `query_builder()` instead.")]
+            // #[deprecated(note = "Use `query_builder()` instead.")]
             pub async fn find(&self, param: &#query_struct) -> #rt<#name> {
                 #declare_where_clause
                 #(#where_clause)*
@@ -2261,7 +2261,7 @@ impl ApiModel<'_> {
             });
 
             where_clause.push(quote! {
-                if let Some(#f) = &param.#f {
+                if let Some(_) = &param.#f {
                     i += 1;
                     where_clause.push(format!("{}{} = ${}", #parent_variable, #fname, i));
                 }
@@ -2291,7 +2291,7 @@ impl ApiModel<'_> {
         let rt = &self.result_type;
 
         let output = quote! {
-            #[deprecated(note = "Use `query_builder()` instead.")]
+            // #[deprecated(note = "Use `query_builder()` instead.")]
             pub async fn find_one(&self, #(#aggregate_args)* param: &#read_action) -> #rt<#name> {
                 #for_where
                 query.push_str(" ");
