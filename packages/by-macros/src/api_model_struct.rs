@@ -3592,6 +3592,7 @@ pub enum Relation {
         foreign_primary_key: String,
         // Reference key of the current table in the join table
         foreign_reference_key: String,
+        reference_key: String,
     },
     ManyToOne {
         table_name: String,
@@ -3602,6 +3603,7 @@ pub enum Relation {
         #[allow(dead_code)]
         table_name: String,
         foreign_key: String,
+        reference_key: String,
     },
 }
 
@@ -3654,32 +3656,32 @@ impl ApiField {
                     ref table_name,
                     ref foreign_primary_key,
                     ref foreign_reference_key,
+                    ref reference_key,
                     ..
                 }) => Some(format!(
                     r#"
 CASE
     WHEN EXISTS (
-        SELECT 1 FROM {} WHERE {} = p.id AND {} = {{}}
+        SELECT 1 FROM {table_name} WHERE {foreign_reference_key} = p.{reference_key} AND {foreign_primary_key} = {{}}
     ) THEN true
     ELSE false
-END AS {}
+END AS {bound_name}
 "#,
-                    table_name, foreign_reference_key, foreign_primary_key, bound_name,
                 )),
 
                 Some(Relation::OneToMany {
                     ref table_name,
                     ref foreign_key,
+                    ref reference_key,
                 }) => Some(format!(
                     r#"
 CASE
     WHEN EXISTS (
-        SELECT 1 FROM {} WHERE {} = p.id
+        SELECT 1 FROM {table_name} WHERE {foreign_key} = p.{reference_key}
     ) THEN true
     ELSE false
-END AS {}
+END AS {bound_name}
 "#,
-                    table_name, foreign_key, bound_name,
                 )),
                 _ => panic!(
                     "exists aggregator supports only `one_to_many` and `many_to_many` relations"
@@ -3696,6 +3698,7 @@ END AS {}
                     foreign_table_name,
                     foreign_primary_key,
                     foreign_reference_key,
+                    reference_key,
                     ..
                 }) => {
                     if self.rust_type.starts_with("Vec") {
@@ -3707,7 +3710,7 @@ COALESCE(
        SELECT DISTINCT ON (f.id) f.*
          FROM {foreign_table_name} f
               JOIN {table_name} j ON f.id = j.{foreign_primary_key}
-        WHERE j.{foreign_reference_key} = p.id
+        WHERE j.{foreign_reference_key} = p.{reference_key}
      ) m
   ), '[]'
 ) AS {bound_name}"#,
@@ -3720,6 +3723,7 @@ COALESCE(
                 Some(Relation::OneToMany {
                     table_name,
                     foreign_key,
+                    reference_key,
                 }) => {
                     if self.rust_type.starts_with("Vec") {
                         Some(format!(
@@ -3729,7 +3733,7 @@ COALESCE(
      FROM (
        SELECT DISTINCT ON (f.id) f.*
          FROM {table_name} f
-        WHERE f.{foreign_key} = p.id
+        WHERE f.{foreign_key} = p.{reference_key}
      ) m
   ), '[]'
 ) AS {bound_name}"#,
@@ -3861,26 +3865,32 @@ COALESCE(
 
     pub fn group_by(&self) -> Option<String> {
         match self.relation {
-            Some(Relation::ManyToMany { .. }) => return Some("GROUP BY p.id".to_string()),
-            Some(Relation::OneToMany { .. }) => return Some("GROUP BY p.id".to_string()),
+            Some(Relation::ManyToMany {
+                ref reference_key, ..
+            }) => return Some(format!("GROUP BY p.{reference_key}")),
+            Some(Relation::OneToMany {
+                ref reference_key, ..
+            }) => return Some(format!("GROUP BY p.{reference_key}")),
             _ => None,
         }
     }
 
     /// It will be bound {bound_name.value}.
     pub fn aggregate_query(&self, bound_name: &str) -> Option<String> {
-        let (table_name, foreign_key) = match self.relation {
+        let (table_name, foreign_key, reference_key) = match self.relation {
             Some(Relation::OneToMany {
                 ref table_name,
                 ref foreign_key,
-            }) => (table_name, foreign_key),
+                ref reference_key,
+            }) => (table_name, foreign_key, reference_key),
             Some(Relation::ManyToMany {
                 ref table_name,
                 ref foreign_table_name,
                 ref foreign_primary_key,
                 ref foreign_reference_key,
+                ref reference_key,
                 ..
-            }) => (table_name, foreign_reference_key),
+            }) => (table_name, foreign_reference_key, reference_key),
             _ => return None,
         };
 
@@ -3904,21 +3914,11 @@ COALESCE(
         let query = format!(
             r#"
 LEFT JOIN (
-    SELECT {}, {} AS value
-    FROM {} {}
-    GROUP BY {}
-) {} ON p.id = {}.{}
+    SELECT {foreign_key}, {aggregate} AS value
+    FROM {table_name} {where_clause}
+    GROUP BY {foreign_key}
+) {bound_name} ON p.{reference_key} = {bound_name}.{foreign_key}
 "#,
-            // select
-            foreign_key,
-            aggregate,
-            table_name,
-            where_clause,
-            foreign_key,
-            // join
-            bound_name,
-            bound_name,
-            foreign_key,
         );
 
         Some(query)
@@ -4500,6 +4500,7 @@ impl ApiField {
                 foreign_key_type,
                 foreign_primary_key,
                 foreign_reference_key,
+                reference_key,
             }) => Some(Relation::ManyToMany {
                 table_name: table_name.to_string(),
                 foreign_table_name: foreign_table_name.to_string(),
@@ -4507,6 +4508,7 @@ impl ApiField {
                 foreign_key_type: foreign_key_type.to_string(),
                 foreign_primary_key: foreign_primary_key.to_string(),
                 foreign_reference_key: foreign_reference_key.to_string(),
+                reference_key: reference_key.to_string(),
             }),
 
             Some(SqlAttribute::ManyToOne {
@@ -4522,9 +4524,11 @@ impl ApiField {
             Some(SqlAttribute::OneToMany {
                 table_name,
                 foreign_key,
+                reference_key,
             }) => Some(Relation::OneToMany {
                 table_name: table_name.to_string(),
                 foreign_key: foreign_key.to_string(),
+                reference_key: reference_key.to_string(),
             }),
 
             rel => {
