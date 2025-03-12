@@ -3865,12 +3865,8 @@ COALESCE(
 
     pub fn group_by(&self) -> Option<String> {
         match self.relation {
-            Some(Relation::ManyToMany {
-                ref reference_key, ..
-            }) => return Some(format!("GROUP BY p.{reference_key}")),
-            Some(Relation::OneToMany {
-                ref reference_key, ..
-            }) => return Some(format!("GROUP BY p.{reference_key}")),
+            Some(Relation::ManyToMany { .. }) => return Some(format!("GROUP BY p.id")),
+            Some(Relation::OneToMany { .. }) => return Some(format!("GROUP BY p.id")),
             _ => None,
         }
     }
