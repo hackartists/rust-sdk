@@ -787,7 +787,7 @@ impl ApiModel<'_> {
                                 }
                             });
                                 quote! {
-                                    #[serde(deserialize_with = #fname_str)]
+                                    #[serde(deserialize_with = #fname_str, default)]
                                 }
                             }
                         };
@@ -1025,7 +1025,7 @@ impl ApiModel<'_> {
                     }
                 });
                     quote! {
-                        #[serde(deserialize_with = #fname_str)]
+                        #[serde(deserialize_with = #fname_str, default)]
                     }
                 }
             };
@@ -1104,6 +1104,7 @@ impl ApiModel<'_> {
                                     D: serde::Deserializer<'de>,
                                 {
                                     use serde::Deserialize;
+                                    tracing::debug!("Parsing field: {}", #fname_str);
 
                                     let s: Option<String> = Option::deserialize(deserializer)?;
                                     match s {
@@ -1117,7 +1118,7 @@ impl ApiModel<'_> {
                                 }
                             });
                                 quote! {
-                                    #[serde(deserialize_with = #fname_str)]
+                                    #[serde(deserialize_with = #fname_str, default)]
                                 }
                             }
                         };
@@ -1247,7 +1248,7 @@ impl ApiModel<'_> {
             #[serde(rename_all = "kebab-case")]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub struct #query_name {
-                #[serde(deserialize_with = #size_fname_str)]
+                #[serde(deserialize_with = #size_fname_str, default)]
                 pub size: usize,
                 pub bookmark: Option<String>,
                 #read_action_type_field
