@@ -1890,6 +1890,9 @@ impl ApiModel<'_> {
                 .fields
                 .get(&f.to_string().to_case(self.rename))
                 .expect(&format!("Field not found: {}", f.to_string()));
+            if field.skip {
+                continue;
+            }
 
             let bind = field.bind();
 
@@ -1901,7 +1904,7 @@ impl ApiModel<'_> {
             });
 
             where_clause.push(quote! {
-                if let Some(#f) = &param.#f {
+                if let Some(_) = &param.#f {
                     i += 1;
                     where_clause.push(format!("{} = ${}", #fname, i));
                 }
@@ -1947,6 +1950,7 @@ impl ApiModel<'_> {
         let rt = &self.result_type;
 
         let output = quote! {
+            // #[deprecated(note = "Use `query_builder()` instead.")]
             pub async fn find(&self, param: &#query_struct) -> #rt<#name> {
                 #declare_where_clause
                 #(#where_clause)*
@@ -2243,6 +2247,10 @@ impl ApiModel<'_> {
                 .get(&f.to_string().to_case(self.rename))
                 .expect(&format!("Field not found: {}", f.to_string()));
 
+            if field.skip {
+                continue;
+            }
+
             let bind = field.bind();
 
             binds.push(quote! {
@@ -2253,7 +2261,7 @@ impl ApiModel<'_> {
             });
 
             where_clause.push(quote! {
-                if let Some(#f) = &param.#f {
+                if let Some(_) = &param.#f {
                     i += 1;
                     where_clause.push(format!("{}{} = ${}", #parent_variable, #fname, i));
                 }
@@ -2283,6 +2291,7 @@ impl ApiModel<'_> {
         let rt = &self.result_type;
 
         let output = quote! {
+            // #[deprecated(note = "Use `query_builder()` instead.")]
             pub async fn find_one(&self, #(#aggregate_args)* param: &#read_action) -> #rt<#name> {
                 #for_where
                 query.push_str(" ");
@@ -2932,6 +2941,10 @@ impl ApiModel<'_> {
                 }
             });
             continue;
+        }
+
+        if option_condition.is_empty() {
+            return quote! {};
         }
 
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
@@ -3602,6 +3615,7 @@ pub struct ApiField {
     pub unique: bool,
     pub auto: Vec<AutoOperation>,
     pub nullable: bool,
+    // omitted indicates if this field should be included in insert or not.
     pub omitted: bool,
     pub rust_type: String,
 
@@ -3615,6 +3629,8 @@ pub struct ApiField {
     pub version: Option<String>,
 
     pub aggregator: Option<Aggregator>,
+    // skip indicates if this field should be skipped for sql model or not.
+    pub skip: bool,
 
     // depends on struct derive
     pub rename: Case,
@@ -3909,6 +3925,9 @@ LEFT JOIN (
     }
 
     pub fn can_query(&self) -> bool {
+        if self.skip {
+            return false;
+        }
         if self.aggregator.is_some() {
             return true;
         }
@@ -3921,6 +3940,9 @@ LEFT JOIN (
     }
 
     pub fn should_return_in_insert(&self) -> bool {
+        if self.skip {
+            return false;
+        }
         match self.relation {
             Some(Relation::ManyToMany { .. }) => false,
             Some(Relation::OneToMany { .. }) => false,
@@ -3930,6 +3952,7 @@ LEFT JOIN (
 
     pub fn should_skip_inserting(&self) -> bool {
         self.omitted
+            || self.skip
             || self.auto.len() > 0
             || match self.relation {
                 Some(Relation::OneToMany { .. }) => true,
@@ -4130,6 +4153,9 @@ END $$;
     }
 
     fn create_field_query_line(&self) -> Option<String> {
+        if self.skip {
+            return None;
+        }
         let name = self.name.to_case(self.rename);
 
         let mut line = match &self.relation {
@@ -4452,6 +4478,8 @@ impl ApiField {
         }
 
         let f = super::sql_model::parse_field_attr(field);
+        let skip = f.attrs.contains_key(&SqlAttributeKey::Skip);
+
         let primary_key = f.attrs.contains_key(&SqlAttributeKey::PrimaryKey);
         if primary_key {
             if rust_type.as_str() != "i64" {
@@ -4603,6 +4631,7 @@ impl ApiField {
             related,
             version,
             aggregator,
+            skip,
 
             table,
             rename,
