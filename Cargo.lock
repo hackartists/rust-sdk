@@ -765,6 +765,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "bdk"
+version = "0.1.0"
+dependencies = [
+ "aide",
+ "bigdecimal",
+ "btracing",
+ "by-axum",
+ "by-components",
+ "by-macros",
+ "by-types",
+ "dioxus",
+ "dioxus-aws",
+ "dioxus-fullstack",
+ "dioxus-logger 0.5.1",
+ "dioxus-popup",
+ "dioxus-translate",
+ "reqwest",
+ "rest-api",
+ "schemars",
+ "sqlx",
+ "tracing",
+ "validator",
+]
+
+[[package]]
 name = "bigdecimal"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

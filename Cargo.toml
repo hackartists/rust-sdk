@@ -15,6 +15,7 @@ edition = "2021"
 license = "Apache-2.0"
 
 [workspace.dependencies]
+btracing = { path = "packages/btracing", version = "0.1.*" }
 by-components = { path = "packages/by-components", version = "0.1.*" }
 by-axum = { path = "packages/by-axum", version = "0.2.*" }
 by-types = { path = "packages/by-types", version = "0.3.*" }
@@ -26,6 +27,7 @@ dioxus-translate = { path = "packages/dioxus-translate", version = "0.1.*" }
 dioxus-translate-types = { path = "packages/dioxus-translate-types", version = "0.1.*" }
 dioxus-translate-macro = { path = "packages/dioxus-translate-macro", version = "0.1.*" }
 by-macros = { path = "packages/by-macros", version = "0.6.*" }
+dioxus-logger = { version = "0.5.0" }
 
 aide = { version = "0.14.0", features = ["axum", "axum-query", "axum-extra", "axum-extra-headers", "axum-extra-query", "axum-json", "swagger", "redoc", "scalar", "macros"] }
 axum = "0.8.1"
@@ -34,6 +36,16 @@ serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.133"
 reqwest = { version = "0.12.12", features = ["blocking", "json", "multipart"] }
 
-dioxus = { version = "0.6.3", features = ["web", "fullstack"], git = "https://github.com/hackartists/dioxus.git" }
+dioxus = { version = "0.6.3", features = ["web", "router", "fullstack"], git = "https://github.com/hackartists/dioxus.git" }
 dioxus-fullstack = { version = "0.6.3", git = "https://github.com/hackartists/dioxus.git" }
 dioxus-cli-config = { version = "0.6.3", git = "https://github.com/hackartists/dioxus.git" }
+dioxus-web = { version = "0.6.3", git = "https://github.com/hackartists/dioxus.git" }
+
+sqlx = { version = "0.8.3", features = [
+    "sqlite",
+    "postgres",
+    "runtime-tokio",
+    "time",
+    "bigdecimal",
+] }
+bigdecimal = "0.4.7"
