@@ -1,0 +1,40 @@
+[package]
+name = "bdk"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Biyard Development Kit for Rust"
+
+[dependencies]
+by-macros.workspace = true
+by-types.workspace = true
+rest-api.workspace = true
+reqwest.workspace = true
+tracing = "0.1.41"
+validator = { version = "0.20.0", features = ["derive"] }
+dioxus-translate = { workspace = true, features = ["ko"] }
+
+# Frontend
+dioxus-aws = { workspace = true, optional = true }
+btracing = { workspace = true, optional = true }
+dioxus = { workspace = true, optional = true }
+dioxus-fullstack = { workspace = true, optional = true }
+dioxus-popup = { workspace = true, optional = true }
+by-components = { workspace = true, optional = true }
+dioxus-logger = { workspace = true, optional = true }
+
+# Backend
+by-axum = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+bigdecimal = { workspace = true, optional = true }
+aide = { workspace = true, optional = true }
+
+[features]
+default = []
+fe = ["dioxus-aws", "btracing", "dioxus", "dioxus-fullstack", "dioxus-popup", "by-components", "dioxus-logger"]
+web = ["fe", "dioxus-aws", "dioxus/web", "dioxus-translate/web"]
+server = ["fe", "dioxus-aws/server", "dioxus/server"]
+lambda = ["dioxus-aws?/lambda", "by-axum?/lambda"]
+be = ["by-axum", "schemars", "sqlx", "bigdecimal", "aide", "by-types/server", "by-macros/server"]
