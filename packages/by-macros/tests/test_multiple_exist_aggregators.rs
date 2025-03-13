@@ -21,7 +21,7 @@ mod test_multiple_exist_aggeregators {
         pub email: String,
     }
 
-    #[api_model(base = "/", table = test_multiple_aggregator_member)]
+    #[api_model(base = "/", table = test_multiple_aggregator_members)]
     pub struct Member {
         #[api_model(primary_key)]
         pub id: i64,
@@ -79,7 +79,7 @@ mod test_multiple_exist_aggeregators {
 
         #[api_model(many_to_one = test_multiple_aggregator_models)]
         pub model_id: i64,
-        #[api_model(many_to_one = test_multiple_aggregator_users)]
+        #[api_model(many_to_one = test_multiple_aggregator_members)]
         pub member_id: i64,
     }
 
