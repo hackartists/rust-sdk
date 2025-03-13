@@ -34,14 +34,11 @@ pub mod prelude {
     #[cfg(feature = "be")]
     pub use bigdecimal;
     #[cfg(feature = "be")]
-    pub use schemars;
-    #[cfg(feature = "be")]
-    pub use schemars::JsonSchema;
-
-    #[cfg(feature = "be")]
     pub use by_axum;
     #[cfg(feature = "be")]
     pub use schemars;
+    #[cfg(feature = "be")]
+    pub use schemars::JsonSchema;
     #[cfg(feature = "be")]
     pub use sqlx;
 }
