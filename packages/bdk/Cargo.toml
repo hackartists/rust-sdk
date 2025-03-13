@@ -37,4 +37,4 @@ fe = ["dioxus-aws", "btracing", "dioxus", "dioxus-fullstack", "dioxus-popup", "b
 web = ["fe", "dioxus-aws", "dioxus/web", "dioxus-translate/web"]
 server = ["fe", "dioxus-aws/server", "dioxus/server"]
 lambda = ["dioxus-aws?/lambda", "by-axum?/lambda"]
-be = ["by-axum", "schemars", "sqlx", "bigdecimal", "aide"]
+be = ["by-axum", "schemars", "sqlx", "bigdecimal", "aide", "by-types/server", "by-macros/server"]

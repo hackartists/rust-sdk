@@ -1,7 +1,9 @@
 pub mod prelude {
     pub use by_macros;
+    pub use by_macros::*;
     pub use by_types;
     pub use dioxus_translate;
+    pub use dioxus_translate::*;
     pub use reqwest;
     pub use rest_api;
     pub use tracing;
@@ -31,6 +33,11 @@ pub mod prelude {
     pub use aide;
     #[cfg(feature = "be")]
     pub use bigdecimal;
+    #[cfg(feature = "be")]
+    pub use schemars;
+    #[cfg(feature = "be")]
+    pub use schemars::JsonSchema;
+
     #[cfg(feature = "be")]
     pub use by_axum;
     #[cfg(feature = "be")]
