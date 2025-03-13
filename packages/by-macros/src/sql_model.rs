@@ -77,6 +77,7 @@ pub enum SqlAttributeKey {
     SqlType,
     Relation,
     Unique,
+    Skip,
     Auto,
     Version,
     Nullable,
@@ -116,6 +117,7 @@ pub enum SqlAttribute {
         foreign_primary_key: String,
         // Reference key of the current table in the join table
         foreign_reference_key: String,
+        reference_key: String,
     },
     ManyToOne {
         table_name: String,
@@ -126,8 +128,10 @@ pub enum SqlAttribute {
         #[allow(dead_code)]
         table_name: String,
         foreign_key: String,
+        reference_key: String,
     },
     Unique,
+    Skip,
     Auto(Vec<AutoOperation>),
     Version(String),
     Nullable,
@@ -143,6 +147,7 @@ enum OpenedOffset {
     OneToMany,
     ForeignTableName,
     ForeignKey,
+    ReferenceKey,
     ForeignKeyType,
     ForeignPrimaryKey,
     ForeignReferenceKey,
@@ -185,6 +190,10 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             "unique" => {
                                 field_attrs.insert(SqlAttributeKey::Unique, SqlAttribute::Unique);
                             }
+                            "skip" => {
+                                field_attrs.insert(SqlAttributeKey::Skip, SqlAttribute::Skip);
+                            }
+
                             "type" => {
                                 opened = OpenedOffset::Type;
                             }
@@ -196,6 +205,9 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             }
                             "one_to_many" => {
                                 opened = OpenedOffset::OneToMany;
+                            }
+                            "reference_key" => {
+                                opened = OpenedOffset::ReferenceKey;
                             }
                             "foreign_key" => {
                                 opened = OpenedOffset::ForeignKey;
@@ -293,6 +305,7 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                             foreign_key_type: "BIGINT".to_string(),
                                             foreign_primary_key: "".to_string(),
                                             foreign_reference_key: "".to_string(),
+                                            reference_key: "id".to_string(),
                                         },
                                     );
                                     tracing::trace!("many_to_many: {name}");
@@ -314,9 +327,27 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                         SqlAttribute::OneToMany {
                                             table_name: id,
                                             foreign_key: "id".to_string(),
+                                            reference_key: "id".to_string(),
                                         },
                                     );
                                     tracing::trace!("one_to_many: {name}");
+                                }
+                                OpenedOffset::ReferenceKey => {
+                                    field_attrs.get_mut(&SqlAttributeKey::Relation).map(|attr| {
+                                        if let SqlAttribute::OneToMany {
+                                            ref mut reference_key,
+                                            ..
+                                        } = attr
+                                        {
+                                            *reference_key = id
+                                        } else if let SqlAttribute::ManyToMany {
+                                            ref mut reference_key,
+                                            ..
+                                        } = attr
+                                        {
+                                            *reference_key = id
+                                        }
+                                    });
                                 }
                                 OpenedOffset::ForeignKey => {
                                     field_attrs.get_mut(&SqlAttributeKey::Relation).map(|attr| {

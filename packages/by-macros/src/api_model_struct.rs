@@ -787,7 +787,7 @@ impl ApiModel<'_> {
                                 }
                             });
                                 quote! {
-                                    #[serde(deserialize_with = #fname_str)]
+                                    #[serde(deserialize_with = #fname_str, default)]
                                 }
                             }
                         };
@@ -1025,7 +1025,7 @@ impl ApiModel<'_> {
                     }
                 });
                     quote! {
-                        #[serde(deserialize_with = #fname_str)]
+                        #[serde(deserialize_with = #fname_str, default)]
                     }
                 }
             };
@@ -1104,6 +1104,7 @@ impl ApiModel<'_> {
                                     D: serde::Deserializer<'de>,
                                 {
                                     use serde::Deserialize;
+                                    tracing::debug!("Parsing field: {}", #fname_str);
 
                                     let s: Option<String> = Option::deserialize(deserializer)?;
                                     match s {
@@ -1117,7 +1118,7 @@ impl ApiModel<'_> {
                                 }
                             });
                                 quote! {
-                                    #[serde(deserialize_with = #fname_str)]
+                                    #[serde(deserialize_with = #fname_str, default)]
                                 }
                             }
                         };
@@ -1247,7 +1248,7 @@ impl ApiModel<'_> {
             #[serde(rename_all = "kebab-case")]
             #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
             pub struct #query_name {
-                #[serde(deserialize_with = #size_fname_str)]
+                #[serde(deserialize_with = #size_fname_str, default)]
                 pub size: usize,
                 pub bookmark: Option<String>,
                 #read_action_type_field
@@ -1890,6 +1891,9 @@ impl ApiModel<'_> {
                 .fields
                 .get(&f.to_string().to_case(self.rename))
                 .expect(&format!("Field not found: {}", f.to_string()));
+            if field.skip {
+                continue;
+            }
 
             let bind = field.bind();
 
@@ -1901,7 +1905,7 @@ impl ApiModel<'_> {
             });
 
             where_clause.push(quote! {
-                if let Some(#f) = &param.#f {
+                if let Some(_) = &param.#f {
                     i += 1;
                     where_clause.push(format!("{} = ${}", #fname, i));
                 }
@@ -1947,6 +1951,7 @@ impl ApiModel<'_> {
         let rt = &self.result_type;
 
         let output = quote! {
+            // #[deprecated(note = "Use `query_builder()` instead.")]
             pub async fn find(&self, param: &#query_struct) -> #rt<#name> {
                 #declare_where_clause
                 #(#where_clause)*
@@ -2245,6 +2250,10 @@ impl ApiModel<'_> {
                 .get(&f.to_string().to_case(self.rename))
                 .expect(&format!("Field not found: {}", f.to_string()));
 
+            if field.skip {
+                continue;
+            }
+
             let bind = field.bind();
 
             binds.push(quote! {
@@ -2255,7 +2264,7 @@ impl ApiModel<'_> {
             });
 
             where_clause.push(quote! {
-                if let Some(#f) = &param.#f {
+                if let Some(_) = &param.#f {
                     i += 1;
                     where_clause.push(format!("{}{} = ${}", #parent_variable, #fname, i));
                 }
@@ -2285,6 +2294,7 @@ impl ApiModel<'_> {
         let rt = &self.result_type;
         let aggregate_args: Vec<proc_macro2::TokenStream> = aggregate_args.into_values().collect();
         let output = quote! {
+            // #[deprecated(note = "Use `query_builder()` instead.")]
             pub async fn find_one(&self, #(#aggregate_args,)* param: &#read_action) -> #rt<#name> {
                 #for_where
                 query.push_str(" ");
@@ -2936,6 +2946,10 @@ impl ApiModel<'_> {
             continue;
         }
 
+        if option_condition.is_empty() {
+            return quote! {};
+        }
+
         let name = syn::Ident::new(&self.name, proc_macro2::Span::call_site());
         let call_map = self.call_map();
 
@@ -3581,6 +3595,7 @@ pub enum Relation {
         foreign_primary_key: String,
         // Reference key of the current table in the join table
         foreign_reference_key: String,
+        reference_key: String,
     },
     ManyToOne {
         table_name: String,
@@ -3591,6 +3606,7 @@ pub enum Relation {
         #[allow(dead_code)]
         table_name: String,
         foreign_key: String,
+        reference_key: String,
     },
 }
 
@@ -3604,6 +3620,7 @@ pub struct ApiField {
     pub unique: bool,
     pub auto: Vec<AutoOperation>,
     pub nullable: bool,
+    // omitted indicates if this field should be included in insert or not.
     pub omitted: bool,
     pub rust_type: String,
 
@@ -3617,6 +3634,8 @@ pub struct ApiField {
     pub version: Option<String>,
 
     pub aggregator: Option<Aggregator>,
+    // skip indicates if this field should be skipped for sql model or not.
+    pub skip: bool,
 
     // depends on struct derive
     pub rename: Case,
@@ -3640,32 +3659,32 @@ impl ApiField {
                     ref table_name,
                     ref foreign_primary_key,
                     ref foreign_reference_key,
+                    ref reference_key,
                     ..
                 }) => Some(format!(
                     r#"
 CASE
     WHEN EXISTS (
-        SELECT 1 FROM {} WHERE {} = p.id AND {} = {{}}
+        SELECT 1 FROM {table_name} WHERE {foreign_reference_key} = p.{reference_key} AND {foreign_primary_key} = {{}}
     ) THEN true
     ELSE false
-END AS {}
+END AS {bound_name}
 "#,
-                    table_name, foreign_reference_key, foreign_primary_key, bound_name,
                 )),
 
                 Some(Relation::OneToMany {
                     ref table_name,
                     ref foreign_key,
+                    ref reference_key,
                 }) => Some(format!(
                     r#"
 CASE
     WHEN EXISTS (
-        SELECT 1 FROM {} WHERE {} = p.id
+        SELECT 1 FROM {table_name} WHERE {foreign_key} = p.{reference_key}
     ) THEN true
     ELSE false
-END AS {}
+END AS {bound_name}
 "#,
-                    table_name, foreign_key, bound_name,
                 )),
                 _ => panic!(
                     "exists aggregator supports only `one_to_many` and `many_to_many` relations"
@@ -3682,6 +3701,7 @@ END AS {}
                     foreign_table_name,
                     foreign_primary_key,
                     foreign_reference_key,
+                    reference_key,
                     ..
                 }) => {
                     if self.rust_type.starts_with("Vec") {
@@ -3693,7 +3713,7 @@ COALESCE(
        SELECT DISTINCT ON (f.id) f.*
          FROM {foreign_table_name} f
               JOIN {table_name} j ON f.id = j.{foreign_primary_key}
-        WHERE j.{foreign_reference_key} = p.id
+        WHERE j.{foreign_reference_key} = p.{reference_key}
      ) m
   ), '[]'
 ) AS {bound_name}"#,
@@ -3706,6 +3726,7 @@ COALESCE(
                 Some(Relation::OneToMany {
                     table_name,
                     foreign_key,
+                    reference_key,
                 }) => {
                     if self.rust_type.starts_with("Vec") {
                         Some(format!(
@@ -3715,7 +3736,7 @@ COALESCE(
      FROM (
        SELECT DISTINCT ON (f.id) f.*
          FROM {table_name} f
-        WHERE f.{foreign_key} = p.id
+        WHERE f.{foreign_key} = p.{reference_key}
      ) m
   ), '[]'
 ) AS {bound_name}"#,
@@ -3847,26 +3868,28 @@ COALESCE(
 
     pub fn group_by(&self) -> Option<String> {
         match self.relation {
-            Some(Relation::ManyToMany { .. }) => return Some("GROUP BY p.id".to_string()),
-            Some(Relation::OneToMany { .. }) => return Some("GROUP BY p.id".to_string()),
+            Some(Relation::ManyToMany { .. }) => return Some(format!("GROUP BY p.id")),
+            Some(Relation::OneToMany { .. }) => return Some(format!("GROUP BY p.id")),
             _ => None,
         }
     }
 
     /// It will be bound {bound_name.value}.
     pub fn aggregate_query(&self, bound_name: &str) -> Option<String> {
-        let (table_name, foreign_key) = match self.relation {
+        let (table_name, foreign_key, reference_key) = match self.relation {
             Some(Relation::OneToMany {
                 ref table_name,
                 ref foreign_key,
-            }) => (table_name, foreign_key),
+                ref reference_key,
+            }) => (table_name, foreign_key, reference_key),
             Some(Relation::ManyToMany {
                 ref table_name,
                 ref foreign_table_name,
                 ref foreign_primary_key,
                 ref foreign_reference_key,
+                ref reference_key,
                 ..
-            }) => (table_name, foreign_reference_key),
+            }) => (table_name, foreign_reference_key, reference_key),
             _ => return None,
         };
 
@@ -3890,27 +3913,20 @@ COALESCE(
         let query = format!(
             r#"
 LEFT JOIN (
-    SELECT {}, {} AS value
-    FROM {} {}
-    GROUP BY {}
-) {} ON p.id = {}.{}
+    SELECT {foreign_key}, {aggregate} AS value
+    FROM {table_name} {where_clause}
+    GROUP BY {foreign_key}
+) {bound_name} ON p.{reference_key} = {bound_name}.{foreign_key}
 "#,
-            // select
-            foreign_key,
-            aggregate,
-            table_name,
-            where_clause,
-            foreign_key,
-            // join
-            bound_name,
-            bound_name,
-            foreign_key,
         );
 
         Some(query)
     }
 
     pub fn can_query(&self) -> bool {
+        if self.skip {
+            return false;
+        }
         if self.aggregator.is_some() {
             return true;
         }
@@ -3923,6 +3939,9 @@ LEFT JOIN (
     }
 
     pub fn should_return_in_insert(&self) -> bool {
+        if self.skip {
+            return false;
+        }
         match self.relation {
             Some(Relation::ManyToMany { .. }) => false,
             Some(Relation::OneToMany { .. }) => false,
@@ -3932,6 +3951,7 @@ LEFT JOIN (
 
     pub fn should_skip_inserting(&self) -> bool {
         self.omitted
+            || self.skip
             || self.auto.len() > 0
             || match self.relation {
                 Some(Relation::OneToMany { .. }) => true,
@@ -4132,6 +4152,9 @@ END $$;
     }
 
     fn create_field_query_line(&self) -> Option<String> {
+        if self.skip {
+            return None;
+        }
         let name = self.name.to_case(self.rename);
 
         let mut line = match &self.relation {
@@ -4454,6 +4477,8 @@ impl ApiField {
         }
 
         let f = super::sql_model::parse_field_attr(field);
+        let skip = f.attrs.contains_key(&SqlAttributeKey::Skip);
+
         let primary_key = f.attrs.contains_key(&SqlAttributeKey::PrimaryKey);
         if primary_key {
             if rust_type.as_str() != "i64" {
@@ -4474,6 +4499,7 @@ impl ApiField {
                 foreign_key_type,
                 foreign_primary_key,
                 foreign_reference_key,
+                reference_key,
             }) => Some(Relation::ManyToMany {
                 table_name: table_name.to_string(),
                 foreign_table_name: foreign_table_name.to_string(),
@@ -4481,6 +4507,7 @@ impl ApiField {
                 foreign_key_type: foreign_key_type.to_string(),
                 foreign_primary_key: foreign_primary_key.to_string(),
                 foreign_reference_key: foreign_reference_key.to_string(),
+                reference_key: reference_key.to_string(),
             }),
 
             Some(SqlAttribute::ManyToOne {
@@ -4496,9 +4523,11 @@ impl ApiField {
             Some(SqlAttribute::OneToMany {
                 table_name,
                 foreign_key,
+                reference_key,
             }) => Some(Relation::OneToMany {
                 table_name: table_name.to_string(),
                 foreign_key: foreign_key.to_string(),
+                reference_key: reference_key.to_string(),
             }),
 
             rel => {
@@ -4605,6 +4634,7 @@ impl ApiField {
             related,
             version,
             aggregator,
+            skip,
 
             table,
             rename,

@@ -57,7 +57,7 @@ pub fn ToastTracing(
                 div { class: "btracing-toast-content",
                     div { class: "btracing-toast-header",
                         {children}
-                        h3 { class: "btracing-toast-header-text", "Your app is being rebuilt." }
+                        h3 { class: "btracing-toast-header-text", "" }
                     }
                     if let Some(ToastMessage { ref message, .. }) = toast() {
                         p { class: "btracing-toast-msg", "{message}" }

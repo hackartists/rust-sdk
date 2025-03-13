@@ -216,6 +216,7 @@ where
     T: serde::de::DeserializeOwned,
     E: serde::de::DeserializeOwned + From<reqwest::Error>,
 {
+    tracing::debug!("GET {}", url);
     let client = reqwest::Client::builder().build()?;
 
     let req = client.get(url);
