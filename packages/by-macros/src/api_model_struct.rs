@@ -2131,7 +2131,7 @@ impl ApiModel<'_> {
                 query
             }
 
-            pub fn query_builder(#(#aggregate_args)*) -> #query_builder {
+            pub fn query_builder(#(#aggregate_args),*) -> #query_builder {
                 let base_sql = format!(#q, #(#arg_names),*);
                 #query_builder::from(&base_sql, #group_by).with_count()
             }
@@ -2194,7 +2194,7 @@ impl ApiModel<'_> {
 
             #group_by
 
-            pub fn query_builder(#(#aggregate_args)*) -> #query_builder {
+            pub fn query_builder(#(#aggregate_args),*) -> #query_builder {
                 let base_sql = format!(#q, #(#arg_names),*);
                 let g = #name::group_by();
                 #query_builder::from(&base_sql, &g)
@@ -2283,7 +2283,7 @@ impl ApiModel<'_> {
         let rt = &self.result_type;
 
         let output = quote! {
-            pub async fn find_one(&self, #(#aggregate_args)* param: &#read_action) -> #rt<#name> {
+            pub async fn find_one(&self, #(#aggregate_args,)* param: &#read_action) -> #rt<#name> {
                 #for_where
                 query.push_str(" ");
                 query.push_str(#name::group_by().as_str());
