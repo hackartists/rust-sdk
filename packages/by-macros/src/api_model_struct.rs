@@ -2029,7 +2029,7 @@ impl ApiModel<'_> {
     pub fn base_sql_with_function_for_summary(&self) -> proc_macro2::TokenStream {
         let mut aggregates = vec![];
         let mut aggregated_fields = vec![];
-        let mut aggregate_args = vec![];
+        let mut aggregate_args: IndexMap<String, proc_macro2::TokenStream> = IndexMap::new();
         let mut arg_names = vec![];
         let mut group_by = vec![];
         let mut summary_fields = vec![];
@@ -2055,9 +2055,9 @@ impl ApiModel<'_> {
                 aggregated_fields.push(q);
             }
 
-            if let Some(q) = field.aggregate_arg() {
+            if let Some((name, q)) = field.aggregate_arg() {
                 is_agg = true;
-                aggregate_args.push(q);
+                aggregate_args.insert(name, q);
             }
 
             if let Some(q) = field.aggregate_arg_name() {
@@ -2114,7 +2114,7 @@ impl ApiModel<'_> {
 
         let query_builder = self.repo_query_struct_id();
         let summary_name = self.summary_struct_name();
-
+        let aggregate_args: Vec<proc_macro2::TokenStream> = aggregate_args.into_values().collect();
         let output = quote! {
             pub fn base_sql_with(#(#aggregate_args,)* where_and_statements: &str) -> String {
                 tracing::debug!("{} base_sql_with group: {}", #q, #group_by);
@@ -2145,7 +2145,7 @@ impl ApiModel<'_> {
 
         let mut aggregates = vec![];
         let mut aggregated_fields = vec![];
-        let mut aggregate_args = vec![];
+        let mut aggregate_args: IndexMap<String, proc_macro2::TokenStream> = IndexMap::new();
         let mut arg_names = vec![];
 
         for (field_name, field) in self.fields.iter() {
@@ -2157,8 +2157,8 @@ impl ApiModel<'_> {
                 aggregated_fields.push(q);
             }
 
-            if let Some(q) = field.aggregate_arg() {
-                aggregate_args.push(q);
+            if let Some((name, q)) = field.aggregate_arg() {
+                aggregate_args.insert(name, q);
             }
 
             if let Some(q) = field.aggregate_arg_name() {
@@ -2186,7 +2186,7 @@ impl ApiModel<'_> {
         let group_by = self.group_by();
 
         let query_builder = self.repo_query_struct_id();
-
+        let aggregate_args: Vec<proc_macro2::TokenStream> = aggregate_args.into_values().collect();
         let output = quote! {
             pub fn base_sql(#(#aggregate_args),*) -> String {
                 format!(#q, #(#arg_names),*)
@@ -2216,19 +2216,21 @@ impl ApiModel<'_> {
             proc_macro2::Span::call_site(),
         );
 
-        let mut aggregate_args = vec![];
+        let mut aggregate_args: IndexMap<String, proc_macro2::TokenStream> = IndexMap::new();
         let mut arg_names = vec![];
 
         for (field_name, field) in self.fields.iter() {
-            if let Some(q) = field.aggregate_arg() {
-                aggregate_args.push(quote! {
-                    #q,
-                });
+            if let Some((name, q)) = field.aggregate_arg() {
+                if aggregate_args.insert(name, q).is_none() {
+                    if let Some(q) = field.aggregate_arg_name() {
+                        arg_names.push(q);
+                    }
+                }
             }
 
-            if let Some(q) = field.aggregate_arg_name() {
-                arg_names.push(q);
-            }
+            // if let Some(q) = field.aggregate_arg_name() {
+            //     arg_names.push(q);
+            // }
         }
         let mut parent_variable = syn::LitStr::new("", proc_macro2::Span::call_site());
 
@@ -2281,7 +2283,7 @@ impl ApiModel<'_> {
         };
 
         let rt = &self.result_type;
-
+        let aggregate_args: Vec<proc_macro2::TokenStream> = aggregate_args.into_values().collect();
         let output = quote! {
             pub async fn find_one(&self, #(#aggregate_args,)* param: &#read_action) -> #rt<#name> {
                 #for_where
@@ -3798,7 +3800,7 @@ COALESCE(
         }
     }
 
-    pub fn aggregate_arg(&self) -> Option<proc_macro2::TokenStream> {
+    pub fn aggregate_arg(&self) -> Option<(String, proc_macro2::TokenStream)> {
         match (&self.aggregator, &self.relation) {
             (
                 Some(Aggregator::Exist),
@@ -3820,8 +3822,8 @@ COALESCE(
                     },
                     proc_macro2::Span::call_site(),
                 );
-
-                Some(quote! { #arg_name: #arg_type})
+                let stream = quote! { #arg_name: #arg_type};
+                Some((foreign_primary_key.clone(), stream))
             }
             // (
             //     None,
