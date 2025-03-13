@@ -21,6 +21,7 @@ mod test_duplicate_exist_aggregators {
         pub email: String,
     }
 
+    // Note: when fields have duplicated foreign_primary_key(user_id, member_id) with exist aggregator.
     #[api_model(base = "/", table = test_duplicate_aggregators_models)]
     pub struct Model {
         #[api_model(primary_key, read_action = find_by_id)]

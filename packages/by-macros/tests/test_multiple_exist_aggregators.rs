@@ -33,7 +33,7 @@ mod test_multiple_exist_aggeregators {
         pub name: String,
     }
 
-    // Note: When having the same foreign_primary_key "user_id".
+    // Note: when fields have multiple foreign_primary_key(user_id) with exist aggregator.
     #[api_model(base = "/", table = test_multiple_aggregator_models)]
     pub struct Model {
         #[api_model(primary_key, read_action = find_by_id)]
@@ -52,7 +52,6 @@ mod test_multiple_exist_aggeregators {
         #[api_model(summary, many_to_many = test_multiple_aggregator_model_member_followers, table_name = test_multiple_aggregator_member, foreign_primary_key = member_id, foreign_reference_key = model_id, aggregator = exist)]
         pub followed: bool,
     }
-    // Note: When having the multiple foreign_primary_key "user_id_1", "user_id_2".
 
     #[api_model(base = "/", table = test_multiple_aggregator_model_user_likes)]
     pub struct ModelUserLikes {
