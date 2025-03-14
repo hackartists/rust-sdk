@@ -10,42 +10,49 @@ pub mod prelude {
     pub use validator;
 
     #[cfg(any(
+        feature = "fe",
         feature = "web",
         feature = "server",
         all(feature = "server", feature = "lambda")
     ))]
     pub use btracing;
     #[cfg(any(
+        feature = "fe",
         feature = "web",
         feature = "server",
         all(feature = "server", feature = "lambda")
     ))]
     pub use by_components;
     #[cfg(any(
+        feature = "fe",
         feature = "web",
         feature = "server",
         all(feature = "server", feature = "lambda")
     ))]
     pub use dioxus;
     #[cfg(any(
+        feature = "fe",
         feature = "web",
         feature = "server",
         all(feature = "server", feature = "lambda")
     ))]
     pub use dioxus::prelude::*;
     #[cfg(any(
+        feature = "fe",
         feature = "web",
         feature = "server",
         all(feature = "server", feature = "lambda")
     ))]
     pub use dioxus_aws;
     #[cfg(any(
+        feature = "fe",
         feature = "web",
         feature = "server",
         all(feature = "server", feature = "lambda")
     ))]
     pub use dioxus_logger;
     #[cfg(any(
+        feature = "fe",
         feature = "web",
         feature = "server",
         all(feature = "server", feature = "lambda")
