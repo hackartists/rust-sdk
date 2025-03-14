@@ -36,7 +36,7 @@ serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.133"
 reqwest = { version = "0.12.12", features = ["blocking", "json", "multipart"] }
 
-dioxus = { version = "0.6.3", features = ["web", "router", "fullstack"], git = "https://github.com/hackartists/dioxus.git" }
+dioxus = { version = "0.6.3", features = ["router", "fullstack"], git = "https://github.com/hackartists/dioxus.git" }
 dioxus-fullstack = { version = "0.6.3", git = "https://github.com/hackartists/dioxus.git" }
 dioxus-cli-config = { version = "0.6.3", git = "https://github.com/hackartists/dioxus.git" }
 dioxus-web = { version = "0.6.3", git = "https://github.com/hackartists/dioxus.git" }

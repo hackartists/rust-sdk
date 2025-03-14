@@ -9,36 +9,64 @@ pub mod prelude {
     pub use tracing;
     pub use validator;
 
-    #[cfg(feature = "fe")]
+    #[cfg(any(
+        feature = "web",
+        feature = "server",
+        all(feature = "server", feature = "lambda")
+    ))]
     pub use btracing;
-    #[cfg(feature = "fe")]
+    #[cfg(any(
+        feature = "web",
+        feature = "server",
+        all(feature = "server", feature = "lambda")
+    ))]
     pub use by_components;
-    #[cfg(feature = "fe")]
+    #[cfg(any(
+        feature = "web",
+        feature = "server",
+        all(feature = "server", feature = "lambda")
+    ))]
     pub use dioxus;
-    #[cfg(feature = "fe")]
+    #[cfg(any(
+        feature = "web",
+        feature = "server",
+        all(feature = "server", feature = "lambda")
+    ))]
     pub use dioxus::prelude::*;
-    #[cfg(feature = "fe")]
+    #[cfg(any(
+        feature = "web",
+        feature = "server",
+        all(feature = "server", feature = "lambda")
+    ))]
     pub use dioxus_aws;
-    #[cfg(feature = "fe")]
+    #[cfg(any(
+        feature = "web",
+        feature = "server",
+        all(feature = "server", feature = "lambda")
+    ))]
     pub use dioxus_logger;
-    #[cfg(feature = "fe")]
+    #[cfg(any(
+        feature = "web",
+        feature = "server",
+        all(feature = "server", feature = "lambda")
+    ))]
     pub use dioxus_popup;
 
-    #[cfg(feature = "server")]
+    #[cfg(any(feature = "server", all(feature = "server", feature = "lambda")))]
     pub use dioxus::fullstack;
-    #[cfg(feature = "server")]
+    #[cfg(any(feature = "server", all(feature = "server", feature = "lambda")))]
     pub use dioxus::fullstack::prelude::*;
 
-    #[cfg(feature = "be")]
+    #[cfg(any(feature = "be", all(feature = "be", feature = "lambda")))]
     pub use aide;
-    #[cfg(feature = "be")]
+    #[cfg(any(feature = "be", all(feature = "be", feature = "lambda")))]
     pub use bigdecimal;
-    #[cfg(feature = "be")]
+    #[cfg(any(feature = "be", all(feature = "be", feature = "lambda")))]
     pub use by_axum;
-    #[cfg(feature = "be")]
+    #[cfg(any(feature = "be", all(feature = "be", feature = "lambda")))]
     pub use schemars;
-    #[cfg(feature = "be")]
+    #[cfg(any(feature = "be", all(feature = "be", feature = "lambda")))]
     pub use schemars::JsonSchema;
-    #[cfg(feature = "be")]
+    #[cfg(any(feature = "be", all(feature = "be", feature = "lambda")))]
     pub use sqlx;
 }
