@@ -1,4 +1,3 @@
-#[cfg(feature = "web")]
 use dioxus::prelude::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
@@ -127,7 +126,6 @@ impl FirebaseService {
     ) -> Self {
         tracing::debug!("FirebaseService::init: {api_key}, {auth_domain}, {project_id}, {storage_bucket}, {messaging_sender_id}, {app_id}, {measurement_id}");
 
-        #[cfg(feature = "web")]
         use_effect(move || {
             let config = FirebaseConfig {
                 api_key: api_key.clone(),
