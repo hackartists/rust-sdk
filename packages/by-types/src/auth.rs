@@ -8,6 +8,21 @@ pub struct Claims {
     pub custom: HashMap<String, String>,
 }
 
+impl Claims {
+    pub fn new(sub: String, role: Role) -> Self {
+        Self {
+            sub,
+            role,
+            ..Default::default()
+        }
+    }
+
+    pub fn with_custom(mut self, key: String, value: String) -> Self {
+        self.custom.insert(key, value);
+        self
+    }
+}
+
 #[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "server", derive(schemars::JsonSchema, aide::OperationIo))]
 #[serde(rename_all = "snake_case")]
