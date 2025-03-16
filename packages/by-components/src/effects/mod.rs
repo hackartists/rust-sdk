@@ -37,7 +37,7 @@ pub fn HoverEffects() -> Element {
         let document = web_sys::window().unwrap().document().unwrap();
         let shadow = document.get_element_by_id("shadow").unwrap();
         let closure = Closure::wrap(Box::new(move |event: web_sys::Event| {
-            if let Ok(event) = event.dyn_into::<MouseEvent>() {
+            if let Ok(event) = event.dyn_into::<web_sys::MouseEvent>() {
                 if let Some(target) = event.target() {
                     if let Ok(el) = target.dyn_into::<HtmlElement>() {
                         if (el.tag_name().to_lowercase().as_str() == "button")

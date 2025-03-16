@@ -1,11 +1,5 @@
 #![allow(non_snake_case)]
-
-use crate::{charts::d3, theme::ColorTheme};
 use dioxus::prelude::*;
-use serde_wasm_bindgen::to_value;
-use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
-
-use super::utils::closure;
 
 #[component]
 pub fn BarChart(
@@ -15,20 +9,27 @@ pub fn BarChart(
     #[props(extends = GlobalAttributes)] attributes: Vec<Attribute>,
     children: Element,
 ) -> Element {
-    let color: ColorTheme = try_use_context().unwrap_or_default();
-    let colors = color.chart.bar_chart_colors;
+    #[cfg(feature = "web")]
+    {
+        use crate::theme::ColorTheme;
+        let color: ColorTheme = try_use_context().unwrap_or_default();
+        let colors = color.chart.bar_chart_colors;
+    }
 
     rsx! {
         div {
             width,
             height,
             onmounted: move |_el| {
-                use dioxus::web::WebEventExt;
-                let el = _el.as_web_event();
-                let width = el.client_width();
-                let height = el.client_height();
-                let svg = inject_svg(width, height, data.clone(), colors.clone());
-                el.append_child(&svg).unwrap();
+                #[cfg(feature = "web")]
+                {
+                    use dioxus::web::WebEventExt;
+                    let el = _el.as_web_event();
+                    let width = el.client_width();
+                    let height = el.client_height();
+                    let svg = inject_svg(width, height, data.clone(), colors.clone());
+                    el.append_child(&svg).unwrap();
+                }
             },
             ..attributes,
             {children}
@@ -48,12 +49,19 @@ impl BarChartData {
     }
 }
 
+#[cfg(feature = "web")]
 fn inject_svg(
     width: i32,
     height: i32,
     data: Vec<BarChartData>,
     colors: Vec<&'static str>,
 ) -> web_sys::Node {
+    use crate::charts::d3;
+
+    use serde_wasm_bindgen::to_value;
+    use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
+
+    use super::utils::closure;
     let margin_left = 140.0;
     let margin_top = 50.0;
     let width = width as f64 - margin_left - 20.0;

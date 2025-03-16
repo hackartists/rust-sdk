@@ -4,6 +4,8 @@ use dioxus::prelude::*;
 
 pub type FileExtension = String;
 
+#[allow(unused_mut)]
+#[allow(unused_variables)]
 #[component]
 pub fn DropZone(
     oncomplete: Option<EventHandler<Vec<String>>>,
@@ -54,9 +56,12 @@ pub fn DropZone(
                 }
             },
             onclick: move |_| {
-                use wasm_bindgen::JsCast;
                 if let Some(file_input) = file_input() {
-                    file_input.dyn_ref::<web_sys::HtmlInputElement>().unwrap().click();
+                    #[cfg(feature = "web")]
+                    {
+                        use wasm_bindgen::JsCast;
+                        file_input.dyn_ref::<web_sys::HtmlInputElement>().unwrap().click();
+                    }
                 }
             },
             ..attributes,
@@ -65,9 +70,12 @@ pub fn DropZone(
         input {
             class: "hidden",
             onmounted: move |el| {
-                use dioxus::web::WebEventExt;
-                let w = el.as_web_event();
-                file_input.set(Some(w));
+                #[cfg(feature = "web")]
+                {
+                    use dioxus::web::WebEventExt;
+                    let w = el.as_web_event();
+                    file_input.set(Some(w));
+                }
             },
             accept,
             multiple,

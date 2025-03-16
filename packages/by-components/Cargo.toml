@@ -11,7 +11,7 @@ repository = "https://github.com/biyard/rust-sdk/tree/main/packages/by-component
 dioxus.workspace = true
 wasm-bindgen = { version = "0.2.*", features = ["serde-serialize"] }
 wasm-bindgen-futures = { version = "0.4.*" }
-web-sys = { version = "0.3.*", features=["Navigator", "HtmlCollection","EventTarget"] }
+web-sys = { version = "0.3.*", features=["Navigator", "HtmlCollection","EventTarget","MouseEvent"] }
 tracing = { version = "0.1.40" }
 serde_json.workspace = true
 serde.workspace = true
