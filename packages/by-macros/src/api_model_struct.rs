@@ -2,7 +2,11 @@
 
 #[cfg(feature = "server")]
 use crate::query_builder_functions::*;
-use crate::{action::Actions, api_model::*};
+use crate::{
+    action::Actions,
+    api_model::*,
+    parse_queryable_fields::{parse_queryable_action_fields, parse_queryable_fields},
+};
 use convert_case::{Case, Casing};
 use indexmap::IndexMap;
 use proc_macro::TokenStream;
@@ -955,7 +959,7 @@ impl ApiModel<'_> {
         let struct_name = self.name_id;
         let base_endpoint = &self.base;
         let parent_ids = &self.parent_ids;
-        let read_actions = &self.query_action_names;
+        let query_actions = &self.query_action_names;
         let has_validator = self.has_validator;
         let queryable_fields = &self.queryable_fields;
 
@@ -971,86 +975,27 @@ impl ApiModel<'_> {
         let mut cli_read_action_functions = vec![];
         let mut parsers = vec![];
         let rt = &self.result_type;
+        parse_queryable_fields(
+            &queryable_fields,
+            &struct_name,
+            &mut hashed_fields,
+            &mut query_fields,
+            &mut query_builder_functions,
+            &mut parsers,
+        );
+        parse_queryable_action_fields(
+            &self.actions.queryable,
+            &struct_name,
+            &mut hashed_fields,
+            &mut query_fields,
+            &mut query_builder_functions,
+            &mut parsers,
+        );
 
-        for field in queryable_fields {
-            let field_name = &field.ident;
-            hashed_fields.insert(field_name.clone());
-            let field_type = &field.ty;
-            let mut validate_attributes = Vec::new();
-            for attr in &field.attrs {
-                if let Meta::List(meta_list) = attr.meta.clone() {
-                    if meta_list.path.is_ident("validate") {
-                        validate_attributes.push(attr.clone());
-                    }
-                }
-            }
-
-            let convert = match to_string(&field_type).as_str() {
-                "String" => quote! {},
-                _ => {
-                    let fname = syn::Ident::new(
-                        &format!(
-                            "parse_{}_of_{}_query",
-                            field_name.clone().unwrap().to_string().to_case(Case::Snake),
-                            struct_name.to_string().to_case(Case::Snake)
-                        ),
-                        struct_name.span(),
-                    );
-
-                    let fname_str = syn::LitStr::new(
-                        &format!(
-                            "parse_{}_of_{}_query",
-                            field_name.clone().unwrap().to_string().to_case(Case::Snake),
-                            struct_name.to_string().to_case(Case::Snake)
-                        ),
-                        struct_name.span(),
-                    );
-
-                    parsers.push(quote! {
-                    pub fn #fname<'de, D>(deserializer: D) -> std::result::Result<Option<#field_type>, D::Error>
-                    where
-                        D: serde::Deserializer<'de>,
-                    {
-                        use serde::Deserialize;
-
-                        let s: Option<String> = Option::deserialize(deserializer)?;
-                        match s {
-                            Some(s) => {
-                                s.parse::<#field_type>()
-                                    .map_err(serde::de::Error::custom)
-                                    .map(Some)
-                            }
-                            None => Ok(None),
-                        }
-                    }
-                });
-                    quote! {
-                        #[serde(deserialize_with = #fname_str, default)]
-                    }
-                }
-            };
-
-            query_fields.push(quote! {
-                #(#validate_attributes)*
-                #convert
-                pub #field_name: Option<#field_type>,
-            });
-            let function_name = syn::Ident::new(
-                &format!("with_{}", field_name.as_ref().unwrap()),
-                struct_name.span(),
-            );
-
-            query_builder_functions.push(quote! {
-                pub fn #function_name(mut self, #field_name: #field_type) -> Self {
-                    self.#field_name = Some(#field_name);
-                    self
-                }
-            });
-        }
         let mut extended_query_fields = vec![];
         let mut read_action_types = vec![];
 
-        for (read_action, fields) in read_actions {
+        for (read_action, fields) in query_actions {
             let mut params = vec![];
             let mut replace_expressions = vec![];
 
@@ -1193,6 +1138,7 @@ impl ApiModel<'_> {
                 ) -> #rt<#iter_type_tokens> {
                     let path = format!(#base_endpoint_lit, #(#parent_names)*);
                     let endpoint = format!("{}{}", self.endpoint, path);
+
                     let params = #param_name::Query(#query_name {
                         size,
                         bookmark,
@@ -4321,7 +4267,10 @@ CREATE TABLE IF NOT EXISTS {} (
 pub fn to_string(ty: &syn::Type) -> String {
     match &ty {
         syn::Type::Path(ref type_path) => type_path.path.segments.last().unwrap().ident.to_string(),
-        _ => panic!("it must be valid type"),
+        syn::Type::Verbatim(token) => token.to_string(),
+        _ => {
+            panic!("api_model custom type only support Type::Path and Type::Verbatim");
+        }
     }
 }
 
