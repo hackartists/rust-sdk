@@ -10,11 +10,11 @@ pub fn BarChart(
     children: Element,
 ) -> Element {
     #[cfg(feature = "web")]
-    {
-        use crate::theme::ColorTheme;
-        let color: ColorTheme = try_use_context().unwrap_or_default();
-        let colors = color.chart.bar_chart_colors;
-    }
+    use crate::theme::ColorTheme;
+    #[cfg(feature = "web")]
+    let color: ColorTheme = try_use_context().unwrap_or_default();
+    #[cfg(feature = "web")]
+    let colors = color.chart.bar_chart_colors;
 
     rsx! {
         div {
