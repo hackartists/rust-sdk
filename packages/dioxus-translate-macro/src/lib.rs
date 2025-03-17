@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::parse::{Parse, ParseStream};
 use syn::{braced, parse_macro_input, DeriveInput, Fields, Ident, Lit, LitStr, Meta, Token};
 
@@ -271,17 +271,28 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
             #arm_name => write!(f, #lower_name),
         });
 
-        #[cfg(not(feature = "ko"))]
+        if let Some((_, expr)) = &variant.discriminant {
+            let value = LitStr::new(
+                expr.to_token_stream().to_string().as_str(),
+                proc_macro2::Span::call_site(),
+            );
+
+            from_str_arms.push(quote! {
+                #value => Ok(#assigner),
+            });
+        }
+
         from_str_arms.push(quote! {
             #en_str | #lower_name => Ok(#assigner),
         });
+
         #[cfg(feature = "ko")]
         {
             ko_arms.push(quote! {
                 #arm_name => #ko_str,
             });
             from_str_arms.push(quote! {
-                #en_str | #ko_str | #lower_name => Ok(#assigner),
+                #ko_str => Ok(#assigner),
             });
         }
     }

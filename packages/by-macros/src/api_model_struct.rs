@@ -2632,7 +2632,19 @@ impl ApiModel<'_> {
                         #f
                     })
                 }
-                _ => {}
+                _ => match v.r#type.to_lowercase().as_str() {
+                    "integer" => {
+                        let ty = ty.to_string();
+                        let f = build_integer_query_functions(&v.name, &ty);
+                        let o = build_order_by_functions(&v.name);
+
+                        functions.push(quote! {
+                            #f
+                            #o
+                        });
+                    }
+                    _ => {}
+                },
             }
         }
 
