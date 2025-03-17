@@ -209,6 +209,10 @@ pub fn build_integer_query_functions(field_name: &str, ty_str: &str) -> proc_mac
     let field_id_str = syn::LitStr::new(field_name, proc_macro2::Span::call_site());
     let bridge = if ty_str == "u32" {
         quote! { as i32 }
+    } else if ty_str != "i32" {
+        quote! {
+           .into()
+        }
     } else {
         quote! {}
     };
