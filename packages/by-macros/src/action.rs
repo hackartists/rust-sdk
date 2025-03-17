@@ -22,6 +22,7 @@ impl ActionRequestField {
 #[derive(Debug, PartialEq)]
 pub struct Actions {
     pub actions: IndexMap<String, Vec<ActionRequestField>>,
+    pub queryable: Vec<ActionRequestField>,
     pub read_actions: IndexMap<String, Vec<ActionRequestField>>,
     pub action_by_id: IndexMap<String, Vec<ActionRequestField>>,
     pub responses: IndexMap<String, Vec<ActionRequestField>>,
@@ -39,6 +40,7 @@ impl FromStr for Actions {
         let mut read_actions: IndexMap<String, Vec<ActionRequestField>> = IndexMap::new();
         let mut action_by_id: IndexMap<String, Vec<ActionRequestField>> = IndexMap::new();
         let mut responses: IndexMap<String, Vec<ActionRequestField>> = IndexMap::new();
+        let mut queryable: Vec<ActionRequestField> = Vec::new();
 
         for (key, value) in pairs {
             let key_lower = key.trim().to_lowercase();
@@ -50,11 +52,16 @@ impl FromStr for Actions {
                 action_by_id = parse_action_value(&value)?;
             } else if key_lower == "response" {
                 responses = parse_action_value(&value)?;
+            } else if key_lower == "queryable" {
+                for (_, v) in parse_action_value(&value)? {
+                    queryable.extend(v);
+                }
             }
         }
 
         Ok(Actions {
             actions,
+            queryable,
             read_actions,
             action_by_id,
             responses,
@@ -342,9 +349,31 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_query_value_list() {
+        let input = "[(code = String, param = u64)]";
+        let map = parse_action_value(input).unwrap();
+        let mut expected = IndexMap::new();
+        expected.insert(
+            "".to_string(),
+            vec![
+                ActionRequestField {
+                    name: "code".to_string(),
+                    r#type: "String".to_string(),
+                },
+                ActionRequestField {
+                    name: "param".to_string(),
+                    r#type: "u64".to_string(),
+                },
+            ],
+        );
+        assert_eq!(map, expected);
+    }
+
+    #[test]
     fn test_actions_from_str_full() {
         let input = r#"
             base = "/auth/v1",
+            queryable = [(sort = Sorter)],
             action = [signup(code = String, param = u64), login(test = Vec<String>)],
             read_action = read_data,
             action_by_id = [get_data, update_data],
@@ -392,6 +421,10 @@ mod tests {
 
         let expected = Actions {
             actions: expected_actions,
+            queryable: vec![ActionRequestField {
+                name: "sort".to_string(),
+                r#type: "Sorter".to_string(),
+            }],
             read_actions: expected_read_actions,
             action_by_id: expected_action_by_id,
             responses: expected_responses,

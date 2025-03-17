@@ -4,6 +4,7 @@ mod action;
 mod api_model;
 mod api_model_struct;
 mod enum_prop;
+pub(crate) mod parse_queryable_fields;
 #[cfg(feature = "server")]
 mod query_builder_functions;
 mod query_display;
