@@ -2648,6 +2648,13 @@ impl ApiModel<'_> {
             }
         }
 
+        functions.push(quote! {
+            pub fn order_by_random(mut self) -> Self {
+                self.order = by_types::Order::Random;
+                self
+            }
+        });
+
         quote! {
             #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
             pub struct #name {
