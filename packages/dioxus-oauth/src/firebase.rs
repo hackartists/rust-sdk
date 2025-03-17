@@ -212,3 +212,36 @@ impl FirebaseService {
         Some(id_token)
     }
 }
+
+#[allow(non_snake_case)]
+#[component]
+pub fn FirebaseProvider(
+    api_key: String,
+    auth_domain: String,
+    project_id: String,
+    storage_bucket: String,
+    messaging_sender_id: String,
+    app_id: String,
+    measurement_id: String,
+) -> Element {
+    use_effect(move || {
+        let config = FirebaseConfig {
+            api_key: api_key.clone(),
+            auth_domain: auth_domain.clone(),
+            project_id: project_id.clone(),
+            storage_bucket: storage_bucket.clone(),
+            messaging_sender_id: messaging_sender_id.clone(),
+            app_id: app_id.clone(),
+            measurement_id: measurement_id.clone(),
+        };
+
+        let v = serde_wasm_bindgen::to_value(&config).unwrap_or_default();
+
+        tracing::debug!("initialize firebase");
+        initialize_app(&v);
+    });
+
+    rsx! {
+        document::Script { src: asset!("/dep.js") }
+    }
+}
