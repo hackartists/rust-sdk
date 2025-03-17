@@ -112,6 +112,7 @@ impl Conditions {
 pub enum Order {
     Asc(Vec<String>),
     Desc(Vec<String>),
+    Random,
     #[default]
     None,
 }
@@ -121,6 +122,7 @@ impl std::fmt::Display for Order {
         let s = match self {
             Order::Asc(field) => format!("ORDER BY {} ASC", field.join(", ")),
             Order::Desc(field) => format!("ORDER BY {} DESC", field.join(", ")),
+            Order::Random => format!("ORDER BY RANDOM()"),
             Order::None => "".to_string(),
         };
 
