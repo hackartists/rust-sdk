@@ -174,7 +174,6 @@ impl FirebaseService {
                 let access_token = v.access_token();
                 let id_token = v.id_token();
                 tracing::debug!("id_token: {id_token}, access_token: {access_token}");
-                web_sys::console::log_1(&res);
 
                 let cred: UserCredentialImpl = res.dyn_into().unwrap();
                 let user = cred.user();

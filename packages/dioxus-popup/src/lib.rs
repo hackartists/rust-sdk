@@ -147,7 +147,10 @@ pub fn PopupZone(
 }
 
 #[component]
-pub fn Close(#[props(default = "white".to_string())] color: String) -> Element {
+pub fn Close(
+    #[props(extends = GlobalAttributes)] attributes: Vec<Attribute>,
+    #[props(default = "white".to_string())] color: String,
+) -> Element {
     rsx! {
         svg {
             width: "24",
@@ -155,6 +158,7 @@ pub fn Close(#[props(default = "white".to_string())] color: String) -> Element {
             view_box: "0 0 24 24",
             fill: "none",
             xmlns: "http://www.w3.org/2000/svg",
+            ..attributes,
             path {
                 d: "M16.9498 7.05029L7.05029 16.9498M7.05029 7.05029L16.9498 16.9498",
                 stroke: "{color}",
