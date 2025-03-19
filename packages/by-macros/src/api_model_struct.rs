@@ -2620,6 +2620,9 @@ impl ApiModel<'_> {
                 fn bitor(self, rhs: Self) -> Self::Output {
                     let mut new_or = self.or;
                     new_or.push(rhs.conditions); // Append rhs conditions to or
+                    if !rhs.or.is_empty() {
+                        new_or.extend(rhs.or);
+                    }
 
                     Self {
                         base_sql: self.base_sql,
@@ -2637,6 +2640,9 @@ impl ApiModel<'_> {
             impl std::ops::BitOrAssign for #name {
                 fn bitor_assign(&mut self, rhs: Self) {
                     self.or.push(rhs.conditions);
+                    if !rhs.or.is_empty() {
+                        self.or.extend(rhs.or);
+                    }
                     self.count = self.count || rhs.count;
                     self.limit = self.limit.or(rhs.limit);
                     self.page = self.page.or(rhs.page);
