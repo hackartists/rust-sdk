@@ -2613,17 +2613,17 @@ impl ApiModel<'_> {
                                 format!("{} WHERE {}", q.base_sql, w)
                             };
 
-                            tracing::info!("sub_query(before): {sub_query}");
+                            tracing::trace!("sub_query(before): {sub_query}");
                             let sub_query = format!(r#"
         {sub_query}
         JOIN {table_name} j ON {bound_name}.id = j.{foreign_primary_key}
         WHERE j.{foreign_reference_key} = dummy.{reference_key}
         GROUP BY {bound_name}.id
 "#);
-                            tracing::info!("new ready sub_query: {sub_query}");
+                            tracing::trace!("new ready sub_query: {sub_query}");
                             let sub_query = sub_query.replace("p.", &format!("{}.",#bound_name)).replace(" p ", &format!(" {} ", #bound_name)).replace(" dummy.", " p.").to_string();
                             let sub_query = format!("\n{}\n", sub_query);
-                            tracing::info!("sub query(after): {}", sub_query);
+                            tracing::trace!("sub query(after): {}", sub_query);
 
                             let re = regex::Regex::new(#pattern).unwrap();
                             re.replace_all(&ret, #bpattern).to_string().replace(#bpattern, &sub_query).to_string()
@@ -2631,7 +2631,7 @@ impl ApiModel<'_> {
                             ret
                         };
 
-                        tracing::info!("modified query: \n{}", ret);
+                        tracing::trace!("modified query: \n{}", ret);
                     });
                 } else if let Some(Relation::OneToMany { foreign_key, .. }) = &v.relation {
                     let foreign_key = syn::LitStr::new(
