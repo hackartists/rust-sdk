@@ -2529,20 +2529,71 @@ impl ApiModel<'_> {
             proc_macro2::Span::call_site(),
         );
 
-        let mut fields = vec![];
+        let mut builder_fields = vec![];
         let mut functions = vec![];
+        let mut bindings = vec![];
+        let mut assigns = vec![];
 
         for (_, v) in self.fields.iter() {
             if !v.can_query() {
                 continue;
             }
+
+            if v.can_query_builder() {
+                let ty = if v.rust_type.starts_with("Vec") {
+                    v.rust_type
+                        .replace(" ", "")
+                        .trim_start_matches("Vec<")
+                        .trim_end_matches(">")
+                        .to_string()
+                } else {
+                    v.rust_type.clone()
+                };
+
+                let ty: proc_macro2::TokenStream =
+                    format!("{}RepositoryQueryBuilder", ty).parse().unwrap();
+                let pattern = syn::LitStr::new(
+                    &format!(r"-- {} start([\s\S]*?)-- {} end", v.name, v.name),
+                    proc_macro2::Span::call_site(),
+                );
+
+                let bound_name =
+                    syn::LitStr::new(&format!("{}", v.name), proc_macro2::Span::call_site());
+
+                let name = syn::Ident::new(
+                    &format!("{}_builder", v.name),
+                    proc_macro2::Span::call_site(),
+                );
+                builder_fields.push(quote! {
+                    pub #name: Option<#ty>,
+                });
+
+                functions.push(quote! {
+                    pub fn #name(mut self, #name: #ty) -> Self {
+                        self.#name = Some(#name);
+                        self
+                    }
+                });
+                bindings.push(quote! {
+                    let ret = if let Some(q) = &self.#name {
+                        let sub_query = q.sql_starts_with(i);
+                        let re = regex::Regex::new(#pattern).unwrap();
+                        let sub_query = sub_query.replace("p.", &format!("{}.",#bound_name)).to_string().replace(" p ", &format!(" {} ", #bound_name)).to_string();
+
+                        re.replace_all(&ret, &format!("\n{}\n", sub_query)).to_string()
+                    } else {
+                        ret
+                    };
+                });
+                assigns.push(quote! {
+                    #name: self.#name,
+                });
+                continue;
+            }
+
             let name = syn::Ident::new(&v.name, proc_macro2::Span::call_site());
             let ty = v.unwrapped_type_token();
             let field_id_str = syn::LitStr::new(&v.name, proc_macro2::Span::call_site());
-
-            fields.push(quote! {
-                pub #name: Option<#ty>
-            });
 
             match ty.to_string().as_str() {
                 "i32" | "u32" => {
@@ -2615,7 +2666,8 @@ impl ApiModel<'_> {
                 pub order: by_types::Order,
                 pub limit: Option<i32>,
                 pub page: Option<i32>,
-                pub or: Vec<Vec<by_types::Conditions>>
+                pub or: Vec<Vec<by_types::Conditions>>,
+                #(#builder_fields)*
             }
 
             impl std::ops::BitOr for #name {
@@ -2637,6 +2689,7 @@ impl ApiModel<'_> {
                         limit: self.limit.or(rhs.limit),
                         page: self.page.or(rhs.page),
                         or: new_or,
+                        #(#assigns)*
                     }
                 }
             }
@@ -2681,9 +2734,8 @@ impl ApiModel<'_> {
                     self
                 }
 
-                pub fn build_where(&self) -> String {
+                pub fn build_where_starts_with(&self, i:&mut i32) -> String {
                     let mut where_clause = vec![];
-                    let mut i = 1;
                     tracing::debug!("Building where clause with group: {}", self.group_by);
                     let prefix = if self.group_by.is_empty() {
                         ""
@@ -2692,8 +2744,8 @@ impl ApiModel<'_> {
                     };
 
                     for condition in self.conditions.iter() {
-                        let (q, new_i) = condition.to_binder(i);
-                        i = new_i;
+                        let (q, new_i) = condition.to_binder(*i);
+                        *i = new_i;
                         where_clause.push(format!("{}{}", prefix, q));
                     }
 
@@ -2703,8 +2755,8 @@ impl ApiModel<'_> {
                         let mut where_clause = vec![];
 
                         for condition in conditions.iter() {
-                            let (q, new_i) = condition.to_binder(i);
-                            i = new_i;
+                            let (q, new_i) = condition.to_binder(*i);
+                            *i = new_i;
                             where_clause.push(format!("{}{}", prefix, q));
                         }
                         ret.push(where_clause.join(" AND "));
@@ -2717,8 +2769,13 @@ impl ApiModel<'_> {
                     }
                 }
 
-                pub fn sql(&self) -> String {
-                    let w = self.build_where();
+                pub fn build_where(&self) -> String {
+                    let mut _i = 1;
+                    self.build_where_starts_with(&mut _i)
+                }
+
+                pub fn sql_starts_with(&self, i: &mut i32) -> String {
+                    let w = self.build_where_starts_with(i);
 
                     let mut query = if w.is_empty() {
                         format!("{} {} {}", self.base_sql, self.group_by, self.order)
@@ -2730,7 +2787,7 @@ impl ApiModel<'_> {
                         query = query.replacen("SELECT", "SELECT COUNT(*) OVER() as total_count,", 1);
                     }
 
-                    if let Some(limit) = self.limit {
+                    let ret = if let Some(limit) = self.limit {
                         if let Some(page) = self.page {
                             format!("{} LIMIT {} OFFSET {}", query, limit, (limit * (page - 1)))
                         } else {
@@ -2738,7 +2795,16 @@ impl ApiModel<'_> {
                         }
                     } else {
                         query
-                    }
+                    };
+
+                    #(#bindings)*
+
+                    ret
+                }
+
+                pub fn sql(&self) -> String {
+                    let mut _i = 1;
+                    self.sql_starts_with(&mut _i)
                 }
 
                 pub fn query(
@@ -2748,7 +2814,8 @@ impl ApiModel<'_> {
                 sqlx::Postgres,
                 <sqlx::Postgres as sqlx::Database>::Arguments<'static>,
                 > {
-                    let mut query = self.sql();
+                    let mut i = 1;
+                    let mut query = self.sql_starts_with(&mut i);
 
                     let s: Box<String> = Box::new(query);
                     let query: &'static str = Box::leak(s);
@@ -3741,10 +3808,12 @@ END AS {bound_name}
 COALESCE(
   (SELECT jsonb_agg(to_jsonb(m))
      FROM (
+-- {bound_name} start
        SELECT DISTINCT ON (f.id) {table}.*
          FROM {foreign_table_name} f
               JOIN {table_name} j ON f.id = j.{foreign_primary_key}
         WHERE j.{foreign_reference_key} = p.{reference_key}
+-- {bound_name} end
      ) m
   ), '[]'
 ) AS {bound_name}"#,
@@ -3773,9 +3842,11 @@ COALESCE(
 COALESCE(
   (SELECT jsonb_agg(to_jsonb(m))
      FROM (
+-- {bound_name} start
        SELECT DISTINCT ON (f.id) f.*
          FROM {table_name} f
         WHERE f.{foreign_key} = p.{reference_key}
+-- {bound_name} end
      ) m
   ), '[]'
 ) AS {bound_name}"#,
@@ -3979,8 +4050,23 @@ LEFT JOIN (
 
         match self.relation {
             Some(Relation::ManyToMany { .. }) => false,
-            Some(Relation::OneToMany { .. }) => false,
+            Some(Relation::OneToMany { .. }) => true,
             _ => true,
+        }
+    }
+
+    pub fn can_query_builder(&self) -> bool {
+        if self.skip {
+            return false;
+        }
+        if self.aggregator.is_some() {
+            return false;
+        }
+
+        match self.relation {
+            Some(Relation::ManyToMany { .. }) => false,
+            Some(Relation::OneToMany { .. }) => true,
+            _ => false,
         }
     }
 
