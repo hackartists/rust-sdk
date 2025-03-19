@@ -176,17 +176,21 @@ pub mod update_into_tests {
         repo.create_table().await;
         repo_child.create_table().await;
 
+        let mut ids = vec![];
+
         for b in [true, false].iter() {
             for n in 0..10 {
-                repo.insert(
-                    format!("{} {}-{}", name, n, b),
-                    description.clone(),
-                    status,
-                    n,
-                    *b,
-                )
-                .await
-                .unwrap();
+                let doc = repo
+                    .insert(
+                        format!("{} {}-{}", name, n, b),
+                        description.clone(),
+                        status,
+                        n,
+                        *b,
+                    )
+                    .await
+                    .unwrap();
+                ids.push(doc.id);
             }
         }
 
@@ -514,5 +518,21 @@ pub mod update_into_tests {
             .fetch_one(&pool)
             .await
             .unwrap();
+
+        let mut q = QueryModel::query_builder();
+        let q = q.clone().id_equals(ids[0]) | q.clone().id_equals(ids[1]);
+        let docs = q
+            .clone()
+            .order_by_id_asc()
+            .query()
+            .map(QueryModel::from)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+        let s = q.clone().order_by_id_asc().sql();
+        assert_eq!(docs.len(), 2, "{}", s);
+        assert_eq!(docs[0].id, ids[0], "{:?} {:?} {}", docs, ids, s);
+        assert_eq!(docs[1].id, ids[1], "{:?} {:?} {}", docs, ids, s);
     }
 }

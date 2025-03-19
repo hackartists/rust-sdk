@@ -2611,6 +2611,42 @@ impl ApiModel<'_> {
                 pub order: by_types::Order,
                 pub limit: Option<i32>,
                 pub page: Option<i32>,
+                pub or: Vec<Vec<by_types::Conditions>>
+            }
+
+            impl std::ops::BitOr for #name {
+                type Output = Self;
+
+                fn bitor(self, rhs: Self) -> Self::Output {
+                    let mut new_or = self.or;
+                    new_or.push(rhs.conditions); // Append rhs conditions to or
+                    if !rhs.or.is_empty() {
+                        new_or.extend(rhs.or);
+                    }
+
+                    Self {
+                        base_sql: self.base_sql,
+                        group_by: self.group_by,
+                        count: self.count || rhs.count,
+                        conditions: self.conditions,
+                        order: self.order,
+                        limit: self.limit.or(rhs.limit),
+                        page: self.page.or(rhs.page),
+                        or: new_or,
+                    }
+                }
+            }
+
+            impl std::ops::BitOrAssign for #name {
+                fn bitor_assign(&mut self, rhs: Self) {
+                    self.or.push(rhs.conditions);
+                    if !rhs.or.is_empty() {
+                        self.or.extend(rhs.or);
+                    }
+                    self.count = self.count || rhs.count;
+                    self.limit = self.limit.or(rhs.limit);
+                    self.page = self.page.or(rhs.page);
+                }
             }
 
             impl #name {
@@ -2657,7 +2693,24 @@ impl ApiModel<'_> {
                         where_clause.push(format!("{}{}", prefix, q));
                     }
 
-                    where_clause.join(" AND ")
+                    let mut ret = vec![where_clause.join(" AND ")];
+
+                    for conditions in self.or.iter() {
+                        let mut where_clause = vec![];
+
+                        for condition in conditions.iter() {
+                            let (q, new_i) = condition.to_binder(i);
+                            i = new_i;
+                            where_clause.push(format!("{}{}", prefix, q));
+                        }
+                        ret.push(where_clause.join(" AND "));
+                    }
+
+                    if ret.len() == 1 {
+                        ret[0].clone()
+                    } else {
+                        format!("({})", ret.join(") OR ("))
+                    }
                 }
 
                 pub fn sql(&self) -> String {
@@ -2698,7 +2751,10 @@ impl ApiModel<'_> {
 
                     let mut q = sqlx::query(query);
 
-                    for condition in self.conditions.clone() {
+                    let mut conditions = self.conditions.clone();
+                    conditions.extend(self.or.iter().flatten().cloned());
+
+                    for condition in conditions.clone() {
                         q = match condition {
                             by_types::Conditions::BetweenBigint(_, from, to) => {
                                 tracing::debug!("Binding BetweenBigint {} and {}", from, to);
