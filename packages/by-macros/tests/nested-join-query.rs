@@ -101,97 +101,104 @@ pub mod update_into_tests {
             .with_target(false)
             .try_init();
 
-        // let pool: sqlx::Pool<sqlx::Postgres> = sqlx::postgres::PgPoolOptions::new()
-        //     .max_connections(5)
-        //     .connect(
-        //         option_env!("DATABASE_URL")
-        //             .unwrap_or("postgres://postgres:postgres@localhost:5432/test"),
-        //     )
-        //     .await
-        //     .unwrap();
-        // let now = SystemTime::now()
-        //     .duration_since(SystemTime::UNIX_EPOCH)
-        //     .unwrap()
-        //     .as_secs();
+        let pool: sqlx::Pool<sqlx::Postgres> = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(5)
+            .connect(
+                option_env!("DATABASE_URL")
+                    .unwrap_or("postgres://postgres:postgres@localhost:5432/test"),
+            )
+            .await
+            .unwrap();
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
-        // let name = format!("nested-joined-{}", now);
+        let name = format!("nested-joined-{}", now);
 
-        // let l1 = NestedJoinModel::get_repository(pool.clone());
-        // let l2 = NestedChildModel::get_repository(pool.clone());
-        // let l3 = NestedJoinedChildModel::get_repository(pool.clone());
-        // let l4 = NestedJoinedChildManyModel::get_repository(pool.clone());
-        // let l5 = NestedJoinedChiuldManyModelsInter::get_repository(pool.clone());
+        let l1 = NestedJoinModel::get_repository(pool.clone());
+        let l2 = NestedChildModel::get_repository(pool.clone());
+        let l3 = NestedJoinedChildModel::get_repository(pool.clone());
+        let l4 = NestedJoinedChildManyModel::get_repository(pool.clone());
+        let l5 = NestedJoinedChiuldManyModelsInter::get_repository(pool.clone());
 
-        // l1.create_this_table().await;
-        // l2.create_this_table().await;
-        // l3.create_this_table().await;
-        // l4.create_this_table().await;
-        // l5.create_this_table().await;
+        l1.create_this_table().await;
+        l2.create_this_table().await;
+        l3.create_this_table().await;
+        l4.create_this_table().await;
+        l5.create_this_table().await;
 
-        // l1.create_table().await;
-        // l2.create_table().await;
-        // l3.create_table().await;
-        // l4.create_table().await;
-        // l5.create_table().await;
+        l1.create_table().await;
+        l2.create_table().await;
+        l3.create_table().await;
+        l4.create_table().await;
+        l5.create_table().await;
 
-        // let doc1 = l1.insert(name.clone()).await.unwrap();
-        // let doc2 = l2.insert(format!("{name}-child"), doc1.id).await.unwrap();
-        // let doc3 = l3
-        //     .insert(format!("{name}-child-1-to-n"), doc2.id)
-        //     .await
-        //     .unwrap();
-        // let doc4 = l4.insert(format!("{name}-child-n-to-n")).await.unwrap();
-        // tracing::info!("doc2: {:?} doc4: {:?}", doc2, doc4);
-        // let doc5 = l5.insert(doc2.id, doc4.id).await.unwrap();
+        let doc1 = l1.insert(name.clone()).await.unwrap();
+        let dummy = l1.insert(name.clone()).await.unwrap();
+        let doc2 = l2.insert(format!("{name}-child"), doc1.id).await.unwrap();
+        let doc2_2 = l2.insert(format!("{name}-child-2"), doc1.id).await.unwrap();
+        l2.insert(format!("{name}-child-dummy"), dummy.id)
+            .await
+            .unwrap();
 
-        // let got = NestedChildModel::query_builder()
-        //     .id_equals(doc2.id)
-        //     .query()
-        //     .map(NestedChildModel::from)
-        //     .fetch_one(&pool)
-        //     .await
-        //     .unwrap();
+        let doc3 = l3
+            .insert(format!("{name}-child-1-to-n"), doc2.id)
+            .await
+            .unwrap();
+        let doc4 = l4.insert(format!("{name}-child-n-to-n")).await.unwrap();
+        tracing::info!("doc2: {:?} doc4: {:?}", doc2, doc4);
+        let doc5 = l5.insert(doc2.id, doc4.id).await.unwrap();
 
-        // assert_eq!(got.id, doc2.id);
-        // assert_eq!(got.name, format!("{name}-child"));
-        // assert_eq!(got.parent_id, doc1.id);
-        // assert_eq!(got.joined_children.len(), 1);
-        // assert_eq!(got.joined_children[0].id, doc3.id);
-        // assert_eq!(got.joined_children[0].child, format!("{name}-child-1-to-n"));
-        // assert_eq!(got.joined_children[0].child_id, doc2.id);
-        // assert_eq!(got.joined_children_many.len(), 1);
-        // assert_eq!(got.joined_children_many[0].id, doc4.id);
-        // assert_eq!(
-        //     got.joined_children_many[0].many,
-        //     format!("{name}-child-n-to-n")
-        // );
+        let got = NestedChildModel::query_builder()
+            .id_equals(doc2.id)
+            .query()
+            .map(NestedChildModel::from)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
-        // let got = NestedJoinModel::query_builder()
-        //     .id_equals(doc1.id)
-        //     .query()
-        //     .map(NestedJoinModel::from)
-        //     .fetch_one(&pool)
-        //     .await
-        //     .unwrap();
+        assert_eq!(got.id, doc2.id);
+        assert_eq!(got.name, format!("{name}-child"));
+        assert_eq!(got.parent_id, doc1.id);
+        assert_eq!(got.joined_children.len(), 1);
+        assert_eq!(got.joined_children[0].id, doc3.id);
+        assert_eq!(got.joined_children[0].child, format!("{name}-child-1-to-n"));
+        assert_eq!(got.joined_children[0].child_id, doc2.id);
+        assert_eq!(got.joined_children_many.len(), 1);
+        assert_eq!(got.joined_children_many[0].id, doc4.id);
+        assert_eq!(
+            got.joined_children_many[0].many,
+            format!("{name}-child-n-to-n")
+        );
 
-        // assert_eq!(got.id, doc1.id);
-        // assert_eq!(got.name, name);
-        // assert_eq!(got.children.len(), 1);
-        // assert_eq!(got.children[0].id, doc2.id);
-        // assert_eq!(got.children[0].name, format!("{name}-child"));
-        // assert_eq!(got.children[0].parent_id, doc1.id);
-        // assert_eq!(got.children[0].joined_children.len(), 1);
-        // assert_eq!(got.children[0].joined_children[0].id, doc3.id);
-        // assert_eq!(
-        //     got.children[0].joined_children[0].child,
-        //     format!("{name}-child-1-to-n")
-        // );
-        // assert_eq!(got.children[0].joined_children[0].child_id, doc2.id);
-        // assert_eq!(got.children[0].joined_children_many.len(), 1);
-        // assert_eq!(got.children[0].joined_children_many[0].id, doc4.id);
-        // assert_eq!(
-        //     got.children[0].joined_children_many[0].many,
-        //     format!("{name}-child-n-to-n")
-        // );
+        let got = NestedJoinModel::query_builder()
+            .id_equals(doc1.id)
+            .children_builder(NestedChildModel::query_builder())
+            .query()
+            .map(NestedJoinModel::from)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(got.id, doc1.id);
+        assert_eq!(got.name, name);
+        assert_eq!(got.children.len(), 2);
+        assert_eq!(got.children[0].id, doc2.id);
+        assert_eq!(got.children[0].name, format!("{name}-child"));
+        assert_eq!(got.children[0].parent_id, doc1.id);
+        assert_eq!(got.children[0].joined_children.len(), 1);
+        assert_eq!(got.children[0].joined_children[0].id, doc3.id);
+        assert_eq!(
+            got.children[0].joined_children[0].child,
+            format!("{name}-child-1-to-n")
+        );
+        assert_eq!(got.children[0].joined_children[0].child_id, doc2.id);
+        assert_eq!(got.children[0].joined_children_many.len(), 1);
+        assert_eq!(got.children[0].joined_children_many[0].id, doc4.id);
+        assert_eq!(
+            got.children[0].joined_children_many[0].many,
+            format!("{name}-child-n-to-n")
+        );
     }
 }

@@ -2539,7 +2539,7 @@ impl ApiModel<'_> {
                 continue;
             }
 
-            if v.can_query_builder() {
+            if let Some(foreign_key) = v.can_query_builder() {
                 let ty = if v.rust_type.starts_with("Vec") {
                     v.rust_type
                         .replace(" ", "")
@@ -2554,6 +2554,10 @@ impl ApiModel<'_> {
                     format!("{}RepositoryQueryBuilder", ty).parse().unwrap();
                 let pattern = syn::LitStr::new(
                     &format!(r"-- {} start([\s\S]*?)-- {} end", v.name, v.name),
+                    proc_macro2::Span::call_site(),
+                );
+                let foreign_key = syn::LitStr::new(
+                    &format!("{} = dummy.id", foreign_key),
                     proc_macro2::Span::call_site(),
                 );
 
@@ -2576,9 +2580,11 @@ impl ApiModel<'_> {
                 });
                 bindings.push(quote! {
                     let ret = if let Some(q) = &self.#name {
+                        let mut q = q.clone();
+                        q.conditions.push(by_types::Conditions::Custom(#foreign_key.to_string()));
                         let sub_query = q.sql_starts_with(i);
                         let re = regex::Regex::new(#pattern).unwrap();
-                        let sub_query = sub_query.replace("p.", &format!("{}.",#bound_name)).to_string().replace(" p ", &format!(" {} ", #bound_name)).to_string();
+                        let sub_query = sub_query.replace("p.", &format!("{}.",#bound_name)).replace(" p ", &format!(" {} ", #bound_name)).replace(" dummy.", " p.").to_string();
 
                         re.replace_all(&ret, &format!("\n{}\n", sub_query)).to_string()
                     } else {
@@ -2926,6 +2932,10 @@ impl ApiModel<'_> {
                                 q
                             }
                             by_types::Conditions::FalseBoolean(_) => {
+                                tracing::debug!("(Not)Binding FalseBoolean");
+                                q
+                            }
+                            by_types::Conditions::Custom(_) => {
                                 tracing::debug!("(Not)Binding FalseBoolean");
                                 q
                             }
@@ -4055,18 +4065,20 @@ LEFT JOIN (
         }
     }
 
-    pub fn can_query_builder(&self) -> bool {
+    pub fn can_query_builder(&self) -> Option<String> {
         if self.skip {
-            return false;
+            return None;
         }
         if self.aggregator.is_some() {
-            return false;
+            return None;
         }
 
         match self.relation {
-            Some(Relation::ManyToMany { .. }) => false,
-            Some(Relation::OneToMany { .. }) => true,
-            _ => false,
+            Some(Relation::ManyToMany { .. }) => None,
+            Some(Relation::OneToMany {
+                ref foreign_key, ..
+            }) => Some(foreign_key.clone()),
+            _ => None,
         }
     }
 
