@@ -88,7 +88,9 @@ fn inject_svg(width: f64, height: i32, colors: &Vec<&'static str>) -> web_sys::N
         .attr_with_i32("x", 0)
         .attr_with_i32("y", 0)
         .attr_with_i32("height", height)
-        .attr_with_str("fill", "url(#barGradientColor)");
+        .attr_with_str("fill", "url(#barGradientColor)")
+        .attr_with_i32("rx", 10)
+        .attr_with_i32("ry", 10);
 
     bars.transition()
         .duration(1000)

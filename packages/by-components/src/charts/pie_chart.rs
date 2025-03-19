@@ -136,11 +136,17 @@ fn inject_svg(
     });
 
     let handle_text = closure(move |d: ArcData| -> String {
-        format!(
-            "{}: {}",
-            d.data.label,
-            d.data.value.to_formatted_string(&Locale::en)
-        )
+        let percentage = (d.data.value as f64 * 100.0) / total as f64;
+
+        if percentage < 5.0 {
+            format!("")
+        } else {
+            format!(
+                "{}: {}",
+                d.data.label,
+                d.data.value.to_formatted_string(&Locale::en)
+            )
+        }
     });
 
     let arc_sync = Rc::new(RefCell::new(arc.clone()));
@@ -164,7 +170,10 @@ fn inject_svg(
 
         text.append("tspan")
             .attr_with_str("y", "-0.4em")
-            .attr_with_str("font-weight", "bold")
+            .attr_with_str("font-weight", "medium")
+            .attr_with_str("fill", "#ffffff")
+            .attr_with_str("font-size", "15px")
+            .attr_with_str("text-shadow", "1px 1px 2px rgba(0,0,0,0.5)")
             .text(handle_text.as_ref().unchecked_ref())
             .into()
     }) as Box<dyn Fn(JsValue) -> JsValue>);
@@ -184,7 +193,7 @@ fn inject_svg(
         .join("path")
         .attr_with_closure("fill", handle_color.as_ref().unchecked_ref());
 
-    const DURATION: i32 = 100;
+    const DURATION: i32 = 500;
     let delay = Closure::wrap(Box::new(|_d: JsValue, i: i32| -> i32 { i * DURATION })
         as Box<dyn FnMut(JsValue, i32) -> i32>);
 
@@ -218,9 +227,13 @@ fn inject_svg(
         "text",
         &format!(
             r#"
-return text.filter(d => (d.endAngle - d.startAngle) > 0.25).append("tspan")
+return text.filter(d => (d.data.value * 100 / {total}) >= 5).append("tspan")
     .attr("x", 0)
     .attr("y", "0.7em")
+    .attr("fill", "white")
+    .attr("font-size", "15px")
+    .attr("rx", 3)
+    .attr("ry", 3)
     .attr("fill-opacity", 0.7)
     .text(d => (d.data.value * 100 / {total}).toLocaleString("en-US") + "%")
 "#
