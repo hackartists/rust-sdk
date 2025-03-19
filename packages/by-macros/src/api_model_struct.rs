@@ -2536,7 +2536,7 @@ impl ApiModel<'_> {
         let mut conditions = vec![];
 
         for (_, v) in self.fields.iter() {
-            if v.can_query_builder() {
+            if v.query_builder {
                 tracing::trace!("building query_builder condition: {}", v.name);
                 let ty = if v.rust_type.starts_with("Vec") {
                     v.rust_type
@@ -2617,11 +2617,11 @@ impl ApiModel<'_> {
                             let sub_query = format!(r#"
         {sub_query}
         JOIN {table_name} j ON {bound_name}.id = j.{foreign_primary_key}
-        WHERE j.{foreign_reference_key} = p.{reference_key}
+        WHERE j.{foreign_reference_key} = dummy.{reference_key}
         GROUP BY {bound_name}.id
 "#);
                             tracing::info!("new ready sub_query: {sub_query}");
-                            let sub_query = sub_query.replace("p.", &format!("{}.",#bound_name)).replace(" p ", &format!(" {} ", #bound_name)).to_string();
+                            let sub_query = sub_query.replace("p.", &format!("{}.",#bound_name)).replace(" p ", &format!(" {} ", #bound_name)).replace(" dummy.", " p.").to_string();
                             let sub_query = format!("\n{}\n", sub_query);
                             tracing::info!("sub query(after): {}", sub_query);
 
@@ -3801,6 +3801,7 @@ pub enum Relation {
 pub struct ApiField {
     pub name: String, // this is a native field name in rust
     pub primary_key: bool,
+    pub query_builder: bool,
     pub relation: Option<Relation>,
     pub r#type: String,
     pub unique: bool,
@@ -4144,27 +4145,6 @@ LEFT JOIN (
             Some(Relation::ManyToMany { .. }) => false,
             Some(Relation::OneToMany { .. }) => true,
             _ => true,
-        }
-    }
-
-    pub fn can_query_builder(&self) -> bool {
-        if self.skip {
-            return false;
-        }
-        if self.aggregator.is_some() {
-            return false;
-        }
-
-        match self.relation {
-            Some(Relation::ManyToMany { target_table, .. }) => {
-                if target_table == TargetTable::Foreign {
-                    true
-                } else {
-                    false
-                }
-            }
-            Some(Relation::OneToMany { .. }) => true,
-            _ => false,
         }
     }
 
@@ -4724,6 +4704,7 @@ impl ApiField {
         let f = super::sql_model::parse_field_attr(field);
         let skip = f.attrs.contains_key(&SqlAttributeKey::Skip);
 
+        let query_builder = f.attrs.contains_key(&SqlAttributeKey::Nested);
         let primary_key = f.attrs.contains_key(&SqlAttributeKey::PrimaryKey);
         if primary_key {
             if rust_type.as_str() != "i64" {
@@ -4865,6 +4846,7 @@ impl ApiField {
         let ret = Self {
             name,
             primary_key,
+            query_builder,
             relation,
             r#type,
             unique,

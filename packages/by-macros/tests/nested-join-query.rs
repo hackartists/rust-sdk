@@ -23,10 +23,10 @@ pub mod update_into_tests {
         pub updated_at: i64,
 
         pub name: String,
-        #[api_model(one_to_many = nested_child_models, foreign_key = parent_id)]
+        #[api_model(one_to_many = nested_child_models, foreign_key = parent_id, nested)]
         pub children: Vec<NestedChildModel>,
 
-        #[api_model(many_to_many = nested_nn, foreign_table_name = nested_many_child_models, foreign_primary_key = many_id, foreign_reference_key = parent_id, target_table = foreign)]
+        #[api_model(many_to_many = nested_nn, foreign_table_name = nested_many_child_models, foreign_primary_key = many_id, foreign_reference_key = parent_id, target_table = foreign, nested)]
         pub manies: Vec<NestedManyChildModel>,
     }
 
@@ -141,7 +141,7 @@ pub mod update_into_tests {
         pub many_id: i64,
     }
 
-    // #[tokio::test]
+    #[tokio::test]
     async fn test_nested_join_query() {
         let _ = tracing_subscriber::fmt()
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
