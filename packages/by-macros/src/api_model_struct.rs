@@ -3904,7 +3904,8 @@ COALESCE(
      FROM (
 -- {bound_name} start
        SELECT DISTINCT ON (f.id) {table}.*
-         FROM {foreign_table_name} f JOIN {table_name} j ON f.id = j.{foreign_primary_key}
+         FROM {foreign_table_name} f
+              JOIN {table_name} j ON f.id = j.{foreign_primary_key}
         WHERE j.{foreign_reference_key} = p.{reference_key}
 -- {bound_name} end
      ) m
@@ -4143,15 +4144,8 @@ LEFT JOIN (
 
         match self.relation {
             Some(Relation::ManyToMany { .. }) => false,
-            Some(Relation::OneToMany { .. }) => true,
+            Some(Relation::OneToMany { .. }) => false,
             _ => true,
-        }
-    }
-
-    pub fn is_many_to_many(&self) -> bool {
-        match self.relation {
-            Some(Relation::ManyToMany { .. }) => true,
-            _ => false,
         }
     }
 
