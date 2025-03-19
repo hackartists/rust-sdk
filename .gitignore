@@ -3,3 +3,4 @@ target/
 /.build/
 /cdk/.projectile
 .build/
+.vscode/*

@@ -2401,7 +2401,8 @@ impl ApiModel<'_> {
 
     pub fn insert_function_for_many_to_many(&self) -> proc_macro2::TokenStream {
         let name = self.name_id;
-        let mut dep_args = vec![];
+        // let mut dep_args = vec![];
+        let mut dep_args: IndexMap<String, proc_macro2::TokenStream> = IndexMap::new();
         let mut joined_query = vec![];
 
         for (field_name, field) in self.fields.iter() {
@@ -2416,12 +2417,15 @@ impl ApiModel<'_> {
                 ..
             }) = &field.relation
             {
+                let foreign_primary_key_str = foreign_primary_key.clone();
                 let foreign_primary_key =
                     syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
-
-                dep_args.push(quote! {
-                    #foreign_primary_key: i64
-                });
+                dep_args.insert(
+                    foreign_primary_key_str,
+                    quote! {
+                        #foreign_primary_key: i64
+                    },
+                );
 
                 let q = syn::LitStr::new(
                     &format!(
@@ -2481,7 +2485,7 @@ impl ApiModel<'_> {
             proc_macro2::Span::call_site(),
         );
         let rt = &self.result_type;
-
+        let dep_args: Vec<proc_macro2::TokenStream> = dep_args.into_values().collect();
         quote! {
             pub async fn insert_with_dependency(&self, #(#dep_args),*, #(#args),*) -> #rt<#name> {
                 use sqlx::Row;
@@ -3617,6 +3621,7 @@ pub enum Relation {
         // Reference key of the current table in the join table
         foreign_reference_key: String,
         reference_key: String,
+        target_table: TargetTable,
     },
     ManyToOne {
         table_name: String,
@@ -3723,15 +3728,20 @@ END AS {bound_name}
                     foreign_primary_key,
                     foreign_reference_key,
                     reference_key,
+                    target_table,
                     ..
                 }) => {
+                    let table = match target_table {
+                        TargetTable::Foreign => "f",
+                        TargetTable::Join => "j",
+                    };
                     if self.rust_type.starts_with("Vec") {
                         Some(format!(
                             r#"
 COALESCE(
   (SELECT jsonb_agg(to_jsonb(m))
      FROM (
-       SELECT DISTINCT ON (f.id) f.*
+       SELECT DISTINCT ON (f.id) {table}.*
          FROM {foreign_table_name} f
               JOIN {table_name} j ON f.id = j.{foreign_primary_key}
         WHERE j.{foreign_reference_key} = p.{reference_key}
@@ -3740,7 +3750,15 @@ COALESCE(
 ) AS {bound_name}"#,
                         ))
                     } else {
-                        None
+                        Some(format!(
+                            r#"
+            (SELECT to_jsonb({table})
+               FROM {foreign_table_name} f
+                    JOIN {table_name} j ON f.id = j.{foreign_primary_key}
+              WHERE j.{foreign_reference_key} = p.{reference_key}
+              LIMIT 1
+            ) AS {bound_name}"#,
+                        ))
                     }
                 }
 
@@ -3763,7 +3781,14 @@ COALESCE(
 ) AS {bound_name}"#,
                         ))
                     } else {
-                        None
+                        Some(format!(
+                            r#"
+            (SELECT to_jsonb(f)
+               FROM {table_name} f
+              WHERE f.{foreign_key} = p.{reference_key}
+              LIMIT 1
+            ) AS {bound_name}"#,
+                        ))
                     }
                 }
                 _ => None,
@@ -4436,23 +4461,28 @@ impl ApiField {
             tracing::trace!("vector callmap: {}: {}", self.name, self.rust_type);
             let field_name = syn::LitStr::new(&field_name, proc_macro2::Span::call_site());
 
+            let default: proc_macro2::TokenStream = if self.rust_type.starts_with("Vec") {
+                quote! { vec![] }
+            } else {
+                let ty = syn::Ident::new(&self.rust_type, proc_macro2::Span::call_site());
+                quote! { #ty::default() }
+            };
             return quote! {
                 #n: match row.try_get::<serde_json::Value, _>(#field_name) {
                     Ok(v) => match serde_json::from_value(v) {
                         Ok(v) => v,
                         Err(e) => {
                             tracing::error!("error on {} field: {}", #field_name, e);
-                            vec![]
+                            #default
                         }
                     },
                     e => {
                         tracing::debug!("empty vector for {}: {:?}", #field_name, e);
-                        vec![]
+                        #default
                     }
                 }
             };
         }
-
         quote! {
             #n: row.try_get(#sql_field_name).unwrap_or_default()
         }
@@ -4524,6 +4554,7 @@ impl ApiField {
                 foreign_primary_key,
                 foreign_reference_key,
                 reference_key,
+                target_table,
             }) => Some(Relation::ManyToMany {
                 table_name: table_name.to_string(),
                 foreign_table_name: foreign_table_name.to_string(),
@@ -4532,6 +4563,7 @@ impl ApiField {
                 foreign_primary_key: foreign_primary_key.to_string(),
                 foreign_reference_key: foreign_reference_key.to_string(),
                 reference_key: reference_key.to_string(),
+                target_table: *target_table,
             }),
 
             Some(SqlAttribute::ManyToOne {

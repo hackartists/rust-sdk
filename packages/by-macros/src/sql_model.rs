@@ -90,6 +90,12 @@ pub enum AutoOperation {
     Update,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub enum TargetTable {
+    Foreign,
+    Join,
+}
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Aggregator {
     Count,
@@ -118,6 +124,8 @@ pub enum SqlAttribute {
         // Reference key of the current table in the join table
         foreign_reference_key: String,
         reference_key: String,
+
+        target_table: TargetTable,
     },
     ManyToOne {
         table_name: String,
@@ -154,6 +162,7 @@ enum OpenedOffset {
     Auto,
     Version,
     Aggregator,
+    TargetTable,
 }
 
 #[derive(Debug)]
@@ -233,6 +242,9 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             "aggregator" => {
                                 opened = OpenedOffset::Aggregator;
                             }
+                            "target_table" => {
+                                opened = OpenedOffset::TargetTable;
+                            }
                             _ => match opened {
                                 OpenedOffset::Aggregator => match id.as_str() {
                                     "count" => {
@@ -306,6 +318,7 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                             foreign_primary_key: "".to_string(),
                                             foreign_reference_key: "".to_string(),
                                             reference_key: "id".to_string(),
+                                            target_table: TargetTable::Foreign,
                                         },
                                     );
                                     tracing::trace!("many_to_many: {name}");
@@ -441,6 +454,26 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                     {
                                         operations.push(auto);
                                     }
+                                }
+                                OpenedOffset::TargetTable => {
+                                    let target = match id.as_str() {
+                                        "join" => TargetTable::Join,
+                                        "foreign" => TargetTable::Foreign,
+                                        _ => {
+                                            panic!(
+                                                "target_table mut be either join or foreign: {id}"
+                                            );
+                                        }
+                                    };
+                                    field_attrs.get_mut(&SqlAttributeKey::Relation).map(|attr| {
+                                        if let SqlAttribute::ManyToMany {
+                                            ref mut target_table,
+                                            ..
+                                        } = attr
+                                        {
+                                            *target_table = target;
+                                        }
+                                    });
                                 }
                                 OpenedOffset::None => {}
                             },
