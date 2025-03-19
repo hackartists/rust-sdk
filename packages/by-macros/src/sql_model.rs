@@ -460,8 +460,9 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                         "join" => TargetTable::Join,
                                         "foreign" => TargetTable::Foreign,
                                         _ => {
-                                            tracing::error!("invalid target table: {id}");
-                                            continue;
+                                            panic!(
+                                                "target_table mut be either join or foreign: {id}"
+                                            );
                                         }
                                     };
                                     field_attrs.get_mut(&SqlAttributeKey::Relation).map(|attr| {
