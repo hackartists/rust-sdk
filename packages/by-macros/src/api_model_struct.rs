@@ -2536,11 +2536,8 @@ impl ApiModel<'_> {
         let mut conditions = vec![];
 
         for (_, v) in self.fields.iter() {
-            if !v.can_query() {
-                continue;
-            }
-
-            if let Some(foreign_key) = v.can_query_builder() {
+            if v.can_query_builder() {
+                tracing::trace!("building query_builder condition: {}", v.name);
                 let ty = if v.rust_type.starts_with("Vec") {
                     v.rust_type
                         .replace(" ", "")
@@ -2562,10 +2559,6 @@ impl ApiModel<'_> {
                     &format!(r"-- {} start -- {} end", v.name, v.name),
                     proc_macro2::Span::call_site(),
                 );
-                let foreign_key = syn::LitStr::new(
-                    &format!("{} = dummy.id", foreign_key),
-                    proc_macro2::Span::call_site(),
-                );
 
                 let bound_name =
                     syn::LitStr::new(&format!("{}", v.name), proc_macro2::Span::call_site());
@@ -2584,23 +2577,86 @@ impl ApiModel<'_> {
                         self
                     }
                 });
-                bindings.push(quote! {
-                    let ret = if let Some(q) = &self.#name {
-                        let mut q = q.clone();
-                        q.conditions.push(by_types::Conditions::Custom(#foreign_key.to_string()));
-                        let sub_query = q.sql_starts_with(i);
-                        let re = regex::Regex::new(#pattern).unwrap();
-                        let sub_query = sub_query.replace("p.", &format!("{}.",#bound_name)).replace(" p ", &format!(" {} ", #bound_name)).replace(" dummy.", " p.").to_string();
-                        let sub_query = format!("\n{}\n", sub_query);
-                        tracing::trace!("sub query: {}", sub_query);
 
-                        re.replace_all(&ret, #bpattern).to_string().replace(#bpattern, &sub_query).to_string()
-                    } else {
-                        ret
-                    };
+                if let Some(Relation::ManyToMany {
+                    table_name,
+                    foreign_primary_key,
+                    foreign_reference_key,
+                    reference_key,
+                    target_table: TargetTable::Foreign,
+                    ..
+                }) = &v.relation
+                {
+                    let table_name = syn::LitStr::new(table_name, proc_macro2::Span::call_site());
 
-                    tracing::trace!("modified query: {}", ret);
-                });
+                    let foreign_primary_key =
+                        syn::LitStr::new(foreign_primary_key, proc_macro2::Span::call_site());
+                    let foreign_reference_key =
+                        syn::LitStr::new(foreign_reference_key, proc_macro2::Span::call_site());
+                    let reference_key =
+                        syn::LitStr::new(reference_key, proc_macro2::Span::call_site());
+
+                    // NOTE: now support only Foreign table target
+                    bindings.push(quote! {
+                        let ret = if let Some(q) = &self.#name {
+                            let mut q = q.clone();
+                            let table_name = #table_name;
+                            let foreign_primary_key = #foreign_primary_key;
+                            let foreign_reference_key = #foreign_reference_key;
+                            let reference_key = #reference_key;
+                            let bound_name = #bound_name;
+                            let w = q.build_where_starts_with(i);
+
+                            let sub_query = if w.is_empty() {
+                                format!("{}", q.base_sql)
+                            } else {
+                                format!("{} WHERE {}", q.base_sql, w)
+                            };
+
+                            tracing::info!("sub_query(before): {sub_query}");
+                            let sub_query = format!(r#"
+        {sub_query}
+        JOIN {table_name} j ON {bound_name}.id = j.{foreign_primary_key}
+        WHERE j.{foreign_reference_key} = p.{reference_key}
+        GROUP BY {bound_name}.id
+"#);
+                            tracing::info!("new ready sub_query: {sub_query}");
+                            let sub_query = sub_query.replace("p.", &format!("{}.",#bound_name)).replace(" p ", &format!(" {} ", #bound_name)).to_string();
+                            let sub_query = format!("\n{}\n", sub_query);
+                            tracing::info!("sub query(after): {}", sub_query);
+
+                            let re = regex::Regex::new(#pattern).unwrap();
+                            re.replace_all(&ret, #bpattern).to_string().replace(#bpattern, &sub_query).to_string()
+                        } else {
+                            ret
+                        };
+
+                        tracing::info!("modified query: \n{}", ret);
+                    });
+                } else if let Some(Relation::OneToMany { foreign_key, .. }) = &v.relation {
+                    let foreign_key = syn::LitStr::new(
+                        &format!("{} = dummy.id", foreign_key),
+                        proc_macro2::Span::call_site(),
+                    );
+
+                    bindings.push(quote! {
+                        let ret = if let Some(q) = &self.#name {
+                            let mut q = q.clone();
+                            q.conditions.push(by_types::Conditions::Custom(#foreign_key.to_string()));
+                            let sub_query = q.sql_starts_with(i);
+                            let sub_query = sub_query.replace("p.", &format!("{}.",#bound_name)).replace(" p ", &format!(" {} ", #bound_name)).replace(" dummy.", " p.").to_string();
+                            let sub_query = format!("\n{}\n", sub_query);
+                            tracing::trace!("sub query(after): {}", sub_query);
+
+                            let re = regex::Regex::new(#pattern).unwrap();
+                            re.replace_all(&ret, #bpattern).to_string().replace(#bpattern, &sub_query).to_string()
+                        } else {
+                            ret
+                        };
+
+                        tracing::trace!("modified query: {}", ret);
+                    });
+                }
                 assigns.push(quote! {
                     #name: self.#name,
                 });
@@ -2609,6 +2665,10 @@ impl ApiModel<'_> {
                         conditions.extend(q.all_conditions());
                     }
                 });
+                continue;
+            }
+
+            if !v.can_query() {
                 continue;
             }
 
@@ -3843,8 +3903,7 @@ COALESCE(
      FROM (
 -- {bound_name} start
        SELECT DISTINCT ON (f.id) {table}.*
-         FROM {foreign_table_name} f
-              JOIN {table_name} j ON f.id = j.{foreign_primary_key}
+         FROM {foreign_table_name} f JOIN {table_name} j ON f.id = j.{foreign_primary_key}
         WHERE j.{foreign_reference_key} = p.{reference_key}
 -- {bound_name} end
      ) m
@@ -4088,20 +4147,31 @@ LEFT JOIN (
         }
     }
 
-    pub fn can_query_builder(&self) -> Option<String> {
+    pub fn can_query_builder(&self) -> bool {
         if self.skip {
-            return None;
+            return false;
         }
         if self.aggregator.is_some() {
-            return None;
+            return false;
         }
 
         match self.relation {
-            Some(Relation::ManyToMany { .. }) => None,
-            Some(Relation::OneToMany {
-                ref foreign_key, ..
-            }) => Some(foreign_key.clone()),
-            _ => None,
+            Some(Relation::ManyToMany { target_table, .. }) => {
+                if target_table == TargetTable::Foreign {
+                    true
+                } else {
+                    false
+                }
+            }
+            Some(Relation::OneToMany { .. }) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_many_to_many(&self) -> bool {
+        match self.relation {
+            Some(Relation::ManyToMany { .. }) => true,
+            _ => false,
         }
     }
 
