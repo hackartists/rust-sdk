@@ -2533,6 +2533,7 @@ impl ApiModel<'_> {
         let mut functions = vec![];
         let mut bindings = vec![];
         let mut assigns = vec![];
+        let mut conditions = vec![];
 
         for (_, v) in self.fields.iter() {
             if !v.can_query() {
@@ -2554,6 +2555,11 @@ impl ApiModel<'_> {
                     format!("{}RepositoryQueryBuilder", ty).parse().unwrap();
                 let pattern = syn::LitStr::new(
                     &format!(r"-- {} start([\s\S]*?)-- {} end", v.name, v.name),
+                    proc_macro2::Span::call_site(),
+                );
+
+                let bpattern = syn::LitStr::new(
+                    &format!(r"-- {} start -- {} end", v.name, v.name),
                     proc_macro2::Span::call_site(),
                 );
                 let foreign_key = syn::LitStr::new(
@@ -2585,14 +2591,23 @@ impl ApiModel<'_> {
                         let sub_query = q.sql_starts_with(i);
                         let re = regex::Regex::new(#pattern).unwrap();
                         let sub_query = sub_query.replace("p.", &format!("{}.",#bound_name)).replace(" p ", &format!(" {} ", #bound_name)).replace(" dummy.", " p.").to_string();
+                        let sub_query = format!("\n{}\n", sub_query);
+                        tracing::trace!("sub query: {}", sub_query);
 
-                        re.replace_all(&ret, &format!("\n{}\n", sub_query)).to_string()
+                        re.replace_all(&ret, #bpattern).to_string().replace(#bpattern, &sub_query).to_string()
                     } else {
                         ret
                     };
+
+                    tracing::trace!("modified query: {}", ret);
                 });
                 assigns.push(quote! {
                     #name: self.#name,
+                });
+                conditions.push(quote! {
+                    if let Some(q) = &self.#name {
+                        conditions.extend(q.all_conditions());
+                    }
                 });
                 continue;
             }
@@ -2661,6 +2676,7 @@ impl ApiModel<'_> {
                 self
             }
         });
+        let ns = syn::LitStr::new(&name.to_string(), proc_macro2::Span::call_site());
 
         quote! {
             #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
@@ -2742,7 +2758,7 @@ impl ApiModel<'_> {
 
                 pub fn build_where_starts_with(&self, i:&mut i32) -> String {
                     let mut where_clause = vec![];
-                    tracing::debug!("Building where clause with group: {}", self.group_by);
+                    tracing::debug!("Building where clause for {}", #ns);
                     let prefix = if self.group_by.is_empty() {
                         ""
                     } else {
@@ -2754,6 +2770,7 @@ impl ApiModel<'_> {
                         *i = new_i;
                         where_clause.push(format!("{}{}", prefix, q));
                     }
+                    tracing::debug!("conditions: {:?}", where_clause);
 
                     let mut ret = vec![where_clause.join(" AND ")];
 
@@ -2813,6 +2830,15 @@ impl ApiModel<'_> {
                     self.sql_starts_with(&mut _i)
                 }
 
+                pub fn all_conditions(&self) -> Vec<by_types::Conditions> {
+                    let mut conditions = self.conditions.clone();
+                    conditions.extend(self.or.iter().flatten().cloned());
+
+                    #(#conditions)*
+
+                    conditions
+                }
+
                 pub fn query(
                     &self,
                 ) -> sqlx::query::Query<
@@ -2828,10 +2854,7 @@ impl ApiModel<'_> {
 
                     let mut q = sqlx::query(query);
 
-                    let mut conditions = self.conditions.clone();
-                    conditions.extend(self.or.iter().flatten().cloned());
-
-                    for condition in conditions.clone() {
+                    for condition in self.all_conditions() {
                         q = match condition {
                             by_types::Conditions::BetweenBigint(_, from, to) => {
                                 tracing::debug!("Binding BetweenBigint {} and {}", from, to);
