@@ -2,7 +2,7 @@
 pub type Result<T> = std::result::Result<T, by_types::ApiError<String>>;
 
 #[cfg(feature = "server")]
-pub mod test_non_vector_relation_field {
+pub mod test_many_to_many_single_field {
     #![allow(unused)]
     use std::time::SystemTime;
 
@@ -11,8 +11,9 @@ pub mod test_non_vector_relation_field {
     use by_macros::api_model;
     use sqlx::postgres::PgRow;
     use sqlx::Row;
+    use tokio::time::Instant;
 
-    #[api_model(base = "/v1/bills", table = test_support_custom_type_bills)]
+    #[api_model(base = "", table = test_mtm_single_bills)]
     pub struct Bill {
         #[api_model(summary, primary_key)]
         pub id: i64,
@@ -20,30 +21,28 @@ pub mod test_non_vector_relation_field {
         pub created_at: i64,
 
         #[api_model(summary)]
-        pub bill_id: String,
-        #[api_model(summary)]
         pub title: String,
 
-        #[api_model(many_to_many = test_support_custom_type_votes, type = JSONB, foreign_table_name = test_support_custom_type_users, foreign_primary_key = user_id, foreign_reference_key = bill_id, unique)]
-        pub user_vote: SupportVote,
+        #[api_model(many_to_many = test_mtm_single_votes, type = JSONB, foreign_table_name = test_mtm_single_users, foreign_primary_key = user_id, foreign_reference_key = model_id, target_table = join)]
+        pub user_vote: Vote,
     }
 
-    #[api_model(base = "/v1/votes", table = test_support_custom_type_votes)]
-    pub struct SupportVote {
+    #[api_model(base = "", table = test_mtm_single_votes)]
+    pub struct Vote {
         #[api_model(summary, primary_key)]
         pub id: i64,
         #[api_model(summary, auto = [insert])]
         pub created_at: i64,
         #[api_model(summary, auto = [insert, update])]
         pub updated_at: i64,
-        #[api_model(many_to_one = test_support_custom_type_users)]
+        #[api_model(many_to_one = test_mtm_single_users)]
         pub user_id: i64,
-        #[api_model(many_to_one = test_support_custom_type_bills)]
-        pub bill_id: i64,
+        #[api_model(many_to_one = test_mtm_single_bills)]
+        pub model_id: i64,
     }
 
-    #[api_model(base = "/v1/users", table = test_support_custom_type_users)]
-    pub struct SupportUser {
+    #[api_model(base = "/v1/users", table = test_mtm_single_users)]
+    pub struct User {
         #[api_model(primary_key)]
         pub id: i64,
         #[api_model(auto = insert)]
@@ -56,13 +55,13 @@ pub mod test_non_vector_relation_field {
     }
 
     #[tokio::test]
-    async fn test_support() {
+    async fn test_target_table_parameter() {
         let _ = tracing_subscriber::fmt::try_init();
         let pool: sqlx::Pool<sqlx::Postgres> = sqlx::postgres::PgPoolOptions::new()
             .max_connections(5)
             .connect(
                 option_env!("DATABASE_URL")
-                    .unwrap_or("postgres://postgres:postgres@localhost:5432/support"),
+                    .unwrap_or("postgres://postgres:postgres@localhost:5432/test"),
             )
             .await
             .unwrap();
@@ -71,8 +70,8 @@ pub mod test_non_vector_relation_field {
             .unwrap()
             .as_secs();
 
-        let u = SupportUser::get_repository(pool.clone());
-        let v = SupportVote::get_repository(pool.clone());
+        let u = User::get_repository(pool.clone());
+        let v = Vote::get_repository(pool.clone());
         let b = Bill::get_repository(pool.clone());
 
         b.create_this_table().await;
@@ -83,12 +82,11 @@ pub mod test_non_vector_relation_field {
         u.create_related_tables().await;
         v.create_related_tables().await;
 
-        let user = u.insert("test@gmail.com".to_string()).await;
-        assert!(user.is_ok(), "{:?}", user);
-        let user = user.unwrap();
-        let bill = b.insert("SOME ID".to_string(), "title".to_string()).await;
-        assert!(bill.is_ok(), "{:?}", bill);
-        let bill = bill.unwrap();
+        let user = u.insert("test1@gmail.com".to_string()).await.unwrap().id;
+
+        let bill = b.insert("BILL".to_string()).await.unwrap();
+
+        let vote = v.insert(user, bill.id).await.unwrap();
 
         let r: std::result::Result<Bill, sqlx::Error> = Bill::query_builder()
             .id_equals(bill.id)
@@ -96,22 +94,9 @@ pub mod test_non_vector_relation_field {
             .map(Bill::from)
             .fetch_one(&pool)
             .await;
-        assert!(r.is_ok(), "{:?}", r);
-
-        assert_eq!(r.unwrap().user_vote.id, 0);
-
-        let vote = v.insert(user.id, bill.id).await;
-        assert!(vote.is_ok(), "{:?}", vote);
-        let vote = vote.unwrap();
-
-        let r: std::result::Result<Bill, sqlx::Error> = Bill::query_builder()
-            .id_equals(bill.id)
-            .query()
-            .map(Bill::from)
-            .fetch_one(&pool)
-            .await;
-        assert!(r.is_ok(), "{:?}", r);
-
-        assert_ne!(r.unwrap().user_vote.id, 0);
+        tracing::debug!("{:?}", r);
+        assert!(r.is_ok());
+        let bill = r.unwrap();
+        assert_eq!(bill.user_vote, vote);
     }
 }

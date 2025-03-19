@@ -3565,6 +3565,7 @@ pub enum Relation {
         // Reference key of the current table in the join table
         foreign_reference_key: String,
         reference_key: String,
+        target_table: TargetTable,
     },
     ManyToOne {
         table_name: String,
@@ -3671,15 +3672,20 @@ END AS {bound_name}
                     foreign_primary_key,
                     foreign_reference_key,
                     reference_key,
+                    target_table,
                     ..
                 }) => {
+                    let table = match target_table {
+                        TargetTable::Foreign => "f",
+                        TargetTable::Join => "j",
+                    };
                     if self.rust_type.starts_with("Vec") {
                         Some(format!(
                             r#"
 COALESCE(
   (SELECT jsonb_agg(to_jsonb(m))
      FROM (
-       SELECT DISTINCT ON (f.id) f.*
+       SELECT DISTINCT ON (f.id) {table}.*
          FROM {foreign_table_name} f
               JOIN {table_name} j ON f.id = j.{foreign_primary_key}
         WHERE j.{foreign_reference_key} = p.{reference_key}
@@ -3690,7 +3696,7 @@ COALESCE(
                     } else {
                         Some(format!(
                             r#"
-            (SELECT to_jsonb(j)
+            (SELECT to_jsonb({table})
                FROM {foreign_table_name} f
                     JOIN {table_name} j ON f.id = j.{foreign_primary_key}
               WHERE j.{foreign_reference_key} = p.{reference_key}
@@ -4492,6 +4498,7 @@ impl ApiField {
                 foreign_primary_key,
                 foreign_reference_key,
                 reference_key,
+                target_table,
             }) => Some(Relation::ManyToMany {
                 table_name: table_name.to_string(),
                 foreign_table_name: foreign_table_name.to_string(),
@@ -4500,6 +4507,7 @@ impl ApiField {
                 foreign_primary_key: foreign_primary_key.to_string(),
                 foreign_reference_key: foreign_reference_key.to_string(),
                 reference_key: reference_key.to_string(),
+                target_table: *target_table,
             }),
 
             Some(SqlAttribute::ManyToOne {
