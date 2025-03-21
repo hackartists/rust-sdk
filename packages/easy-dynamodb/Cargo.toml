@@ -1,6 +1,6 @@
 [package]
 name = "easy-dynamodb"
-version = "0.1.8"
+version = "0.1.9"
 edition.workspace = true
 description = "A easy and simple library for interaction with DynamoDB"
 license.workspace = true
