@@ -4,6 +4,7 @@ version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
+repository = "https://github.com/biyard/rust-sdk/tree/main/packages/btracing"
 
 [dependencies]
 dioxus.workspace = true
