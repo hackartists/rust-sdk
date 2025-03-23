@@ -8,7 +8,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-
   non-server-feature:
     runs-on: ubuntu-latest
 

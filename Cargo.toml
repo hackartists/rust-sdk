@@ -1,11 +1,8 @@
 [workspace]
 members = [
-  "examples/basic-api",
-  "examples/oauth",
-  "examples/auth",
-  "examples/basic",
   "packages/*",
 ]
+exclude= ["examples"]
 resolver = "2"
 
 [workspace.package]
@@ -62,3 +59,8 @@ sqlx = { version = "0.8.3", features = [
   "bigdecimal",
 ] }
 bigdecimal = "0.4.7"
+
+
+candid = "0.10"
+ic-cdk = "0.17"
+ic-cdk-timers = "0.11"
