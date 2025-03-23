@@ -5,8 +5,9 @@
 
 # Common Package
 - [Package Structure](./common/package-structure.md)
+  - [lib.rs](./common/lib.md)
+  - [Error Handling](./common/error.md)
 - [Models](./common/models/README.md)
-  - [Module Structure](./common/models/module-structure.md)
   - [Define a structure](./common/models/structure.md)
   - [Define API Client](./common/models/api-client.md)
   - [Nesting Relation Fields](./common/models/nested.md)
