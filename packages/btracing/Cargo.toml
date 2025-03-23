@@ -1,9 +1,11 @@
 [package]
 name = "btracing"
-version = "0.1.0"
+version = "0.1.1"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
+repository = "https://github.com/biyard/rust-sdk/tree/main/packages/btracing"
+description = "tracing logger interacting with notification"
 
 [dependencies]
 dioxus.workspace = true
