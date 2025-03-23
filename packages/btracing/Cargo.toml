@@ -5,6 +5,7 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository = "https://github.com/biyard/rust-sdk/tree/main/packages/btracing"
+description = "tracing logger interacting with notification"
 
 [dependencies]
 dioxus.workspace = true

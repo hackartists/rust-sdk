@@ -9,6 +9,8 @@ resolver = "2"
 authors = ["Biyard"]
 edition = "2021"
 license = "Apache-2.0"
+repository = "https://github.com/biyard/rust-sdk"
+description = "Biyard Rust Development Kit"
 
 [workspace.dependencies]
 btracing = { path = "packages/btracing", version = "0.1.*" }
