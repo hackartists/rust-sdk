@@ -3563,7 +3563,10 @@ impl<'a> ApiModel<'a> {
         #[cfg(feature = "server")]
         let table_name = match attrs.get(&SqlModelKey::Table) {
             Some(SqlModel::Table(name)) => name.to_string(),
-            _ => name.to_case(Case::Snake),
+            _ => {
+                database = None;
+                name.to_case(Case::Snake)
+            }
         };
 
         #[cfg(feature = "server")]
