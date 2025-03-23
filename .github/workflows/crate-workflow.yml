@@ -75,7 +75,7 @@ jobs:
           RUSTFLAGS: "-A warnings"
         run: cargo test --features server --tests
 
-  build-deployment:
+  build:
     runs-on: ubuntu-latest
     needs: [server-feature, non-server-feature]
 
