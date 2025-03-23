@@ -130,12 +130,10 @@ jobs:
           toolchain: stable
 
       - name: Build static files
-        id: build
         run: |
           cargo install mdbook
 
       - name: Build static files
-        id: build
         run: |
           mdbook build
 
