@@ -75,7 +75,7 @@ impl Signature {
     pub fn verify(&self, msg: &str) -> Result<String, String> {
         match self.algorithm {
             SignatureAlgorithm::EdDSA => {
-                tracing::debug!("Verifying signature: EdDSA {} {:?}", , msg, self);
+                tracing::debug!("Verifying signature: EdDSA {} {:?}", msg, self);
                 let pk = self.public_key.clone();
                 let public_key = UnparsedPublicKey::new(&ED25519, &pk);
                 public_key
