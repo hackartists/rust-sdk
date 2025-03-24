@@ -48,6 +48,7 @@ impl FromStr for Signature {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        tracing::debug!("Parsing signature: {}", s);
         let parts: Vec<&str> = s.split(':').collect();
         if parts.len() != 3 {
             return Err(format!("Invalid signature format: {}", s));
