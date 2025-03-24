@@ -1,4 +1,4 @@
-# Define a Structure
+# Package Structure
 
 This document explains what elements should be included when configuring a Front Package and what functions each element performs.
 
@@ -13,34 +13,33 @@ The package structure is as follows:
 │    ├── checkbox
 │    │    ├── mod.rs
 │    ├── selectbox
-│          ├── mod.rs
-├── layouts
-│    ├── root_layout
-│          ├── header.rs
-│          └── mod.rs
-│          └── footer.rs
-│          └── side_bar.rs
+│    │    ├── mod.rs
+│    └── mod.rs
 ├── pages
 │    ├── main
 │    │    ├── controller.rs
-│    │    └── i18n.rs
-│    │    └── mod.rs
+│    │    ├── i18n.rs
+│    │    ├── mod.rs
 │    │    └── page.rs
-│    └── create
-│          ├── controller.rs
-│          └── i18n.rs
-│          └── mod.rs
-│          └── page.rs
+│    ├── create
+│    │    ├── controller.rs
+│    │    ├── i18n.rs
+│    │    ├── mod.rs
+│    ├──├── page.rs
+│    ├── mod.rs
+│    ├── layout.rs
+│    └── page.rs
 ├── services
 │    ├── user_service.rs
-│    └── popup_service.rs
+│    └── mod.rs
 ├── utils
 │    ├── api.rs
 │    ├── time.rs
-│    └── hash.rs
-├── lib.rs
+│    ├── hash.rs
+│    └── mod.rs
 ├── main.rs
 ├── routes.rs
+├── theme.rs
 └── config.rs
 ```
 
@@ -49,9 +48,7 @@ The package structure is as follows:
 ### Root Files
 
 - **`main.rs`**  
-  It is the entry point of the Dioxus app and is responsible for running the entire application by initializing the logger, registering services, setting themes, loading external resources, and configuring routing.
-
-- **`lib.rs`**  
+  It is the entry point of the Dioxus app and is responsible for running the entire application by initializing the logger, registering services, setting themes, loading external resources, and configuring routing.<br>
   The entry point that defines the structure of a Dioxus app and integrates and manages UI layouts, routes, pages, services, components, and utility modules.
 
   **Example:**
@@ -61,26 +58,9 @@ The package structure is as follows:
     pub mod pages;
     pub mod routes;
 
-    pub mod service {
-        pub mod user_service;
-        pub mod popup_service;
-    }
-
-    pub mod utils {
-        pub mod api;
-        pub mod time;
-        pub mod hash;
-    }
-
-    pub mod layouts {
-        pub mod root_layout;
-    }
-
-    pub mod components {
-        pub mod button;
-        pub mod checkbox;
-        pub mod selectbox;
-    }
+    pub mod service;
+    pub mod utils;
+    pub mod components;
     ```
 
 - **`routes.rs`**  
@@ -89,6 +69,9 @@ The package structure is as follows:
   **Example:**
 
     ```
+    use bdk::prelude::;
+    use pages::;
+
     #[derive(Clone, Routable, Debug, PartialEq)]
     #[rustfmt::skip]
     pub enum Route {
@@ -96,7 +79,6 @@ The package structure is as follows:
             #[layout(RootLayout)]
                 #[route("/main")]
                 MainPage { lang: Language },
-            #[layout(RootLayout)]
                 #[route("/create")]
                 CreatePage { lang: Language },
             #[end_layout]
@@ -110,6 +92,69 @@ The package structure is as follows:
 
 - **`config.rs`**  
   A configuration module that initializes environment variable-based settings (Config) when the app runs and provides them in a globally accessible singleton form.
+
+- **`theme.rs`**  
+  A file that defines global theme data and manages the application of colors and font styles consistently across the UI via Context.
+
+  **Example:**
+
+    ```
+    #[derive(Debug, Clone)]
+    pub struct ThemeData {
+        pub active: String,
+        pub active00: String,
+        pub font_theme: FontTheme,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct FontTheme {
+        pub exbold15: String,
+        pub bold15: String,
+    }
+
+    impl Default for FontTheme {
+        fn default() -> Self {
+            FontTheme {
+                exbold15: "font-extrabold text-[15px] leading-[22.5px]".to_string(),
+                bold15: "font-bold text-[15px] leading[22.5px]".to_string(),
+            }
+        }
+    }
+
+    impl Default for ThemeData {
+        fn default() -> Self {
+            ThemeData {
+                active: "#68D36C".to_string(), 
+                active00: "#68D36C".to_string(), 
+                font_theme: FontTheme::default(),
+            }
+        }
+    }
+
+    use bdk::prelude::*;
+
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct Theme {
+        pub data: Signal<ThemeData>,
+    }
+
+    impl Theme {
+        pub fn init() {
+            use_context_provider(|| Self {
+                data: Signal::new(ThemeData::default()),
+            });
+        }
+
+        pub fn get_data(&self) -> ThemeData {
+            (self.data)()
+        }
+
+        pub fn get_font_theme(&self) -> FontTheme {
+            (self.data)().font_theme.clone()
+        }
+    }
+
+    ```
 
 ### components
 - Create UI by organizing modules that can be commonly used for each page into a components directory.
@@ -125,23 +170,15 @@ If the Components is defined as:
 │    ├── checkbox
 │    │    ├── mod.rs
 │    ├── selectbox
-│          ├── mod.rs
+│    │    ├── mod.rs
+│    └── mod.rs
 ```
 
-### layouts
-- Organize common layouts for each page into the corresponding directories.
-- Usually consists of header, footer, and sidebar areas.
-
-**Example:**
-
-If the Layouts is defined as:
+At this time, the mod.rs file should be structured as follows:
 ```
-├── layouts
-│    ├── root_layout
-│          ├── header.rs
-│          └── mod.rs
-│          └── footer.rs
-│          └── side_bar.rs
+pub mod button;
+pub mod checkbox;
+pub mod selectbox;
 ```
 
 ### services
@@ -151,16 +188,15 @@ If the Layouts is defined as:
 The steps to configure and use the service are as follows: <br>
 1. service file setting
 - You can define a service file as follows:
-``` popup_service.rs
-#![allow(non_snake_case)]
-use dioxus::prelude::*;
+``` user_service.rs
+use bdk::prelude::*;
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct PopupService {
+pub struct UserService {
     pub id: Signal<Option<String>>,
 }
 
-impl PopupService {
+impl UserService {
     pub fn init() {
         let srv = Self {
             id: Signal::new(None),
@@ -176,10 +212,6 @@ impl PopupService {
 ``` main.rs
 use bdk::prelude::*;
 
-pub mod service {
-    pub mod popup_service;
-}
-
 fn main() {
     dioxus_logger::init(config::get().log_level).expect("failed to init logger");
 
@@ -188,7 +220,7 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    PopupService::init();
+    UserService::init();
 
     rsx! {
         Router::<Route> {}
@@ -201,9 +233,11 @@ fn App() -> Element {
 - In each page's controller.rs, services are accessed via use_context, allowing for seamless dependency injection and modular usage.
 - Services can be accessed as follows:
 ``` controller.rs
+use bdk::prelude::;
+
 #[derive(Debug, Clone, Copy, DioxusController)]
 pub struct Controller {
-    popup_service: PopupService,
+    user_service: UserService,
 }
 
 impl Controller {
@@ -211,7 +245,7 @@ impl Controller {
         lang: Language,
     ) -> std::result::Result<Self, RenderError> {
         let ctrl = Self {
-            popup_service: use_context(),
+            user_service: use_context(),
         };
 
         Ok(ctrl)
@@ -230,7 +264,8 @@ If the Utils is defined as:
 ├── utils
 │    ├── api.rs
 │    ├── time.rs
-│    └── hash.rs
+│    ├── hash.rs
+│    └── mod.rs
 ```
 
 ### pages
@@ -252,6 +287,8 @@ If the pages is defined as:
 │    ├── i18n.rs
 │    ├── mod.rs
 │    └── page.rs
+├── layout.rs
+└── mod.rs
 ```
 
 #### controller.rs
@@ -260,7 +297,6 @@ If the pages is defined as:
 
 **controller.rs**
 ``` controller.rs
-#![allow(unused)]
 use bdk::prelude::*;
 
 #[derive(Debug, Clone, Copy, DioxusController)]
@@ -273,18 +309,17 @@ impl Controller {
     pub fn new(lang: Language) -> std::result::Result<Self, RenderError> {
         let count = use_signal(|| 0);
         let ctrl = Self { lang, count };
-        use_context_provider(|| ctrl);
         Ok(ctrl)
     }
 
     pub fn add_count(&mut self) {
-        let mut c = count();
+        let mut c = (self.count)();
         c += 1;
-        count.set(c);
+        (self.count).set(c);
     }
 
-    pub fn get_count(&mut self) {
-        count()
+    pub fn get_count(&self) -> i64 {
+        (self.count)()
     }
 }
 
@@ -296,7 +331,7 @@ use bdk::prelude::*;
 
 #[component]
 pub fn MainPage(lang: Language) -> Element {
-    let ctrl = Controller::new(lang);
+    let ctrl = Controller::new(lang)?;
     let count = ctrl.get_count();
 
     rsx! {
@@ -310,6 +345,7 @@ pub fn MainPage(lang: Language) -> Element {
 #### i18n.rs
 - Translate configuration using the translate macro, which is an internally implemented macro.
 - Basically, ko and en are supported in two versions, and the two versions are described in the i18n.rs file when configuring the UI.
+- At this time, the Translation name should reflect the page name.
 - Examples of usage are as follows.
 
 **i18n.rs**
@@ -317,7 +353,7 @@ pub fn MainPage(lang: Language) -> Element {
 use bdk::prelude::*;
 
 translate! {
-    Translate;
+    MainTranslate;
 
     text: {
         ko: "메인 페이지",
@@ -334,7 +370,7 @@ use bdk::prelude::*;
 #[component]
 pub fn MainPage(lang: Language) -> Element {
     let ctrl = Controller::new(lang);
-    let tr = translate(&lang);
+    let tr: MainTranslate = translate(&lang);
 
     let count = ctrl.get_count();
     let text = tr.text;
