@@ -223,6 +223,7 @@ pub fn verify_jwt(value: Option<&str>) -> Result<Authorization, StatusCode> {
 /// * `Signature` - The signature of the user
 /// * `StatusCode` - The status code of the response
 pub fn verify_usersig(value: Option<&str>) -> Result<Authorization, StatusCode> {
+    tracing::debug!("verify_usersig: {:?}", value);
     if let Some((timestamp, signature)) = value.unwrap_or_default().split_once(":") {
         let parsed_timestamp: i64 = timestamp.parse().map_err(|_| StatusCode::UNAUTHORIZED)?;
         if now() - parsed_timestamp >= 3600 {
