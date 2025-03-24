@@ -58,6 +58,12 @@ pub fn RichText(content: String, onchange: EventHandler<String>) -> Element {
     });
 
     rsx! {
+        document::Link {
+            rel: "stylesheet",
+            href: "https://cdn.quilljs.com/1.3.6/quill.snow.css",
+        }
+
+        document::Script { src: "https://cdn.quilljs.com/1.3.6/quill.min.js" }
         div {
             class: "rich-text-editor w-full h-fit min-h-[100px] overflow-y-auto border-1 border-gray-300 rounded-md",
             "data-default-value": "{content}",
