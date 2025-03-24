@@ -67,6 +67,7 @@ pub async fn authorization_middleware(
 ) -> Result<Response<Body>, StatusCode> {
     tracing::debug!("Authorization middleware {:?}", req.uri());
     if let Some(auth_header) = req.headers().get(AUTHORIZATION) {
+        tracing::debug!("Authorization header: {:?}", auth_header);
         if let Ok(auth_value) = auth_header.to_str() {
             let mut auth_value = auth_value.split_whitespace();
             let (scheme, value) = (auth_value.next(), auth_value.next());
