@@ -1,13 +1,13 @@
 # Query Builder
 
-The Query Builder is a powerful tool for constructing database queries in a type-safe and fluent manner. It's automatically generated for models marked with the #[api_model] attribute when the "server" feature is enabled. The builder provides a chainable interface for constructing complex queries with conditions, ordering, and other database operations.
+The Query Builder is a powerful tool for constructing database queries in a type-safe and fluent manner. It's automatically generated for models marked with the '#[api_model]' attribute when the 'server' feature is enabled. The builder provides a chainable interface for constructing complex queries with conditions, ordering, and other database operations.
 
 ## Getting Started
 
 To use the Query Builder for a model, first ensure your model is properly annotated:
 
 ```rust
-#[api_model(queryable)]
+#[api_model(base = "/v1/endpoint", table = my_models)]
 struct MyModel {
     id: u64,
     name: String,
@@ -30,7 +30,7 @@ The Query Builder supports a fluent interface for constructing queries:
 
 ```rust
 let query = MyModel::query_builder()
-    .name_equals("John Doe")
+    .name_equals("John Doe".to_string())
     .is_active_is_true()
     .order_by_created_at_desc();
 ```
