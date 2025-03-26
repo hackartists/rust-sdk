@@ -4,3 +4,8 @@ target/
 /cdk/.projectile
 .build/
 .vscode/*
+.DS_Store
+cdk/.DS_Store
+docs/.DS_Store
+examples/.DS_Store
+packages/.DS_Store
