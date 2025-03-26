@@ -512,7 +512,6 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                         match opened {
                             OpenedOffset::FilterBy => {
                                 panic!("filter_by=[field_name=type] is not implemented yet. Please use `filter_by=field_name`");
-                                opened = OpenedOffset::None;
                             }
                             OpenedOffset::Auto => {
                                 for nested in group.stream() {
