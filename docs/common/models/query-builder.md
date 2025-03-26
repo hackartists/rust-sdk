@@ -1,6 +1,6 @@
 # Query Builder
 
-The Query Builder is a powerful tool for constructing database queries in a type-safe and fluent manner. It's automatically generated for models marked with the '#[api_model]' attribute when the 'server' feature is enabled. The builder provides a chainable interface for constructing complex queries with conditions, ordering, and other database operations.
+The Query Builder is a powerful tool for constructing database queries in a type-safe and fluent manner. It's automatically generated for models marked with the `#[api_model]` attribute when the `server` feature is enabled. The builder provides a chainable interface for constructing complex queries with conditions, ordering, and other database operations.
 
 ## Getting Started
 
