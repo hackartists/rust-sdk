@@ -2006,14 +2006,11 @@ impl ApiModel<'_> {
                 aggregated_fields.push(q);
             }
 
-            if let Some((name, q)) = field.aggregate_arg() {
+            for ((name, q)) in field.aggregate_arg() {
                 is_agg = true;
-                aggregate_args.insert(name, q);
-            }
-
-            if let Some(q) = field.aggregate_arg_name() {
-                is_agg = true;
-                arg_names.push(q);
+                aggregate_args.insert(name.clone(), q);
+                let arg_name = syn::Ident::new(&name, proc_macro2::Span::call_site());
+                arg_names.push(arg_name);
             }
 
             if let Some(q) = field.group_by() {
@@ -2108,12 +2105,10 @@ impl ApiModel<'_> {
                 aggregated_fields.push(q);
             }
 
-            if let Some((name, q)) = field.aggregate_arg() {
-                aggregate_args.insert(name, q);
-            }
-
-            if let Some(q) = field.aggregate_arg_name() {
-                arg_names.push(q);
+            for ((name, q)) in field.aggregate_arg() {
+                aggregate_args.insert(name.clone(), q);
+                let arg_name = syn::Ident::new(&name, proc_macro2::Span::call_site());
+                arg_names.push(arg_name);
             }
         }
 
@@ -2171,17 +2166,12 @@ impl ApiModel<'_> {
         let mut arg_names = vec![];
 
         for (field_name, field) in self.fields.iter() {
-            if let Some((name, q)) = field.aggregate_arg() {
-                if aggregate_args.insert(name, q).is_none() {
-                    if let Some(q) = field.aggregate_arg_name() {
-                        arg_names.push(q);
-                    }
+            for ((name, q)) in field.aggregate_arg() {
+                if aggregate_args.insert(name.clone(), q).is_none() {
+                    let arg_name = syn::Ident::new(&name, proc_macro2::Span::call_site());
+                    arg_names.push(quote! { #arg_name })
                 }
             }
-
-            // if let Some(q) = field.aggregate_arg_name() {
-            //     arg_names.push(q);
-            // }
         }
         let mut parent_variable = syn::LitStr::new("", proc_macro2::Span::call_site());
 
@@ -3796,6 +3786,7 @@ pub enum Relation {
         table_name: String,
         foreign_key: String,
         reference_key: String,
+        filter_by: Vec<(String, String)>,
     },
 }
 
@@ -3866,6 +3857,7 @@ END AS {bound_name}
                     ref table_name,
                     ref foreign_key,
                     ref reference_key,
+                    ..
                 }) => Some(format!(
                     r#"
 CASE
@@ -3932,7 +3924,17 @@ COALESCE(
                     table_name,
                     foreign_key,
                     reference_key,
+                    filter_by,
                 }) => {
+                    let filter_conditions = if !filter_by.is_empty() {
+                        filter_by
+                            .iter()
+                            .map(|(filter, _)| format!("AND f.{} = {{}}", filter))
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    } else {
+                        "".to_string()
+                    };
                     if self.rust_type.starts_with("Vec") {
                         Some(format!(
                             r#"
@@ -3942,7 +3944,7 @@ COALESCE(
 -- {bound_name} start
        SELECT DISTINCT ON (f.id) f.*
          FROM {table_name} f
-        WHERE f.{foreign_key} = p.{reference_key}
+        WHERE f.{foreign_key} = p.{reference_key} {filter_conditions}
 -- {bound_name} end
      ) m
   ), '[]'
@@ -3953,7 +3955,7 @@ COALESCE(
                             r#"
             (SELECT to_jsonb(f)
                FROM {table_name} f
-              WHERE f.{foreign_key} = p.{reference_key}
+              WHERE f.{foreign_key} = p.{reference_key} {filter_conditions}
               LIMIT 1
             ) AS {bound_name}"#,
                         ))
@@ -3961,40 +3963,6 @@ COALESCE(
                 }
                 _ => None,
             },
-        }
-    }
-
-    pub fn aggregate_arg_name(&self) -> Option<proc_macro2::TokenStream> {
-        match (&self.aggregator, &self.relation) {
-            (
-                Some(Aggregator::Exist),
-                Some(Relation::ManyToMany {
-                    ref foreign_primary_key,
-                    ..
-                }),
-            ) => {
-                let arg_name =
-                    syn::Ident::new(&foreign_primary_key, proc_macro2::Span::call_site());
-
-                Some(quote! { #arg_name })
-            }
-            // (
-            //     None,
-            //     Some(Relation::ManyToMany {
-            //         ref foreign_reference_key,
-            //         ..
-            //     }),
-            // ) => {
-            //     if !self.rust_type.starts_with("Vec") {
-            //         return None;
-            //     }
-
-            //     let arg_name =
-            //         syn::Ident::new(&foreign_reference_key, proc_macro2::Span::call_site());
-
-            //     Some(quote! { #arg_name })
-            // }
-            _ => None,
         }
     }
 
@@ -4035,7 +4003,8 @@ COALESCE(
         }
     }
 
-    pub fn aggregate_arg(&self) -> Option<(String, proc_macro2::TokenStream)> {
+    pub fn aggregate_arg(&self) -> Vec<(String, proc_macro2::TokenStream)> {
+        let mut ret = vec![];
         match (&self.aggregator, &self.relation) {
             (
                 Some(Aggregator::Exist),
@@ -4058,7 +4027,24 @@ COALESCE(
                     proc_macro2::Span::call_site(),
                 );
                 let stream = quote! { #arg_name: #arg_type};
-                Some((foreign_primary_key.clone(), stream))
+                ret.push((foreign_primary_key.clone(), stream))
+            }
+            (_, Some(Relation::OneToMany { filter_by, .. })) => {
+                for filter in filter_by {
+                    let arg_name = syn::Ident::new(&filter.0, proc_macro2::Span::call_site());
+                    let arg_type = syn::Ident::new(
+                        match filter.1.as_str() {
+                            "BIGINT" => "i64",
+                            "INTEGER" => "i32",
+                            "BOOLEAN" => "bool",
+                            "TEXT" => "String",
+                            _ => "i64",
+                        },
+                        proc_macro2::Span::call_site(),
+                    );
+                    let stream = quote! { #arg_name: #arg_type};
+                    ret.push((filter.0.clone(), stream));
+                }
             }
             // (
             //     None,
@@ -4076,8 +4062,9 @@ COALESCE(
 
             //     Some(quote! { #arg_name: i64})
             // }
-            _ => None,
+            _ => {}
         }
+        ret
     }
 
     pub fn group_by(&self) -> Option<String> {
@@ -4095,6 +4082,7 @@ COALESCE(
                 ref table_name,
                 ref foreign_key,
                 ref reference_key,
+                ..
             }) => (table_name, foreign_key, reference_key),
             Some(Relation::ManyToMany {
                 ref table_name,
@@ -4749,10 +4737,12 @@ impl ApiField {
                 table_name,
                 foreign_key,
                 reference_key,
+                filter_by,
             }) => Some(Relation::OneToMany {
                 table_name: table_name.to_string(),
                 foreign_key: foreign_key.to_string(),
                 reference_key: reference_key.to_string(),
+                filter_by: filter_by.clone(),
             }),
 
             rel => {

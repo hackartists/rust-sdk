@@ -139,6 +139,7 @@ pub enum SqlAttribute {
         table_name: String,
         foreign_key: String,
         reference_key: String,
+        filter_by: Vec<(String, String)>, // List of (field_name, field_type) pairs
     },
     Unique,
     Skip,
@@ -165,6 +166,7 @@ enum OpenedOffset {
     Version,
     Aggregator,
     TargetTable,
+    FilterBy,
 }
 
 #[derive(Debug)]
@@ -249,6 +251,9 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             }
                             "target_table" => {
                                 opened = OpenedOffset::TargetTable;
+                            }
+                            "filter_by" => {
+                                opened = OpenedOffset::FilterBy;
                             }
                             _ => match opened {
                                 OpenedOffset::Aggregator => match id.as_str() {
@@ -346,6 +351,7 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                             table_name: id,
                                             foreign_key: "id".to_string(),
                                             reference_key: "id".to_string(),
+                                            filter_by: vec![],
                                         },
                                     );
                                     tracing::trace!("one_to_many: {name}");
@@ -480,11 +486,34 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                                         }
                                     });
                                 }
+                                OpenedOffset::FilterBy => {
+                                    let filter = id.trim().split('=').collect::<Vec<&str>>();
+                                    let (filter_str, ty_str) = if filter.len() == 1 {
+                                        (filter[0].to_string(), "i64".to_string())
+                                    } else {
+                                        (filter[0].to_string(), filter[1].to_string())
+                                    };
+                                    field_attrs.get_mut(&SqlAttributeKey::Relation).map(|attr| {
+                                        if let SqlAttribute::OneToMany {
+                                            ref mut filter_by,
+                                            ..
+                                        } = attr
+                                        {
+                                            *filter_by = vec![(filter_str, ty_str)]
+                                        } else {
+                                            panic!("filter_by is only allowed for one_to_many relation");
+                                        }
+                                    });
+                                }
                                 OpenedOffset::None => {}
                             },
                         }
                     } else if let proc_macro2::TokenTree::Group(group) = nested {
                         match opened {
+                            OpenedOffset::FilterBy => {
+                                panic!("filter_by=[field_name=type] is not implemented yet. Please use `filter_by=field_name`");
+                                opened = OpenedOffset::None;
+                            }
                             OpenedOffset::Auto => {
                                 for nested in group.stream() {
                                     if let proc_macro2::TokenTree::Ident(iden) = nested {
