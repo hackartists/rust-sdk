@@ -1,7 +1,7 @@
 # Summary
 
-- [Introduction](./intro/README.md)
-  - [Project Structure](./intro/project-structure.md)
+- [Introduction](./README.md)
+  - [Project Structure](./project-structure.md)
 
 # Common Package
 - [Package Structure](./common/package-structure.md)
@@ -14,7 +14,6 @@
   - [Query Builder](./common/models/query-builder.md)
   - [Relations](./common/models/relations/README.md)
     - [One to Many](./common/models/relations/one-to-many.md)
-    - [Many to One](./common/models/relations/many-to-one.md)
     - [Many to Many](./common/models/relations/many-to-many.md)
   - [Nesting Relation Fields](./common/models/nested.md)
   - [Aggregator](./common/models/aggregator.md)
