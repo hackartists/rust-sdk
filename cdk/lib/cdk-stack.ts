@@ -285,6 +285,10 @@ export class CdkStack extends cdk.Stack {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
+        "/public/*": {
+          origin: s3Origin,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
       };
     }
 
