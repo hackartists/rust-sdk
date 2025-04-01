@@ -93,6 +93,22 @@ macro_rules! info {
 }
 
 #[macro_export]
+macro_rules! i {
+    ($lang:ident, $msg:expr) => {
+        if tracing::event_enabled!(tracing::Level::INFO) {
+            let message = format!("{}", $msg.translate(&$lang));
+            tracing::error!("{}", message);
+
+            let p = $crate::ToastMessage {
+                toast_type: $crate::ToastType::Info,
+                message,
+            };
+            *$crate::TOAST.signal().write() = Some(p);
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {
         if tracing::event_enabled!(tracing::Level::ERROR) {
@@ -106,6 +122,22 @@ macro_rules! error {
             *$crate::TOAST.signal().write() = Some(p);
         }
     }
+}
+
+#[macro_export]
+macro_rules! e {
+    ($lang:ident, $err:expr) => {
+        if tracing::event_enabled!(tracing::Level::ERROR) {
+            let message = format!("{}", $err.translate(&$lang));
+            tracing::error!("{}", message);
+
+            let p = $crate::ToastMessage {
+                toast_type: $crate::ToastType::Error,
+                message,
+            };
+            *$crate::TOAST.signal().write() = Some(p);
+        }
+    };
 }
 
 #[macro_export]
