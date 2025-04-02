@@ -62,10 +62,11 @@ pub fn launch(_app: fn() -> Element) {
 
                 #[cfg(feature = "lambda")]
                 {
-                    use self::lambda::LambdaAdapter;
+                    // use self::lambda::LambdaAdapter;
 
                     tracing::info!("Running in lambda mode");
-                    lambda_runtime::run(LambdaAdapter::from(app)).await.unwrap();
+                    lambda_http::run(app).await.unwrap();
+                    // lambda_runtime::run(LambdaAdapter::from(app)).await.unwrap();
                 }
             });
     };
