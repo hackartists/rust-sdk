@@ -24,11 +24,14 @@ http = { version = "1.1.0", optional = true }
 tower-layer = { version = "0.3.3", optional = true }
 tower-service = { version = "0.3.3", optional = true }
 axum-core = { version = "0.4.5", optional = true }
+tower-http = { version = "0.6.2", features = ["compression-gzip"] }
+base64 = { version = "0.22.1", optional = true }
 
 [features]
 default = []
 web = ["dioxus/web", "dioxus-fullstack/web", "dioxus/fullstack"]
 server = ["dioxus/fullstack", "dioxus-fullstack/axum", "dioxus-fullstack/server", "axum", "tokio/full", "dioxus-cli-config", "axum-core", "tower-layer", "tower-service", "tokio"]
 web-only = ["web"]
-lambda = ["server", "tower", "lambda_http", "lambda_runtime", "http"]
+lambda = ["server", "tower", "lambda_http", "lambda_runtime", "http", "base64"]
 tokio = ["dep:tokio"]
+base64 = ["dep:base64"]

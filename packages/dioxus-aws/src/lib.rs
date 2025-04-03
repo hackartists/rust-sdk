@@ -28,6 +28,7 @@ pub fn launch(_app: fn() -> Element) {
     {
         use axum::routing::*;
         use dioxus_fullstack::prelude::*;
+        use tower_http::compression::CompressionLayer;
 
         struct TryIntoResult(Result<ServeConfig, dioxus_fullstack::UnableToLoadIndex>);
 
@@ -42,10 +43,12 @@ pub fn launch(_app: fn() -> Element) {
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
-                let app = Router::new().serve_dioxus_application(
-                    TryIntoResult(ServeConfigBuilder::default().build()),
-                    _app,
-                );
+                let app = Router::new()
+                    .serve_dioxus_application(
+                        TryIntoResult(ServeConfigBuilder::default().build()),
+                        _app,
+                    )
+                    .layer(CompressionLayer::new());
 
                 #[cfg(not(feature = "lambda"))]
                 {
@@ -62,6 +65,7 @@ pub fn launch(_app: fn() -> Element) {
                     use self::lambda::LambdaAdapter;
 
                     tracing::info!("Running in lambda mode");
+                    // lambda_http::run(app).await.unwrap();
                     lambda_runtime::run(LambdaAdapter::from(app)).await.unwrap();
                 }
             });
