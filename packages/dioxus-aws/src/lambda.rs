@@ -1,3 +1,5 @@
+use http::header::CONTENT_ENCODING;
+
 #[allow(missing_docs)]
 pub struct LambdaAdapter<'a, R, S> {
     service: S,
@@ -77,25 +79,14 @@ where
             let res = call.await?;
             let res = res.into_response().await;
             let status_code = res.status().as_u16() as i64;
-            let mut headers = res.headers().clone();
+            let headers = res.headers().clone();
+            tracing::debug!("response: {:?}", headers);
             let body = Some(res.clone().into_body());
-
             let is_base64_encoded = headers
-                .get("content-type")
-                .map(|v| {
-                    v.to_str()
-                        .map(|v| v.contains("image") || v.contains("octet-stream"))
-                        .unwrap_or(false)
-                })
-                .unwrap_or_default();
-
-            if is_base64_encoded {
-                tracing::debug!("Binary response: {} {}", method, uri);
-                headers.insert(
-                    "content-encoding",
-                    http::header::HeaderValue::from_static("base64"),
-                );
-            }
+                .get(CONTENT_ENCODING)
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_ascii_lowercase())
+                .is_some();
 
             let res = lambda_http::aws_lambda_events::apigw::ApiGatewayProxyResponse {
                 is_base64_encoded,
@@ -104,13 +95,19 @@ where
                 body,
                 multi_value_headers: Default::default(),
             };
-            if uri.contains("/ko") {
-                tracing::debug!(
+
+            if status_code != 200 {
+                tracing::error!(
                     "Outgoing response: {} {} \n data:{:?}",
                     method,
                     uri,
                     match &res.body {
                         Some(lambda_http::Body::Text(body)) => body.to_string(),
+                        Some(lambda_http::Body::Binary(body)) => {
+                            use base64::{engine::general_purpose, Engine as _};
+                            let encoded = general_purpose::STANDARD.encode(body);
+                            encoded
+                        }
                         _ => "".to_string(),
                     },
                 );

@@ -137,6 +137,7 @@ export class CdkStack extends cdk.Stack {
           cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
           originRequestPolicy:
             cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          compress: false,
         },
         domainNames: [domain],
         certificate,
@@ -244,50 +245,62 @@ export class CdkStack extends cdk.Stack {
         "/metadata/*": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
         "/assets/*": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
         "/*.js": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
         "/*.css": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
         "/*.html": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
         "/*.ico": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
         "/*.svg": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
         "/*.avif": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
         "/*.wasm": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
         "/icons/*": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
         "/images/*": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
         "/public/*": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
         },
       };
     }
