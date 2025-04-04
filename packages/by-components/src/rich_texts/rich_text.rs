@@ -99,9 +99,9 @@ pub fn RichText(
     rsx! {
         document::Link {
             rel: "stylesheet",
-            href: "https://cdn.quilljs.com/1.3.6/quill.snow.css",
+            href: "https://cdn.jsdelivr.net/npm/quill@2.0.0-dev.4/dist/quill.snow.css",
         }
-        document::Script { src: "https://cdn.quilljs.com/1.3.6/quill.min.js" }
+        document::Script { src: "https://cdn.jsdelivr.net/npm/quill@2.0.0-dev.4/dist/quill.min.js" }
 
         div {
             id: "{id}",
