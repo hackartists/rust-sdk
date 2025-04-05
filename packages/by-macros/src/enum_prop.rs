@@ -49,7 +49,7 @@ pub fn enum_prop_impl(input: TokenStream) -> TokenStream {
         impl std::str::FromStr for #name {
             type Err = String;
 
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
+            fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
                 match s {
                     #(#matches_for_from_str)*
                     _ => Err(format!("Invalid type: {}", s)),
