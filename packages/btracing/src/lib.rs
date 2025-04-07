@@ -126,7 +126,7 @@ macro_rules! error {
 
 #[macro_export]
 macro_rules! e {
-    ($lang:ident, $err:expr) => {
+    ($lang:expr, $err:expr) => {
         if tracing::event_enabled!(tracing::Level::ERROR) {
             let message = format!("{}", $err.translate(&$lang));
             tracing::error!("{}", message);
