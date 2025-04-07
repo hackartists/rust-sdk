@@ -36,6 +36,6 @@ aide = { workspace = true, optional = true }
 default = []
 fe = ["dioxus-aws", "btracing", "dioxus", "dioxus-fullstack", "dioxus-popup", "by-components", "dioxus-logger", "rest-api/web"]
 web = ["fe","dioxus-aws/web", "dioxus/web", "dioxus-translate/web"]
-server = ["be", "dioxus-aws/server", "dioxus/server", "by_components", "dioxus_logger", "dioxus_popup"]
+server = ["be", "dioxus-aws/server", "dioxus/server", "by-components", "dioxus-logger", "dioxus-popup"]
 lambda = ["dioxus-aws?/lambda", "by-axum?/lambda"]
 be = ["by-axum", "schemars", "sqlx", "bigdecimal", "aide", "by-types/server", "by-macros/server", "btracing" ]
