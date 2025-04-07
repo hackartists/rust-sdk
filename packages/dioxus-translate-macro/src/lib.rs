@@ -4,9 +4,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{braced, parse_macro_input, DeriveInput, Fields, Ident, Lit, LitStr, Meta, Token};
+use syn::{DeriveInput, Fields, Ident, Lit, LitStr, Meta, Token, braced, parse_macro_input};
 
 #[proc_macro]
 pub fn translate(input: TokenStream) -> TokenStream {
@@ -307,7 +307,7 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
     let ko_arm = quote! {};
 
     // Generate the implementation block for `translate`
-    let gen = quote! {
+    let r#gen = quote! {
         impl #enum_name {
             pub fn translate(&self, lang: &dioxus_translate::Language) -> &'static str {
                 match lang {
@@ -345,5 +345,5 @@ pub fn translate_derive(input: TokenStream) -> TokenStream {
         }
     };
 
-    gen.into()
+    r#gen.into()
 }
