@@ -1,6 +1,8 @@
 use dioxus::dioxus_core::Element;
 
 #[cfg(feature = "server")]
+pub use axum;
+#[cfg(feature = "server")]
 use axum::routing::Route;
 #[cfg(feature = "server")]
 use axum_core::{extract::Request, response::IntoResponse};
@@ -72,54 +74,6 @@ pub fn launch(_app: fn() -> Element) {
 }
 
 #[cfg(feature = "server")]
-pub fn launch_with_router(_app: fn() -> Element, router: axum::Router) {
-    #[cfg(feature = "web")]
-    dioxus::launch(_app);
-
-    #[cfg(feature = "server")]
-    {
-        use dioxus_fullstack::prelude::*;
-
-        struct TryIntoResult(Result<ServeConfig, dioxus_fullstack::UnableToLoadIndex>);
-
-        impl TryInto<ServeConfig> for TryIntoResult {
-            type Error = dioxus_fullstack::UnableToLoadIndex;
-
-            fn try_into(self) -> Result<ServeConfig, Self::Error> {
-                self.0
-            }
-        }
-
-        tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(async move {
-                let app = router.serve_dioxus_application(
-                    TryIntoResult(ServeConfigBuilder::default().build()),
-                    _app,
-                );
-
-                #[cfg(not(feature = "lambda"))]
-                {
-                    let address = dioxus_cli_config::fullstack_address_or_localhost();
-                    let listener = tokio::net::TcpListener::bind(address).await.unwrap();
-
-                    axum::serve(listener, app.into_make_service())
-                        .await
-                        .unwrap();
-                }
-
-                #[cfg(feature = "lambda")]
-                {
-                    use self::lambda::LambdaAdapter;
-
-                    tracing::info!("Running in lambda mode");
-                    lambda_runtime::run(LambdaAdapter::from(app)).await.unwrap();
-                }
-            });
-    };
-}
-
-#[cfg(feature = "server")]
 pub async fn launch_with_layers<L>(app: fn() -> Element, layers: Vec<L>)
 where
     L: Layer<Route> + Clone + Send + 'static,
@@ -174,33 +128,52 @@ where
 }
 
 #[cfg(feature = "server")]
-pub struct AppBuilder<L> {
-    layers: Vec<L>,
-    app: fn() -> Element,
-}
+use axum::routing::*;
 
 #[cfg(feature = "server")]
-impl<L> AppBuilder<L>
-where
-    L: Layer<Route> + Clone + Send + 'static,
-    L::Service: Service<Request> + Clone + Send + 'static,
-    <L::Service as Service<Request>>::Response: IntoResponse + 'static,
-    <L::Service as Service<Request>>::Error: Into<Infallible> + 'static,
-    <L::Service as Service<Request>>::Future: Send + 'static,
-{
-    pub fn new(app: fn() -> Element) -> Self {
-        Self {
-            layers: Vec::new(),
-            app,
+pub fn new(app: fn() -> Element) -> axum::Router {
+    use dioxus_fullstack::prelude::*;
+
+    struct TryIntoResult(Result<ServeConfig, dioxus_fullstack::UnableToLoadIndex>);
+
+    impl TryInto<ServeConfig> for TryIntoResult {
+        type Error = dioxus_fullstack::UnableToLoadIndex;
+
+        fn try_into(self) -> Result<ServeConfig, Self::Error> {
+            self.0
         }
     }
 
-    pub fn layer(mut self, layer: L) -> Self {
-        self.layers.push(layer);
-        self
-    }
+    Router::new()
+        .serve_dioxus_application(TryIntoResult(ServeConfigBuilder::default().build()), app)
+}
 
-    pub async fn serve(self) {
-        launch_with_layers(self.app, self.layers).await;
-    }
+#[cfg(feature = "server")]
+pub fn serve(app: axum::Router) {
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(async move {
+            #[cfg(not(feature = "lambda"))]
+            {
+                let address = dioxus_cli_config::fullstack_address_or_localhost();
+                let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+
+                axum::serve(listener, app.into_make_service())
+                    .await
+                    .unwrap();
+            }
+
+            #[cfg(feature = "lambda")]
+            {
+                use self::lambda::LambdaAdapter;
+                use tower_http::compression::CompressionLayer;
+                let app = app.layer(CompressionLayer::new());
+
+                tracing::info!("Running in lambda mode");
+                // lambda_http::run(app).await.unwrap();
+                lambda_runtime::run(LambdaAdapter::from(app.into_service()))
+                    .await
+                    .unwrap();
+            }
+        });
 }
