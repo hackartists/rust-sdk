@@ -7,7 +7,7 @@ resolver = "2"
 
 [workspace.package]
 authors = ["Biyard"]
-edition = "2021"
+edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/biyard/rust-sdk"
 description = "Biyard Rust Development Kit"

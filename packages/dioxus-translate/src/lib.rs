@@ -90,4 +90,15 @@ impl Language {
             Language::En => "en".to_string(),
         }
     }
+
+    pub fn all() -> Vec<Language> {
+        #[cfg(feature = "ko")]
+        {
+            vec![Language::Ko, Language::En]
+        }
+        #[cfg(not(feature = "ko"))]
+        {
+            vec![Language::En]
+        }
+    }
 }
