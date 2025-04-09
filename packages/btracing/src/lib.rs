@@ -94,7 +94,7 @@ macro_rules! info {
 
 #[macro_export]
 macro_rules! i {
-    ($lang:ident, $msg:expr) => {
+    ($lang:expr, $msg:expr) => {
         if tracing::event_enabled!(tracing::Level::INFO) {
             let message = format!("{}", $msg.translate(&$lang));
             tracing::error!("{}", message);
