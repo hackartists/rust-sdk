@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
+use wasm_bindgen::{JsCast, JsValue, prelude::Closure};
 use web_sys::js_sys::eval;
 
 #[component]
@@ -42,19 +42,25 @@ pub fn RichText(
             });
 
             let closure = Closure::wrap(Box::new(move |_event: JsValue| {
-                let editor = web_sys::window()
+                if let Some(editor) = web_sys::window()
                     .unwrap()
                     .document()
                     .unwrap()
                     .get_element_by_id(&id)
-                    .unwrap();
-
-                let html = editor
-                    .dyn_ref::<web_sys::HtmlElement>()
-                    .unwrap()
-                    .inner_html();
-
-                onchange.call(html);
+                {
+                    if let Some(ql_editor) = editor
+                        .dyn_ref::<web_sys::Element>()
+                        .unwrap()
+                        .query_selector(".ql-editor")
+                        .unwrap()
+                    {
+                        let html = ql_editor
+                            .dyn_ref::<web_sys::HtmlElement>()
+                            .unwrap()
+                            .inner_html();
+                        onchange.call(html);
+                    }
+                }
             }) as Box<dyn FnMut(JsValue)>);
 
             web_sys::window()
