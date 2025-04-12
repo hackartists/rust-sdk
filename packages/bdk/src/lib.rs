@@ -6,6 +6,9 @@ pub mod prelude {
     pub use dioxus_translate::*;
     pub use reqwest;
     pub use rest_api;
+    pub use serde;
+    pub use serde_json;
+    pub use serde_urlencoded;
     pub use tracing;
     pub use validator;
 
@@ -74,6 +77,11 @@ pub mod prelude {
     pub use schemars;
     #[cfg(any(feature = "be", all(feature = "be", feature = "lambda")))]
     pub use schemars::JsonSchema;
-    #[cfg(any(feature = "be", all(feature = "be", feature = "lambda")))]
+    #[cfg(any(
+        feature = "be",
+        feature = "server",
+        all(feature = "be", feature = "lambda"),
+        all(feature = "server", feature = "lambda")
+    ))]
     pub use sqlx;
 }
