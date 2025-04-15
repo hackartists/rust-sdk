@@ -1940,3 +1940,55 @@ pub fn BendArrowDown(
         }
     }
 }
+
+#[component]
+pub fn ShapeArrowDown(
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = 24)] size: i32,
+) -> Element {
+    rsx! {
+        svg {
+            class,
+            fill,
+            height: "{size}",
+            view_box: "0 0 24 24",
+            width: "{size}",
+            xmlns: "http://www.w3.org/2000/svg",
+            path {
+                d: "M12 14.6667L6.66663 9.33334L17.3333 9.33334L12 14.6667Z",
+                fill: "#1E1E1E",
+                stroke: "black",
+                stroke_linecap: "round",
+                stroke_linejoin: "round",
+                stroke_width: "1.5",
+            }
+        }
+    }
+}
+
+#[component]
+pub fn ShapeArrowUp(
+    #[props(default = "".to_string())] class: String,
+    #[props(default = "none".to_string())] fill: String,
+    #[props(default = 24)] size: i32,
+) -> Element {
+    rsx! {
+        svg {
+            class,
+            fill,
+            height: "{size}",
+            view_box: "0 0 24 24",
+            width: "{size}",
+            xmlns: "http://www.w3.org/2000/svg",
+            path {
+                d: "M12 9.33333L6.66663 14.6667L17.3333 14.6667L12 9.33333Z",
+                fill: "#1E1E1E",
+                stroke: "black",
+                stroke_linecap: "round",
+                stroke_linejoin: "round",
+                stroke_width: "1.5",
+            }
+        }
+    }
+}
