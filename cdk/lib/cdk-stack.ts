@@ -282,6 +282,11 @@ export class CdkStack extends cdk.Stack {
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
           compress: true,
         },
+        "/*.png": {
+          origin: s3Origin,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          compress: true,
+        },
         "/*.wasm": {
           origin: s3Origin,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
