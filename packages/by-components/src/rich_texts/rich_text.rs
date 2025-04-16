@@ -17,9 +17,13 @@ pub fn RichText(
                 (function tryInit() {{
                     let editor = document.getElementById("{id}");
                     if (editor && window.Quill && !editor.__quill) {{
+                        const parent = editor.parentElement;
+                        const existingToolbars = parent.querySelectorAll('.ql-toolbar');
+                        existingToolbars.forEach(t => t.remove());
+
                         editor.__quill = new Quill(editor, {{ theme: "snow" }});
 
-                        let toolbar = editor.previousElementSibling;
+                        const toolbar = parent.querySelector('.ql-toolbar');
                         if (toolbar) {{
                             toolbar.style.width = "100%";
                             toolbar.style.maxWidth = "none";
