@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
-use wasm_bindgen::{JsCast, JsValue, prelude::Closure};
+use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::js_sys::eval;
+use web_sys::{Event, HtmlElement, window};
 
 #[component]
 pub fn RichText(
@@ -8,11 +9,16 @@ pub fn RichText(
     content: String,
     onchange: EventHandler<String>,
 ) -> Element {
+    let mut closure_ref = use_signal(|| None as Option<Closure<dyn FnMut(web_sys::Event)>>);
+
     use_effect({
         let id = id.clone();
+        let onchange = onchange.clone();
+
         move || {
-            let id = id.clone();
-            let js = format!(
+            let event_name = format!("content-updated-{}", id);
+
+            let init_js = format!(
                 r#"
                 (function tryInit() {{
                     let editor = document.getElementById("{id}");
@@ -30,9 +36,8 @@ pub fn RichText(
                             toolbar.style.boxSizing = "border-box";
                         }}
 
-                        editor.__quill.on('text-change', function(delta, oldDelta, source) {{
-                            window.__quill_content = editor.__quill.root.innerHTML;
-                            document.dispatchEvent(new Event('content-updated'));
+                        editor.__quill.on('text-change', function() {{
+                            document.dispatchEvent(new CustomEvent("{event_name}"));
                         }});
                     }} else {{
                         setTimeout(tryInit, 200);
@@ -40,44 +45,51 @@ pub fn RichText(
                 }})();
                 "#
             );
+            let _ = eval(&init_js);
 
-            spawn(async move {
-                let _ = eval(&js);
-            });
-
-            let closure = Closure::wrap(Box::new(move |_event: JsValue| {
-                if let Some(editor) = web_sys::window()
+            let id_cloned = id.clone();
+            let onchange_cloned = onchange.clone();
+            let closure = Closure::wrap(Box::new(move |_event: Event| {
+                if let Some(editor) = window()
                     .unwrap()
                     .document()
                     .unwrap()
-                    .get_element_by_id(&id)
+                    .get_element_by_id(&id_cloned)
                 {
-                    if let Some(ql_editor) = editor
-                        .dyn_ref::<web_sys::Element>()
+                    if let Ok(Some(ql_editor)) = editor
+                        .dyn_ref::<HtmlElement>()
                         .unwrap()
                         .query_selector(".ql-editor")
-                        .unwrap()
                     {
-                        let html = ql_editor
-                            .dyn_ref::<web_sys::HtmlElement>()
-                            .unwrap()
-                            .inner_html();
-                        onchange.call(html);
+                        let html = ql_editor.inner_html();
+                        onchange_cloned.call(html);
                     }
                 }
-            }) as Box<dyn FnMut(JsValue)>);
+            }) as Box<dyn FnMut(_)>);
 
-            web_sys::window()
+            window()
                 .unwrap()
                 .document()
                 .unwrap()
-                .add_event_listener_with_callback(
-                    "content-updated",
-                    closure.as_ref().unchecked_ref(),
-                )
+                .add_event_listener_with_callback(&event_name, closure.as_ref().unchecked_ref())
                 .unwrap();
 
-            closure.forget();
+            closure_ref.set(Some(closure));
+
+            let _ = move || {
+                if let Some(cleanup) = closure_ref.take() {
+                    let _ = window()
+                        .unwrap()
+                        .document()
+                        .unwrap()
+                        .remove_event_listener_with_callback(
+                            &event_name,
+                            cleanup.as_ref().unchecked_ref(),
+                        );
+
+                    closure_ref.set(None);
+                }
+            };
         }
     });
 
@@ -85,7 +97,7 @@ pub fn RichText(
         let id = id.clone();
         let content = content.clone();
         move || {
-            let js = format!(
+            let sync_js = format!(
                 r#"
                 (function syncContent() {{
                     let editor = document.getElementById("{id}");
@@ -99,23 +111,19 @@ pub fn RichText(
                 }})();
                 "#
             );
-
-            spawn(async move {
-                let _ = eval(&js);
-            });
+            let _ = eval(&sync_js);
         }
     });
 
     rsx! {
-        document::Link {
+        link {
             rel: "stylesheet",
             href: "https://cdn.jsdelivr.net/npm/quill@2.0.0-dev.4/dist/quill.snow.css",
         }
-        document::Script { src: "https://cdn.jsdelivr.net/npm/quill@2.0.0-dev.4/dist/quill.min.js" }
-
+        script { src: "https://cdn.jsdelivr.net/npm/quill@2.0.0-dev.4/dist/quill.min.js" }
         div {
             id: "{id}",
-            class: "rich-text-editor w-full h-fit min-h-[100px] overflow-y-auto border border-gray-300 rounded-md",
+            class: "rich-text-editor w-full min-h-[100px] overflow-y-auto border border-gray-300 rounded-md",
         }
     }
 }
