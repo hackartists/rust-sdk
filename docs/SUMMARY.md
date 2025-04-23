@@ -39,7 +39,5 @@
 
 # CI/CD
 - [Web](./cicd/web/testing.md)
-  - [Testing](./cicd/web/testing.md)
 - [Backend](./cicd/backend/testing.md)
-  - [Testing](./cicd/backend/testing.md)
 - [Integration Testing](./cicd/playwright-testing.md)
