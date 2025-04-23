@@ -22,7 +22,11 @@ pub mod update_into_tests {
         #[api_model(summary, auto = [insert, update])]
         pub updated_at: i64,
 
+        pub parent_id: i64,
         pub name: String,
+        #[api_model(one_to_many = nested_child_models, foreign_key = parent_id, reference_key = parent_id, nested)]
+        pub refered_children: Vec<NestedChildModel>,
+
         #[api_model(one_to_many = nested_child_models, foreign_key = parent_id, nested)]
         pub children: Vec<NestedChildModel>,
 
@@ -191,8 +195,10 @@ pub mod update_into_tests {
         l6.create_table().await;
         l7.create_table().await;
 
-        let doc1 = l1.insert(name.clone()).await.unwrap();
-        let dummy = l1.insert(name.clone()).await.unwrap();
+        let doc1 = l1.insert(0, name.clone()).await.unwrap();
+        let dummy = l1.insert(doc1.id, name.clone()).await.unwrap();
+        assert_eq!(dummy.parent_id, doc1.id);
+
         let doc2 = l2.insert(format!("{name}-child"), doc1.id).await.unwrap();
         let doc2_2 = l2.insert(format!("{name}-child-2"), doc1.id).await.unwrap();
         l2.insert(format!("{name}-child-dummy"), dummy.id)
@@ -203,6 +209,7 @@ pub mod update_into_tests {
             .insert(format!("{name}-child-1-to-n"), doc2.id)
             .await
             .unwrap();
+
         let doc4 = l4.insert(format!("{name}-child-n-to-n")).await.unwrap();
         tracing::info!("doc2: {:?} doc4: {:?}", doc2, doc4);
         let doc5 = l5.insert(doc2.id, doc4.id).await.unwrap();
@@ -291,6 +298,38 @@ pub mod update_into_tests {
         assert_eq!(got.children[0].joined_children_many[0].id, doc4.id);
         assert_eq!(
             got.children[0].joined_children_many[0].many,
+            format!("{name}-child-n-to-n")
+        );
+
+        // Reference key testing
+        let got = NestedJoinModel::query_builder()
+            .id_equals(dummy.id)
+            .refered_children_builder(NestedChildModel::query_builder())
+            .children_builder(NestedChildModel::query_builder())
+            .query()
+            .map(NestedJoinModel::from)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(got.id, dummy.id);
+        assert_eq!(got.name, name);
+        assert_eq!(got.children.len(), 1);
+        assert_eq!(got.refered_children.len(), 2);
+        assert_eq!(got.refered_children[0].id, doc2.id);
+        assert_eq!(got.refered_children[0].name, format!("{name}-child"));
+        assert_eq!(got.refered_children[0].parent_id, doc1.id);
+        assert_eq!(got.refered_children[0].joined_children.len(), 1);
+        assert_eq!(got.refered_children[0].joined_children[0].id, doc3.id);
+        assert_eq!(
+            got.refered_children[0].joined_children[0].child,
+            format!("{name}-child-1-to-n")
+        );
+        assert_eq!(got.refered_children[0].joined_children[0].child_id, doc2.id);
+        assert_eq!(got.refered_children[0].joined_children_many.len(), 1);
+        assert_eq!(got.refered_children[0].joined_children_many[0].id, doc4.id);
+        assert_eq!(
+            got.refered_children[0].joined_children_many[0].many,
             format!("{name}-child-n-to-n")
         );
 
