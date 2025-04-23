@@ -2623,9 +2623,14 @@ impl ApiModel<'_> {
 
                         tracing::trace!("modified query: \n{}", ret);
                     });
-                } else if let Some(Relation::OneToMany { foreign_key, .. }) = &v.relation {
+                } else if let Some(Relation::OneToMany {
+                    foreign_key,
+                    reference_key,
+                    ..
+                }) = &v.relation
+                {
                     let foreign_key = syn::LitStr::new(
-                        &format!("{} = dummy.id", foreign_key),
+                        &format!("{} = dummy.{}", foreign_key, reference_key),
                         proc_macro2::Span::call_site(),
                     );
 
