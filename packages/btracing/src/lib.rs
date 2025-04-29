@@ -82,6 +82,28 @@ pub struct SlackMessage<'a> {
 }
 
 #[macro_export]
+macro_rules! notify_error {
+    ($hook:expr, $msg:expr) => {
+        let client = reqwest::Client::new();
+        let payload = btracing::SlackMessage {
+            text: &format!("[{}:{}] {}", file!(), line!(), $msg),
+        };
+
+        for i in 0..3 {
+            if let Ok(_) = client.post($hook).json(&payload).send().await {
+                break;
+            } else {
+                if i == 3 {
+                    tracing::error!("Failed to send Slack message");
+                    break;
+                }
+                tracing::warn!("Failed to send Slack message, attempt {}/3", i + 1);
+            }
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! notify {
     ($hook:expr, $msg:expr) => {
         let client = reqwest::Client::new();
