@@ -13,6 +13,7 @@ pub mod prelude {
     pub use validator;
 
     #[cfg(any(
+        feature = "be",
         feature = "fe",
         feature = "web",
         feature = "server",
