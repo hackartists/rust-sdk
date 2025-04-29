@@ -77,6 +77,11 @@ pub fn build_string_query_functions(field_name: &str, ty: &str) -> proc_macro2::
         proc_macro2::Span::call_site(),
     );
 
+    let any_of = syn::Ident::new(
+        &format!("{}_any_of", field_name),
+        proc_macro2::Span::call_site(),
+    );
+
     quote! {
         pub fn #eq_fn(mut self, #n: #ty) -> Self {
             self.conditions.push(by_types::Conditions::EqualsText(#field_id_str.to_string(),#n));
@@ -115,6 +120,11 @@ pub fn build_string_query_functions(field_name: &str, ty: &str) -> proc_macro2::
 
         pub fn #not_ends_with_fn(mut self, #n: #ty) -> Self {
             self.conditions.push(by_types::Conditions::NotEndsWithText(#field_id_str.to_string(),#n));
+            self
+        }
+
+        pub fn #any_of(mut self, #n: Vec<#ty>) -> Self {
+            self.conditions.push(by_types::Conditions::AnyOfText(#field_id_str.to_string(),#n));
             self
         }
     }
@@ -165,6 +175,11 @@ pub fn build_bigint_query_functions(field_name: &str, ty_str: &str) -> proc_macr
         proc_macro2::Span::call_site(),
     );
 
+    let any_of = syn::Ident::new(
+        &format!("{}_any_of", field_name),
+        proc_macro2::Span::call_site(),
+    );
+
     quote! {
         pub fn #eq_fn(mut self, #n: #ty) -> Self {
             self.conditions.push(by_types::Conditions::EqualsBigint(#field_id_str.to_string(),#n #bridge));
@@ -198,6 +213,11 @@ pub fn build_bigint_query_functions(field_name: &str, ty_str: &str) -> proc_macr
 
         pub fn #between_fn(mut self, from: #ty, to: #ty) -> Self {
             self.conditions.push(by_types::Conditions::BetweenBigint(#field_id_str.to_string(),from #bridge,to #bridge));
+            self
+        }
+
+        pub fn #any_of(mut self, #n: Vec<#ty>) -> Self {
+            self.conditions.push(by_types::Conditions::AnyOfBigint(#field_id_str.to_string(),#n #bridge));
             self
         }
     }
@@ -252,6 +272,11 @@ pub fn build_integer_query_functions(field_name: &str, ty_str: &str) -> proc_mac
         proc_macro2::Span::call_site(),
     );
 
+    let any_of = syn::Ident::new(
+        &format!("{}_any_of", field_name),
+        proc_macro2::Span::call_site(),
+    );
+
     quote! {
         pub fn #eq_fn(mut self, #n: #ty) -> Self {
             self.conditions.push(by_types::Conditions::EqualsInteger(#field_id_str.to_string(),#n #bridge));
@@ -285,6 +310,11 @@ pub fn build_integer_query_functions(field_name: &str, ty_str: &str) -> proc_mac
 
         pub fn #between_fn(mut self, from: #ty, to: #ty) -> Self {
             self.conditions.push(by_types::Conditions::BetweenInteger(#field_id_str.to_string(),from #bridge,to #bridge));
+            self
+        }
+
+        pub fn #any_of(mut self, #n: Vec<#ty>) -> Self {
+            self.conditions.push(by_types::Conditions::AnyOfInteger(#field_id_str.to_string(),#n #bridge));
             self
         }
     }

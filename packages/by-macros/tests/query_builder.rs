@@ -243,6 +243,19 @@ pub mod update_into_tests {
 
         assert_eq!(docs.len(), 20);
 
+        let docs: Vec<QueryModel> = QueryModel::query_builder()
+            .name_any_of(vec![
+                format!("{} 0-true", name),
+                format!("{} 0-false", name),
+            ])
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.len(), 2);
+
         let doc: QueryModel = q
             .query()
             .map(|r: PgRow| r.into())
@@ -405,6 +418,17 @@ pub mod update_into_tests {
             .unwrap();
 
         assert_eq!(docs.len(), 18);
+
+        let docs: Vec<QueryModel> = QueryModel::query_builder()
+            .name_contains(name.clone())
+            .num_any_of(vec![1, 2])
+            .query()
+            .map(|r: PgRow| r.into())
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(docs.len(), 2);
 
         for doc in docs {
             assert!(doc.num != 5);

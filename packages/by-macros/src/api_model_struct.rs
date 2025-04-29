@@ -2939,6 +2939,10 @@ impl ApiModel<'_> {
                                 tracing::debug!("Binding LessThanEqualsBigint {}", value);
                                 q.bind(value)
                             },
+                            by_types::Conditions::AnyOfBigint(_, value) => {
+                                tracing::debug!("Binding AnyOfBigint {}", value);
+                                q.bind(value)
+                            }
                             by_types::Conditions::BetweenInteger(_, from, to) =>  {
                                 tracing::debug!("Binding BetweenInteger {} and {}", from, to);
                                 q.bind(from).bind(to)
@@ -2967,6 +2971,10 @@ impl ApiModel<'_> {
                                 tracing::debug!("Binding LessThanEqualsInteger {}", value);
                                 q.bind(value)
                             },
+                            by_types::Conditions::AnyOfInteger(_, value) => {
+                                tracing::debug!("Binding AnyOfInteger {}", value);
+                                q.bind(value)
+                            }
                             by_types::Conditions::EqualsText(_, value) => {
                                 tracing::debug!("Binding EqualsText {}", value);
                                 q.bind(value)
@@ -3003,6 +3011,10 @@ impl ApiModel<'_> {
                             by_types::Conditions::NotEndsWithText(_, value) => {
                                 let value = format!("%{}", value);
                                 tracing::debug!("Binding NotEndsWithText {}", value);
+                                q.bind(value)
+                            }
+                            by_types::Conditions::AnyOfText(_, value) => {
+                                tracing::debug!("Binding AnyOfText {}", value);
                                 q.bind(value)
                             }
                             by_types::Conditions::TrueBoolean(_) => {

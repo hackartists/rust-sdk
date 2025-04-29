@@ -36,6 +36,7 @@ pub enum Conditions {
     LessThanBigint(String, i64),
     GreaterThanEqualsBigint(String, i64),
     LessThanEqualsBigint(String, i64),
+    AnyOfBigint(String, Vec<i32>),
 
     BetweenInteger(String, i32, i32),
     EqualsInteger(String, i32),
@@ -44,6 +45,7 @@ pub enum Conditions {
     LessThanInteger(String, i32),
     GreaterThanEqualsInteger(String, i32),
     LessThanEqualsInteger(String, i32),
+    AnyOfInteger(String, Vec<i32>),
 
     EqualsText(String, String),
     NotEqualsText(String, String),
@@ -53,6 +55,7 @@ pub enum Conditions {
     NotStartsWithText(String, String),
     EndsWithText(String, String),
     NotEndsWithText(String, String),
+    AnyOfText(String, Vec<String>),
 
     TrueBoolean(String),
     FalseBoolean(String),
@@ -73,6 +76,7 @@ impl Conditions {
             Conditions::LessThanBigint(field, _) => format!("{} < ${}", field, i),
             Conditions::GreaterThanEqualsBigint(field, _) => format!("{} >= ${}", field, i),
             Conditions::LessThanEqualsBigint(field, _) => format!("{} <= ${}", field, i),
+            Conditions::AnyOfBigint(field, _) => format!("{} = ANY(${})", field, i),
 
             Conditions::BetweenInteger(field, _, _) => {
                 let q = format!("{} BETWEEN ${} AND ${}", field, i, i + 1);
@@ -84,6 +88,7 @@ impl Conditions {
             Conditions::LessThanInteger(field, _) => format!("{} < ${}", field, i),
             Conditions::GreaterThanEqualsInteger(field, _) => format!("{} >= ${}", field, i),
             Conditions::LessThanEqualsInteger(field, _) => format!("{} <= ${}", field, i),
+            Conditions::AnyOfInteger(field, _) => format!("{} = ANY(${})", field, i),
 
             Conditions::EqualsText(field, _) => format!("{} = ${}", field, i),
             Conditions::NotEqualsText(field, _) => format!("{} != ${}", field, i),
@@ -93,6 +98,7 @@ impl Conditions {
             Conditions::NotStartsWithText(field, _) => format!("{} NOT ILIKE ${}", field, i),
             Conditions::EndsWithText(field, _) => format!("{} ILIKE ${}", field, i),
             Conditions::NotEndsWithText(field, _) => format!("{} NOT ILIKE ${}", field, i),
+            Conditions::AnyOfText(field, _) => format!("{} = ANY(${})", field, i),
 
             Conditions::TrueBoolean(field) => {
                 let q = format!("{} = true", field);
