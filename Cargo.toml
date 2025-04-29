@@ -27,7 +27,7 @@ dioxus-translate-macro = { path = "packages/dioxus-translate-macro", version = "
 by-macros = { path = "packages/by-macros", version = "0.6.*" }
 dioxus-logger = { version = "0.5.0" }
 
-aide = { version = "0.14.0", features = [
+aide = { version = "0.14.2", features = [
   "axum",
   "axum-query",
   "axum-extra",
@@ -39,7 +39,7 @@ aide = { version = "0.14.0", features = [
   "scalar",
   "macros",
 ] }
-axum = "0.8.1"
+axum = { version = "0.8.1", features = ["macros"] }
 schemars = { version = "0.8.10", features = ["uuid1"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.133"

@@ -2,12 +2,17 @@ use std::convert::Infallible;
 
 use aide::{
     axum::{
-        routing::{get, ApiMethodRouter},
         ApiRouter,
+        routing::{ApiMethodRouter, get},
     },
     openapi::{Info, OpenApi},
 };
-use axum::{body::Body, extract::Request, response::IntoResponse, routing::Route};
+use axum::{
+    body::Body,
+    extract::Request,
+    response::IntoResponse,
+    routing::{MethodRouter, Route},
+};
 use tower::{Layer, Service};
 
 use crate::docs::docs_routes;
@@ -60,6 +65,12 @@ where
                 ..OpenApi::default()
             },
             inner,
+        }
+    }
+    pub fn native_route(self, path: &str, method_router: MethodRouter<S>) -> Self {
+        Self {
+            inner: self.inner.route(&path, method_router),
+            ..self
         }
     }
 
