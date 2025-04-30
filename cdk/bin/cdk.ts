@@ -10,7 +10,7 @@ if (process.env.STACK) {
   stackName = process.env.STACK;
 }
 
-new CdkStack(app, `AppStack`, {
+new CdkStack(app, stackName, {
   stackName,
 
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
