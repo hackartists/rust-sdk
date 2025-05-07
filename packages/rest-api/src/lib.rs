@@ -30,6 +30,11 @@ static mut MESSAGE: Option<String> = None;
 static mut HEADERS: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
 static mut API_SERIVICE: Option<Box<dyn ApiService>> = None;
 
+#[cfg(feature = "server")]
+tokio::task_local! {
+    pub static TOKEN: Option<String>;
+}
+
 pub fn set_api_service(service: Box<dyn ApiService>) {
     unsafe {
         API_SERIVICE = Some(service);
@@ -62,7 +67,7 @@ pub fn get_authz_token() -> Option<String> {
                 .split(" ")
                 .last()
                 .map(|s| s.to_string()),
-            None => None,
+            _ => None,
         }
     }
 }
@@ -210,22 +215,48 @@ pub async fn send(req: RequestBuilder) -> reqwest::Result<reqwest::Response> {
 
     res
 }
-
 pub async fn get<T, E>(url: &str) -> Result<T, E>
 where
     T: serde::de::DeserializeOwned,
-    E: serde::de::DeserializeOwned + From<reqwest::Error>,
+    E: serde::de::DeserializeOwned + From<reqwest::Error> + From<gloo_net::Error>,
 {
-    tracing::debug!("GET {}", url);
-    let client = reqwest::Client::builder().build()?;
+    #[cfg(feature = "server")]
+    {
+        let client = reqwest::Client::builder().build()?;
+        let mut req = client.get(url);
+        match TOKEN.try_with(|token_in_task_local| token_in_task_local.clone()) {
+            Ok(Some(token_string)) => {
+                req = req.header(reqwest::header::AUTHORIZATION, token_string);
+            }
+            Ok(None) => {
+                tracing::debug!("No token found");
+            }
+            Err(e) => {
+                tracing::debug!("No token found {e:?}");
+            }
+        };
 
-    let req = client.get(url);
-    let res = send(req).await?;
+        let res = send(req).await?;
 
-    if res.status().is_success() {
-        Ok(res.json().await?)
-    } else {
-        Err(res.json().await?)
+        if res.status().is_success() {
+            Ok(res.json().await?)
+        } else {
+            Err(res.json().await?)
+        }
+    }
+    #[cfg(not(feature = "server"))]
+    {
+        let res = gloo_net::http::Request::get(url)
+            .header("Content-Type", "application/json")
+            .credentials(web_sys::RequestCredentials::Include)
+            .send()
+            .await?;
+        let status_code = res.status();
+        if status_code < 400 {
+            Ok(res.json().await?)
+        } else {
+            Err(res.json().await?)
+        }
     }
 }
 
@@ -254,21 +285,39 @@ where
         Err(res.json().await?)
     }
 }
-
 pub async fn post<R, T, E>(url: &str, body: R) -> Result<T, E>
 where
     R: Serialize,
     T: serde::de::DeserializeOwned,
-    E: serde::de::DeserializeOwned + From<reqwest::Error>,
+    E: serde::de::DeserializeOwned + From<reqwest::Error> + From<gloo_net::Error>,
 {
-    let client = reqwest::Client::builder().build()?;
+    #[cfg(feature = "server")]
+    {
+        let client = reqwest::Client::builder().build()?;
 
-    let req = client.post(url).json(&body);
-    let res = send(req).await?;
+        let req = client.post(url).json(&body);
+        let res = send(req).await?;
 
-    if res.status().is_success() {
-        Ok(res.json().await?)
-    } else {
-        Err(res.json().await?)
+        if res.status().is_success() {
+            Ok(res.json().await?)
+        } else {
+            Err(res.json().await?)
+        }
+    }
+
+    #[cfg(not(feature = "server"))]
+    {
+        tracing::debug!("POST(Web) {}", url);
+        let req = gloo_net::http::Request::post(url)
+            .header("Content-Type", "application/json")
+            .credentials(web_sys::RequestCredentials::Include)
+            .json(&body)?;
+        let res = req.send().await?;
+        let status_code = res.status();
+        if status_code < 400 {
+            Ok(res.json().await?)
+        } else {
+            Err(res.json().await?)
+        }
     }
 }
