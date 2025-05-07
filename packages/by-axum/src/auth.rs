@@ -3,10 +3,11 @@ use std::{str::FromStr, time::SystemTime};
 use crate::axum::{
     body::Body,
     extract::Request,
-    http::{header::AUTHORIZATION, Response, StatusCode},
+    http::{Response, StatusCode, header::AUTHORIZATION},
     middleware::Next,
 };
 use by_types::{AuthConfig, Claims};
+use http::header::COOKIE;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use rest_api::Signature;
 
@@ -66,48 +67,74 @@ pub async fn authorization_middleware(
     next: Next,
 ) -> Result<Response<Body>, StatusCode> {
     tracing::debug!("Authorization middleware {:?}", req.uri());
+    let mut scheme: Option<&str> = None;
+    let mut value: Option<&str> = None;
+
+    // Priority : `Authorization` header > `Cookie` header
+    // Parse `Authorization` header
     if let Some(auth_header) = req.headers().get(AUTHORIZATION) {
-        tracing::debug!("Authorization header: {:?}", auth_header);
         if let Ok(auth_value) = auth_header.to_str() {
             let mut auth_value = auth_value.split_whitespace();
-            let (scheme, value) = (auth_value.next(), auth_value.next());
-            let ext = match scheme.unwrap_or_default().to_lowercase().as_str() {
-                "usersig" => {
-                    tracing::debug!("User signature");
-                    verify_usersig(value).ok()
-                }
-                "bearer" => {
-                    tracing::debug!("Bearer token");
-                    verify_jwt(value).ok()
-                }
-                "secret" => {
-                    if option_env!("ENV").unwrap_or("local") == "prod" {
-                        None
-                    } else {
-                        verify_secret(value).ok()
-                    }
-                }
-                "x-server-key" => {
-                    tracing::debug!("server key");
-                    verify_server_key(value).ok()
-                }
-                _ => {
-                    tracing::debug!("Unknown scheme: {}", scheme.unwrap_or_default());
-                    None
-                }
-            };
-
-            tracing::debug!("Authorization: {:?}", ext);
-            req.extensions_mut().insert(ext);
-
-            return Ok(next.run(req).await);
+            let (sch, v) = (auth_value.next(), auth_value.next());
+            scheme = sch;
+            value = v;
         }
     }
 
-    tracing::debug!("No Authorization header");
-    req.extensions_mut().insert(None::<Authorization>);
+    if scheme.is_none() {
+        // Parse `Cookie` header
+        if let Some(cookie_header) = req.headers().get(COOKIE) {
+            if let Ok(cookie_str) = cookie_header.to_str() {
+                for cookie_pair_str in cookie_str.split(';') {
+                    let trimmed_pair = cookie_pair_str.trim();
+                    if let Some((name, cookie_val_str)) = trimmed_pair.split_once('=') {
+                        if name.trim() == "auth_token" {
+                            let potential_full_value = cookie_val_str.trim();
+                            if let Some((sch, val)) = potential_full_value.split_once(' ') {
+                                scheme = Some(sch);
+                                value = Some(val);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    return Ok(next.run(req).await);
+    tracing::debug!("Authorization Scheme: {:?}, Value {:?}", scheme, value);
+    let ext = match scheme.unwrap_or_default().to_lowercase().as_str() {
+        "usersig" => {
+            tracing::debug!("User signature");
+            verify_usersig(value).ok()
+        }
+        "bearer" => {
+            tracing::debug!("Bearer token");
+            verify_jwt(value).ok()
+        }
+        "secret" => {
+            if option_env!("ENV").unwrap_or("local") == "prod" {
+                None
+            } else {
+                verify_secret(value).ok()
+            }
+        }
+        "x-server-key" => {
+            tracing::debug!("server key");
+            verify_server_key(value).ok()
+        }
+        _ => {
+            tracing::debug!("Unknown scheme: {}", scheme.unwrap_or_default());
+            None
+        }
+    };
+
+    tracing::debug!("Authorization ext: {:?}", ext);
+    if ext.is_none() {
+        tracing::debug!("No Authorization header");
+    }
+    req.extensions_mut().insert(ext);
+    Ok(next.run(req).await)
 }
 
 pub fn verify_server_key(value: Option<&str>) -> Result<Authorization, StatusCode> {

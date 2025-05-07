@@ -2,6 +2,7 @@ use axum::{
     http::{HeaderMap, HeaderValue},
     response::{IntoResponse, Response},
 };
+use cookie::Cookie;
 use reqwest::header::{self, IntoHeaderName};
 use serde::{Deserialize, Deserializer};
 
@@ -31,6 +32,38 @@ impl<T> JsonWithHeaders<T> {
     pub fn with_cookie(mut self, value: &str) -> Self {
         self.headers
             .insert(header::SET_COOKIE, HeaderValue::from_str(&value).unwrap());
+        self
+    }
+
+    pub fn with_auth_cookie(mut self, scheme: &str, value: &str) -> Self {
+        let is_local = match option_env!("ENV") {
+            Some(env) if env == "local" => true,
+            _ => false,
+        };
+        let cookie = if is_local {
+            Cookie::build(("auth_token", format!("{} {}", scheme, value)))
+                .path("/")
+                .http_only(true)
+                .secure(false)
+                .same_site(cookie::SameSite::Lax)
+                .build()
+        } else {
+            Cookie::build(("auth_token", format!("{} {}", scheme, value)))
+                .path("/")
+                .http_only(true)
+                .secure(true)
+                .same_site(cookie::SameSite::None)
+                .build()
+        };
+
+        self.headers.append(
+            header::SET_COOKIE,
+            HeaderValue::from_str(&cookie.to_string()).unwrap(),
+        );
+        self.headers.insert(
+            header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
+            HeaderValue::from_str("true").unwrap(),
+        );
         self
     }
 
