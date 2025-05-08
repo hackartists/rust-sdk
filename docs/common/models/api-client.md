@@ -22,6 +22,7 @@ The custom `Error` type must implement the following traits. For more details, r
 |-----------------------------------|------------------------------------------------|
 | `From<sqlx::Error>`               | Database error handling                        |
 | `From<reqwest::Error>`            | HTTP request error handling                    |
+| `From<gloo_net::Error>`           | HTTP request(Client) error handling            |
 | `IntoResponse`                    | Converts errors into HTTP responses            |
 | `serde::Serialize`                | Serialization support                          |
 | `serde::Deserialize`              | Deserialization support                        |

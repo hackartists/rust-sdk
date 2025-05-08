@@ -30,6 +30,7 @@
 # Backend
 - [Backend](./backend/README.md)
   - [Package Structure](./backend/package-structure.md)
+  - [Authentication](./backend/authentication.md)
   - [Testing](./backend/testing.md)
 
 # ICP
