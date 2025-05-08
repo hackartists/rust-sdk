@@ -2,8 +2,11 @@ use axum::{
     http::{HeaderMap, HeaderValue},
     response::{IntoResponse, Response},
 };
+use cookie::Cookie;
 use reqwest::header::{self, IntoHeaderName};
 use serde::{Deserialize, Deserializer};
+
+use crate::TokenScheme;
 
 #[derive(Debug, Clone, Default, aide::OperationIo)]
 pub struct JsonWithHeaders<T> {
@@ -31,6 +34,33 @@ impl<T> JsonWithHeaders<T> {
     pub fn with_cookie(mut self, value: &str) -> Self {
         self.headers
             .insert(header::SET_COOKIE, HeaderValue::from_str(&value).unwrap());
+        self
+    }
+
+    pub fn with_auth_cookie(mut self, scheme: TokenScheme, value: &str) -> Self {
+        let is_local = match option_env!("ENV") {
+            Some(env) if env == "local" => true,
+            _ => false,
+        };
+        let cookie_builder =
+            Cookie::build(("auth_token", format!("{} {}", scheme.to_string(), value)))
+                .path("/")
+                .http_only(true)
+                .same_site(cookie::SameSite::Lax);
+        let cookie = if is_local {
+            cookie_builder.secure(false).build()
+        } else {
+            cookie_builder.secure(true).build()
+        };
+
+        self.headers.append(
+            header::SET_COOKIE,
+            HeaderValue::from_str(&cookie.to_string()).unwrap(),
+        );
+        self.headers.insert(
+            header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
+            HeaderValue::from_str("true").unwrap(),
+        );
         self
     }
 

@@ -81,3 +81,35 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for Role {
             .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)).into())
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenScheme {
+    Bearer,
+    Usersig,
+    XServerKey,
+    Secret,
+}
+impl std::fmt::Display for TokenScheme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenScheme::Bearer => write!(f, "Bearer"),
+            TokenScheme::Usersig => write!(f, "Usersig"),
+            TokenScheme::XServerKey => write!(f, "X-Server-Key"),
+            TokenScheme::Secret => write!(f, "Secret"),
+        }
+    }
+}
+
+impl TryFrom<&str> for TokenScheme {
+    type Error = String;
+
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            "bearer" => Ok(TokenScheme::Bearer),
+            "usersig" => Ok(TokenScheme::Usersig),
+            "x-server-key" => Ok(TokenScheme::XServerKey),
+            "secret" => Ok(TokenScheme::Secret),
+            _ => Err(format!("Invalid TokenScheme: {}", value)),
+        }
+    }
+}

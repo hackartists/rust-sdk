@@ -11,15 +11,20 @@ repository = "https://github.com/biyard/rust-sdk/tree/main/packages/rest-api"
 base64 = "0.22.1"
 candid = "0.10.11"
 chrono = "0.4.39"
+gloo-net.workspace = true
 reqwest.workspace = true
 ring = "0.17.14"
 serde = "1.0.217"
 simple_asn1 = "0.6.3"
 tracing = "0.1.41"
+web-sys = "0.3.77"
 
+tokio = { version = "1.43.0", optional = true }
+dioxus-fullstack = { workspace = true, optional = true }
 [dev-dependencies]
-tokio = { version = "1.42.0", features = ["full"] }
+tokio = { version = "1.43.0", features = ["full"] }
 
 [features]
-default=[]
-web=["ring/wasm32_unknown_unknown_js"]
+default = []
+server = ["tokio", "dioxus-fullstack"]
+web = ["ring/wasm32_unknown_unknown_js"]

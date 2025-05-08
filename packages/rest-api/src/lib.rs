@@ -28,11 +28,11 @@ static mut MESSAGE: Option<String> = None;
 // FIXME: It causes dropping Signal of dioxus
 // static mut HOOKS: RwLock<Vec<Box<dyn RequestHooker>>> = RwLock::new(Vec::new());
 static mut HEADERS: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
-static mut API_SERIVICE: Option<Box<dyn ApiService>> = None;
+static mut API_SERVICE: Option<Box<dyn ApiService>> = None;
 
 pub fn set_api_service(service: Box<dyn ApiService>) {
     unsafe {
-        API_SERIVICE = Some(service);
+        API_SERVICE = Some(service);
     }
 }
 // pub fn add_hook<T: RequestHooker + 'static>(hook: T) {
@@ -62,7 +62,7 @@ pub fn get_authz_token() -> Option<String> {
                 .split(" ")
                 .last()
                 .map(|s| s.to_string()),
-            None => None,
+            _ => None,
         }
     }
 }
@@ -198,7 +198,7 @@ pub async fn send(req: RequestBuilder) -> reqwest::Result<reqwest::Response> {
     let req = sign_request(req);
     let req = load_headers(req);
 
-    let api_service = unsafe { API_SERIVICE.as_mut() };
+    let api_service = unsafe { API_SERVICE.as_mut() };
     let res = match api_service {
         Some(api_service) => api_service.handle(req).await,
         None => req.send().await,
@@ -210,22 +210,61 @@ pub async fn send(req: RequestBuilder) -> reqwest::Result<reqwest::Response> {
 
     res
 }
-
 pub async fn get<T, E>(url: &str) -> Result<T, E>
 where
     T: serde::de::DeserializeOwned,
-    E: serde::de::DeserializeOwned + From<reqwest::Error>,
+    E: serde::de::DeserializeOwned + From<reqwest::Error> + From<gloo_net::Error>,
 {
-    tracing::debug!("GET {}", url);
-    let client = reqwest::Client::builder().build()?;
+    #[cfg(feature = "server")]
+    {
+        use dioxus_fullstack::prelude::server_context;
+        use reqwest::header::{HeaderMap, AUTHORIZATION, COOKIE};
+        let client = reqwest::Client::builder().build()?;
+        let mut req = client.get(url);
+        let ctx = server_context();
 
-    let req = client.get(url);
-    let res = send(req).await?;
+        let headers: HeaderMap = ctx.extract().await.unwrap();
+        let auth_token_value = headers
+            .get(COOKIE)
+            .and_then(|cookie_header_value| cookie_header_value.to_str().ok())
+            .and_then(|cookie_str| {
+                cookie_str.split(';').find_map(|cookie_pair| {
+                    let mut parts = cookie_pair.trim().splitn(2, '=');
+                    let key = parts.next()?;
+                    let value = parts.next()?;
+                    if key == "auth_token" {
+                        Some(value.to_string())
+                    } else {
+                        None
+                    }
+                })
+            });
+        if let Some(auth_token_value) = auth_token_value {
+            tracing::debug!("auth_token_value: {}", auth_token_value);
+            req = req.header(AUTHORIZATION, auth_token_value)
+        };
 
-    if res.status().is_success() {
-        Ok(res.json().await?)
-    } else {
-        Err(res.json().await?)
+        let res = send(req).await?;
+
+        if res.status().is_success() {
+            Ok(res.json().await?)
+        } else {
+            Err(res.json().await?)
+        }
+    }
+    #[cfg(not(feature = "server"))]
+    {
+        let res = gloo_net::http::Request::get(url)
+            .header("Content-Type", "application/json")
+            .credentials(web_sys::RequestCredentials::Include)
+            .send()
+            .await?;
+        let status_code = res.status();
+        if status_code < 400 {
+            Ok(res.json().await?)
+        } else {
+            Err(res.json().await?)
+        }
     }
 }
 
@@ -254,21 +293,39 @@ where
         Err(res.json().await?)
     }
 }
-
 pub async fn post<R, T, E>(url: &str, body: R) -> Result<T, E>
 where
     R: Serialize,
     T: serde::de::DeserializeOwned,
-    E: serde::de::DeserializeOwned + From<reqwest::Error>,
+    E: serde::de::DeserializeOwned + From<reqwest::Error> + From<gloo_net::Error>,
 {
-    let client = reqwest::Client::builder().build()?;
+    #[cfg(feature = "server")]
+    {
+        let client = reqwest::Client::builder().build()?;
 
-    let req = client.post(url).json(&body);
-    let res = send(req).await?;
+        let req = client.post(url).json(&body);
+        let res = send(req).await?;
 
-    if res.status().is_success() {
-        Ok(res.json().await?)
-    } else {
-        Err(res.json().await?)
+        if res.status().is_success() {
+            Ok(res.json().await?)
+        } else {
+            Err(res.json().await?)
+        }
+    }
+
+    #[cfg(not(feature = "server"))]
+    {
+        tracing::debug!("POST(Web) {}", url);
+        let req = gloo_net::http::Request::post(url)
+            .header("Content-Type", "application/json")
+            .credentials(web_sys::RequestCredentials::Include)
+            .json(&body)?;
+        let res = req.send().await?;
+        let status_code = res.status();
+        if status_code < 400 {
+            Ok(res.json().await?)
+        } else {
+            Err(res.json().await?)
+        }
     }
 }

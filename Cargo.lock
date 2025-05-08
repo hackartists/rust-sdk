@@ -33,7 +33,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2477554ebf38aea815a9c4729100cfc32f766876c45b9c9c38ef221b9d1a703"
 dependencies = [
  "aide-macros",
- "axum 0.8.3",
+ "axum 0.8.4",
  "axum-extra",
  "bytes",
  "cfg-if",
@@ -572,9 +572,9 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de45108900e1f9b9242f7f2e254aa3e2c029c921c258fe9e6b4217eeebd54288"
+checksum = "021e862c184ae977658b36c4500f7feac3221ca5da43e3f25bd04ab6c79a29b5"
 dependencies = [
  "axum-core 0.5.2",
  "axum-macros 0.5.0",
@@ -652,7 +652,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fc6f625a1f7705c6cf62d0d070794e94668988b1c38111baeec177c715f7b"
 dependencies = [
- "axum 0.8.3",
+ "axum 0.8.4",
  "axum-core 0.5.2",
  "bytes",
  "form_urlencoded",
@@ -856,7 +856,7 @@ name = "by-axum"
 version = "0.2.14"
 dependencies = [
  "aide",
- "axum 0.8.3",
+ "axum 0.8.4",
  "by-types",
  "dioxus-aws",
  "http 1.2.0",
@@ -931,7 +931,9 @@ name = "by-types"
 version = "0.3.9"
 dependencies = [
  "aide",
- "axum 0.8.3",
+ "axum 0.8.4",
+ "cookie",
+ "gloo-net",
  "reqwest",
  "schemars",
  "serde",
@@ -1137,6 +1139,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb402b8d4c85569410425650ce3eddc7d698ed96d39a73f941b08fb63082f1e7"
 dependencies = [
  "unicode-segmentation",
+]
+
+[[package]]
+name = "cookie"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ddef33a339a91ea89fb53151bd0a4689cfce27055c291dfa69945475d22c747"
+dependencies = [
+ "time",
+ "version_check",
 ]
 
 [[package]]
@@ -3836,12 +3848,15 @@ dependencies = [
  "base64 0.22.1",
  "candid",
  "chrono",
+ "dioxus-fullstack",
+ "gloo-net",
  "reqwest",
  "ring",
  "serde",
  "simple_asn1",
  "tokio",
  "tracing",
+ "web-sys",
 ]
 
 [[package]]
@@ -4220,7 +4235,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b417bedc008acbdf6d6b4bc482d29859924114bbe2650b7921fb68a261d0aa6"
 dependencies = [
- "axum 0.8.3",
+ "axum 0.8.4",
  "futures",
  "percent-encoding",
  "serde",
@@ -4966,9 +4981,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.44.0"
+version = "1.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9975ea0f48b5aa3972bf2d888c238182458437cc2a19374b81b25cdf1023fb3a"
+checksum = "2513ca694ef9ede0fb23fe71a4ee4107cb102b9dc1930f6d0fd77aae068ae165"
 dependencies = [
  "backtrace",
  "bytes",

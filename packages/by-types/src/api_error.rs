@@ -88,3 +88,12 @@ where
         ApiError::BadRequest(error.to_string().into())
     }
 }
+
+impl<T> From<gloo_net::Error> for ApiError<T>
+where
+    T: From<String>,
+{
+    fn from(error: gloo_net::Error) -> Self {
+        ApiError::InternalServerError(error.to_string().into())
+    }
+}

@@ -1,9 +1,13 @@
 pub mod auth;
 pub mod axum;
+
+pub use tower_http::cors;
+
 mod docs;
 use std::sync::Arc;
 
 use ::axum::{Extension, Json, Router};
+
 pub use logger as log;
 use router::BiyardRouter;
 
@@ -43,6 +47,13 @@ pub async fn serve(
     app: BiyardRouter,
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let app = app.layer(tower_http::cors::CorsLayer::permissive());
+    serve_wo_cors_layer(_tcp_listener, app).await
+}
+
+pub async fn serve_wo_cors_layer(
+    _tcp_listener: tokio::net::TcpListener,
+    app: BiyardRouter,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut api = app.open_api;
     let app = app
         .inner

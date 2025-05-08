@@ -1,8 +1,6 @@
 [workspace]
-members = [
-  "packages/*",
-]
-exclude= ["examples"]
+members = ["packages/*"]
+exclude = ["examples"]
 resolver = "2"
 
 [workspace.package]
@@ -66,3 +64,5 @@ bigdecimal = "0.4.7"
 candid = "0.10"
 ic-cdk = "0.17"
 ic-cdk-timers = "0.11"
+
+gloo-net = { version = "0.6.0" }
