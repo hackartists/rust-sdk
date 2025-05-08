@@ -42,20 +42,15 @@ impl<T> JsonWithHeaders<T> {
             Some(env) if env == "local" => true,
             _ => false,
         };
+        let cookie_builder =
+            Cookie::build(("auth_token", format!("{} {}", scheme.to_string(), value)))
+                .path("/")
+                .http_only(true)
+                .same_site(cookie::SameSite::Lax);
         let cookie = if is_local {
-            Cookie::build(("auth_token", format!("{} {}", scheme.to_string(), value)))
-                .path("/")
-                .http_only(true)
-                .secure(false)
-                .same_site(cookie::SameSite::Lax)
-                .build()
+            cookie_builder.secure(false).build()
         } else {
-            Cookie::build(("auth_token", format!("{} {}", scheme.to_string(), value)))
-                .path("/")
-                .http_only(true)
-                .secure(true)
-                .same_site(cookie::SameSite::None)
-                .build()
+            cookie_builder.secure(true).build()
         };
 
         self.headers.append(
