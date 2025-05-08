@@ -6,7 +6,7 @@ use crate::axum::{
     http::{Response, StatusCode, header::AUTHORIZATION},
     middleware::Next,
 };
-use by_types::{AuthConfig, Claims};
+use by_types::{AuthConfig, Claims, TokenScheme};
 use http::header::COOKIE;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use rest_api::Signature;
@@ -62,79 +62,87 @@ pub enum Authorization {
 ///
 /// * `Response<Body>` - The response
 /// * `StatusCode` - The status code of the response
+///
 pub async fn authorization_middleware(
     mut req: Request,
     next: Next,
 ) -> Result<Response<Body>, StatusCode> {
     tracing::debug!("Authorization middleware {:?}", req.uri());
-    let mut scheme: Option<&str> = None;
-    let mut value: Option<&str> = None;
 
-    // Priority : `Authorization` header > `Cookie` header
-    // Parse `Authorization` header
-    if let Some(auth_header) = req.headers().get(AUTHORIZATION) {
-        if let Ok(auth_value) = auth_header.to_str() {
-            let mut auth_value = auth_value.split_whitespace();
-            let (sch, v) = (auth_value.next(), auth_value.next());
-            scheme = sch;
-            value = v;
-        }
-    }
+    // Extract token information first without modifying req
+    let token_info = extract_auth_token(&req);
 
-    if scheme.is_none() {
-        // Parse `Cookie` header
-        if let Some(cookie_header) = req.headers().get(COOKIE) {
-            if let Ok(cookie_str) = cookie_header.to_str() {
-                for cookie_pair_str in cookie_str.split(';') {
-                    let trimmed_pair = cookie_pair_str.trim();
-                    if let Some((name, cookie_val_str)) = trimmed_pair.split_once('=') {
-                        if name.trim() == "auth_token" {
-                            let potential_full_value = cookie_val_str.trim();
-                            if let Some((sch, val)) = potential_full_value.split_once(' ') {
-                                scheme = Some(sch);
-                                value = Some(val);
-                            }
-                            break;
-                        }
+    // Process the token if available
+    if let Some((scheme, value)) = token_info {
+        if let Ok(token_scheme) = TokenScheme::try_from(scheme) {
+            tracing::debug!("Token scheme: {:?}", token_scheme);
+
+            let ext = match token_scheme {
+                TokenScheme::Bearer => verify_jwt(Some(value)).ok(),
+                TokenScheme::Usersig => verify_usersig(Some(value)).ok(),
+                TokenScheme::Secret => {
+                    if option_env!("ENV").unwrap_or("local") == "prod" {
+                        None
+                    } else {
+                        verify_secret(Some(value)).ok()
                     }
                 }
+                TokenScheme::XServerKey => verify_server_key(Some(value)).ok(),
+            };
+
+            if let Some(extension) = ext {
+                req.extensions_mut().insert(extension);
             }
         }
     }
 
-    tracing::debug!("Authorization Scheme: {:?}, Value {:?}", scheme, value);
-    let ext = match scheme.unwrap_or_default().to_lowercase().as_str() {
-        "usersig" => {
-            tracing::debug!("User signature");
-            verify_usersig(value).ok()
-        }
-        "bearer" => {
-            tracing::debug!("Bearer token");
-            verify_jwt(value).ok()
-        }
-        "secret" => {
-            if option_env!("ENV").unwrap_or("local") == "prod" {
-                None
-            } else {
-                verify_secret(value).ok()
-            }
-        }
-        "x-server-key" => {
-            tracing::debug!("server key");
-            verify_server_key(value).ok()
-        }
-        _ => {
-            tracing::debug!("Unknown scheme: {}", scheme.unwrap_or_default());
-            None
-        }
-    };
-
-    tracing::debug!("Authorization ext: {:?}", ext);
-    if ext.is_none() {
-        tracing::debug!("No Authorization header");
-    }
-    req.extensions_mut().insert(ext);
     Ok(next.run(req).await)
+}
+
+/// Extracts authentication token from request headers
+/// Prioritizes Authorization header over Cookie header
+fn extract_auth_token(req: &Request) -> Option<(&str, &str)> {
+    // Try Authorization header first
+    if let Some(token) = extract_from_auth_header(req) {
+        return Some(token);
+    }
+
+    // Fall back to Cookie header
+    extract_from_cookie_header(req)
+}
+
+fn extract_from_auth_header(req: &Request) -> Option<(&str, &str)> {
+    req.headers()
+        .get(AUTHORIZATION)
+        .and_then(|header| header.to_str().ok())
+        .and_then(|auth_value| {
+            let mut parts = auth_value.split_whitespace();
+            match (parts.next(), parts.next()) {
+                (Some(scheme), Some(value)) => Some((scheme, value)),
+                _ => None,
+            }
+        })
+}
+
+fn extract_from_cookie_header(req: &Request) -> Option<(&str, &str)> {
+    req.headers()
+        .get(COOKIE)
+        .and_then(|header| header.to_str().ok())
+        .and_then(|cookie_str| {
+            cookie_str
+                .split(';')
+                .map(|s| s.trim())
+                .find_map(|cookie_pair| {
+                    cookie_pair.split_once('=').and_then(|(name, value)| {
+                        if name.trim() == "auth_token" {
+                            let value = value.trim();
+                            value.split_once(' ').map(|(scheme, token)| (scheme, token))
+                        } else {
+                            None
+                        }
+                    })
+                })
+        })
 }
 
 pub fn verify_server_key(value: Option<&str>) -> Result<Authorization, StatusCode> {

@@ -28,7 +28,7 @@ static mut MESSAGE: Option<String> = None;
 // FIXME: It causes dropping Signal of dioxus
 // static mut HOOKS: RwLock<Vec<Box<dyn RequestHooker>>> = RwLock::new(Vec::new());
 static mut HEADERS: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
-static mut API_SERIVICE: Option<Box<dyn ApiService>> = None;
+static mut API_SERVICE: Option<Box<dyn ApiService>> = None;
 
 #[cfg(feature = "server")]
 tokio::task_local! {
@@ -37,7 +37,7 @@ tokio::task_local! {
 
 pub fn set_api_service(service: Box<dyn ApiService>) {
     unsafe {
-        API_SERIVICE = Some(service);
+        API_SERVICE = Some(service);
     }
 }
 // pub fn add_hook<T: RequestHooker + 'static>(hook: T) {
@@ -203,7 +203,7 @@ pub async fn send(req: RequestBuilder) -> reqwest::Result<reqwest::Response> {
     let req = sign_request(req);
     let req = load_headers(req);
 
-    let api_service = unsafe { API_SERIVICE.as_mut() };
+    let api_service = unsafe { API_SERVICE.as_mut() };
     let res = match api_service {
         Some(api_service) => api_service.handle(req).await,
         None => req.send().await,
@@ -222,18 +222,31 @@ where
 {
     #[cfg(feature = "server")]
     {
+        use dioxus_fullstack::prelude::server_context;
+        use reqwest::header::{HeaderMap, AUTHORIZATION, COOKIE};
         let client = reqwest::Client::builder().build()?;
         let mut req = client.get(url);
-        match TOKEN.try_with(|token_in_task_local| token_in_task_local.clone()) {
-            Ok(Some(token_string)) => {
-                req = req.header(reqwest::header::AUTHORIZATION, token_string);
-            }
-            Ok(None) => {
-                tracing::debug!("No token found");
-            }
-            Err(e) => {
-                tracing::debug!("No token found {e:?}");
-            }
+        let ctx = server_context();
+
+        let headers: HeaderMap = ctx.extract().await.unwrap();
+        let auth_token_value = headers
+            .get(COOKIE)
+            .and_then(|cookie_header_value| cookie_header_value.to_str().ok())
+            .and_then(|cookie_str| {
+                cookie_str.split(';').find_map(|cookie_pair| {
+                    let mut parts = cookie_pair.trim().splitn(2, '=');
+                    let key = parts.next()?;
+                    let value = parts.next()?;
+                    if key == "auth_token" {
+                        Some(value.to_string())
+                    } else {
+                        None
+                    }
+                })
+            });
+        if let Some(auth_token_value) = auth_token_value {
+            tracing::debug!("auth_token_value: {}", auth_token_value);
+            req = req.header(AUTHORIZATION, auth_token_value)
         };
 
         let res = send(req).await?;

@@ -6,6 +6,8 @@ use cookie::Cookie;
 use reqwest::header::{self, IntoHeaderName};
 use serde::{Deserialize, Deserializer};
 
+use crate::TokenScheme;
+
 #[derive(Debug, Clone, Default, aide::OperationIo)]
 pub struct JsonWithHeaders<T> {
     pub body: T,
@@ -35,20 +37,20 @@ impl<T> JsonWithHeaders<T> {
         self
     }
 
-    pub fn with_auth_cookie(mut self, scheme: &str, value: &str) -> Self {
+    pub fn with_auth_cookie(mut self, scheme: TokenScheme, value: &str) -> Self {
         let is_local = match option_env!("ENV") {
             Some(env) if env == "local" => true,
             _ => false,
         };
         let cookie = if is_local {
-            Cookie::build(("auth_token", format!("{} {}", scheme, value)))
+            Cookie::build(("auth_token", format!("{} {}", scheme.to_string(), value)))
                 .path("/")
                 .http_only(true)
                 .secure(false)
                 .same_site(cookie::SameSite::Lax)
                 .build()
         } else {
-            Cookie::build(("auth_token", format!("{} {}", scheme, value)))
+            Cookie::build(("auth_token", format!("{} {}", scheme.to_string(), value)))
                 .path("/")
                 .http_only(true)
                 .secure(true)

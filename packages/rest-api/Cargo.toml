@@ -20,11 +20,11 @@ tracing = "0.1.41"
 web-sys = "0.3.77"
 
 tokio = { version = "1.43.0", optional = true }
-
+dioxus-fullstack = { workspace = true, optional = true }
 [dev-dependencies]
 tokio = { version = "1.43.0", features = ["full"] }
 
 [features]
 default = []
-server = ["tokio"]
+server = ["tokio", "dioxus-fullstack"]
 web = ["ring/wasm32_unknown_unknown_js"]
