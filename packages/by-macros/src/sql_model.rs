@@ -83,6 +83,7 @@ pub enum SqlAttributeKey {
     Version,
     Nullable,
     Aggregator,
+    Indexed,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -147,6 +148,7 @@ pub enum SqlAttribute {
     Version(String),
     Nullable,
     Aggregator(Aggregator),
+    Indexed,
 }
 
 #[derive(Debug)]
@@ -198,6 +200,9 @@ pub fn parse_field_attr(field: &Field) -> SqlAttributes {
                             "primary_key" => {
                                 field_attrs
                                     .insert(SqlAttributeKey::PrimaryKey, SqlAttribute::PrimaryKey);
+                            }
+                            "indexed" => {
+                                field_attrs.insert(SqlAttributeKey::Indexed, SqlAttribute::Indexed);
                             }
                             "nullable" => {
                                 field_attrs

@@ -3808,6 +3808,7 @@ pub struct ApiField {
     pub nullable: bool,
     // omitted indicates if this field should be included in insert or not.
     pub omitted: bool,
+    pub indexed: bool,
     pub rust_type: String,
 
     pub summary: bool,
@@ -4500,6 +4501,14 @@ CREATE TABLE IF NOT EXISTS {} (
             _ => {}
         }
 
+        if self.indexed {
+            let index_name = format!("idx_{}_{}", self.table, self.name);
+            query.push(format!(
+                "CREATE INDEX IF NOT EXISTS {} ON {}({});",
+                index_name, self.table, var_name,
+            ));
+        }
+
         query.extend(self.trigger_query());
         query.extend(self.alter_query());
 
@@ -4693,6 +4702,7 @@ impl ApiField {
 
         let f = super::sql_model::parse_field_attr(field);
         let skip = f.attrs.contains_key(&SqlAttributeKey::Skip);
+        let indexed = f.attrs.contains_key(&SqlAttributeKey::Indexed);
 
         let query_builder = f.attrs.contains_key(&SqlAttributeKey::Nested);
         let primary_key = f.attrs.contains_key(&SqlAttributeKey::PrimaryKey);
@@ -4856,6 +4866,7 @@ impl ApiField {
             version,
             aggregator,
             skip,
+            indexed,
 
             table,
             rename,
