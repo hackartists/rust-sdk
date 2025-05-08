@@ -90,12 +90,11 @@ pub async fn authorization_middleware(
                 TokenScheme::XServerKey => verify_server_key(Some(value)).ok(),
             };
 
-            if let Some(extension) = ext {
-                req.extensions_mut().insert(extension);
-            }
+            req.extensions_mut().insert(ext);
+            return Ok(next.run(req).await);
         }
     }
-
+    req.extensions_mut().insert(None::<Authorization>);
     Ok(next.run(req).await)
 }
 
