@@ -18,6 +18,26 @@ pub enum TokenScheme {
 
 **Example**:
 ```rust
+// api/main.rs
+#[tokio::main]
+async fn main() -> Result<()> {
+    let app = make_app().await?;
+    let port = config::get().port;
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
+    tracing::info!("listening on {}", listener.local_addr().unwrap());
+    let cors_layer = CorsLayer::new()
+        .allow_origin(AllowOrigin::exact("{YOUR_CLIENT_DOMAIN}"))
+        .allow_credentials(true)
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers(vec![CONTENT_TYPE, AUTHORIZATION, COOKIE]);
+    let app = app.layer(cors_layer);
+    by_axum::serve_wo_cors_layer(listener, app).await.unwrap();
+
+    Ok(())
+}
+
 // Store the generated JWT (which serves as a Bearer token) in an authentication cookie.
 // The TokenScheme::Bearer argument indicates the type of the token being stored,
 async fn login(
