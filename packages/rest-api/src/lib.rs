@@ -30,11 +30,6 @@ static mut MESSAGE: Option<String> = None;
 static mut HEADERS: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
 static mut API_SERVICE: Option<Box<dyn ApiService>> = None;
 
-#[cfg(feature = "server")]
-tokio::task_local! {
-    pub static TOKEN: Option<String>;
-}
-
 pub fn set_api_service(service: Box<dyn ApiService>) {
     unsafe {
         API_SERVICE = Some(service);
