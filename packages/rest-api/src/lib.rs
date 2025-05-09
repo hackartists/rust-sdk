@@ -217,32 +217,38 @@ where
 {
     #[cfg(feature = "server")]
     {
-        use dioxus_fullstack::prelude::server_context;
-        use reqwest::header::{HeaderMap, AUTHORIZATION, COOKIE};
         let client = reqwest::Client::builder().build()?;
+        #[allow(unused_mut)]
         let mut req = client.get(url);
-        let ctx = server_context();
 
-        let headers: HeaderMap = ctx.extract().await.unwrap();
-        let auth_token_value = headers
-            .get(COOKIE)
-            .and_then(|cookie_header_value| cookie_header_value.to_str().ok())
-            .and_then(|cookie_str| {
-                cookie_str.split(';').find_map(|cookie_pair| {
-                    let mut parts = cookie_pair.trim().splitn(2, '=');
-                    let key = parts.next()?;
-                    let value = parts.next()?;
-                    if key == "auth_token" {
-                        Some(value.to_string())
-                    } else {
-                        None
-                    }
-                })
-            });
-        if let Some(auth_token_value) = auth_token_value {
-            tracing::debug!("auth_token_value: {}", auth_token_value);
-            req = req.header(AUTHORIZATION, auth_token_value)
-        };
+        #[cfg(not(feature = "test"))]
+        {
+            use dioxus_fullstack::prelude::server_context;
+            use reqwest::header::{HeaderMap, AUTHORIZATION, COOKIE};
+
+            let ctx = server_context();
+
+            let headers: HeaderMap = ctx.extract().await.unwrap();
+            let auth_token_value = headers
+                .get(COOKIE)
+                .and_then(|cookie_header_value| cookie_header_value.to_str().ok())
+                .and_then(|cookie_str| {
+                    cookie_str.split(';').find_map(|cookie_pair| {
+                        let mut parts = cookie_pair.trim().splitn(2, '=');
+                        let key = parts.next()?;
+                        let value = parts.next()?;
+                        if key == "auth_token" {
+                            Some(value.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                });
+            if let Some(auth_token_value) = auth_token_value {
+                tracing::debug!("auth_token_value: {}", auth_token_value);
+                req = req.header(AUTHORIZATION, auth_token_value)
+            };
+        }
 
         let res = send(req).await?;
 
