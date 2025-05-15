@@ -5,9 +5,9 @@ use reqwest::RequestBuilder;
 
 pub mod signature;
 
-#[cfg(all(feature = "server", not(feature = "web")))]
+#[cfg(not(feature = "web"))]
 mod server_functions;
-#[cfg(all(feature = "server", not(feature = "web")))]
+#[cfg(not(feature = "web"))]
 pub use server_functions::*;
 
 #[cfg(feature = "web")]

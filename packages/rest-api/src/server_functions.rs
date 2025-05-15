@@ -83,7 +83,7 @@ where
     #[allow(unused_mut)]
     let mut req = client.get(url);
 
-    #[cfg(not(feature = "test"))]
+    #[cfg(all(feature = "server", not(feature = "test")))]
     {
         use dioxus_fullstack::prelude::server_context;
         use reqwest::header::{HeaderMap, AUTHORIZATION, COOKIE};
