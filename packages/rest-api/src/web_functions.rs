@@ -87,7 +87,7 @@ pub fn extract_for_next_request(res: &Response) {
 pub async fn get<T, E>(url: &str) -> Result<T, E>
 where
     T: serde::de::DeserializeOwned,
-    E: serde::de::DeserializeOwned + From<reqwest::Error> + From<gloo_net::Error>,
+    E: serde::de::DeserializeOwned + From<gloo_net::Error>,
 {
     let req = gloo_net::http::Request::get(url)
         .header("Content-Type", "application/json")
@@ -105,7 +105,7 @@ pub async fn post<R, T, E>(url: &str, body: R) -> Result<T, E>
 where
     R: serde::Serialize,
     T: serde::de::DeserializeOwned,
-    E: serde::de::DeserializeOwned + From<reqwest::Error> + From<gloo_net::Error>,
+    E: serde::de::DeserializeOwned + From<gloo_net::Error>,
 {
     tracing::debug!("POST(Web) {}", url);
     let req = gloo_net::http::Request::post(url)
