@@ -1,7 +1,9 @@
 pub mod auth;
 pub mod axum;
 
+use http::Method;
 pub use tower_http::cors;
+use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 
 mod docs;
 use std::sync::Arc;
@@ -46,7 +48,13 @@ pub async fn serve(
     _tcp_listener: tokio::net::TcpListener,
     app: BiyardRouter,
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let app = app.layer(tower_http::cors::CorsLayer::permissive());
+    let app = app.layer(
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::mirror_request())
+            .allow_credentials(true)
+            .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+            .allow_headers(AllowHeaders::mirror_request()),
+    );
     serve_wo_cors_layer(_tcp_listener, app).await
 }
 
