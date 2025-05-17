@@ -5,6 +5,15 @@ pub mod prelude {
     pub use dioxus_translate;
     pub use dioxus_translate::*;
     pub use reqwest;
+
+    #[cfg(any(
+        feature = "be",
+        feature = "fe",
+        feature = "web",
+        feature = "mobile",
+        feature = "server",
+        all(feature = "server", feature = "lambda")
+    ))]
     pub use rest_api;
     pub use serde;
     pub use serde_json;
