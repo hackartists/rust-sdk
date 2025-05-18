@@ -5,14 +5,14 @@ use reqwest::RequestBuilder;
 
 pub mod signature;
 
-#[cfg(not(feature = "web"))]
+#[cfg(not(target_arch = "wasm32"))]
 mod server_functions;
-#[cfg(not(feature = "web"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub use server_functions::*;
 
-#[cfg(feature = "web")]
+#[cfg(target_arch = "wasm32")]
 mod web_functions;
-#[cfg(feature = "web")]
+#[cfg(target_arch = "wasm32")]
 pub use web_functions::*;
 
 pub use signature::Signature;
