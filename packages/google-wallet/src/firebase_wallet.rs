@@ -1,13 +1,13 @@
-use base64::{engine::general_purpose, Engine};
+use base64::{Engine, engine::general_purpose};
 use dioxus_oauth::prelude::FirebaseService;
-use gloo_storage::{errors::StorageError, LocalStorage, Storage};
+use gloo_storage::{LocalStorage, Storage, errors::StorageError};
 use ring::{
     rand::SystemRandom,
     signature::{Ed25519KeyPair, KeyPair, Signature},
 };
 use simple_asn1::{
-    oid, to_der,
     ASN1Block::{BitString, ObjectIdentifier, Sequence},
+    oid, to_der,
 };
 
 pub const IDENTITY_KEY: &str = "identity";
@@ -114,13 +114,16 @@ impl FirebaseWallet {
         let _ = LocalStorage::delete(IDENTITY_KEY);
     }
 
-    pub async fn request_wallet_with_google(&mut self) -> Result<WalletEvent, String> {
+    pub async fn request_wallet_with_google_and_keypair(
+        &mut self,
+        key_pair: &[u8],
+    ) -> Result<WalletEvent, String> {
         use crate::drive_api::DriveApi;
 
         let cred = self
             .firebase
             .sign_in_with_popup(vec![
-                "https://www.googleapis.com/auth/drive.appdata".to_string()
+                "https://www.googleapis.com/auth/drive.appdata".to_string(),
             ])
             .await;
         tracing::debug!("cred: {cred:?}");
@@ -155,10 +158,7 @@ impl FirebaseWallet {
             },
             None => {
                 tracing::warn!("file not found");
-                let rng = SystemRandom::new();
-
-                let key_pair = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
-                let private_key = general_purpose::STANDARD.encode(key_pair.as_ref());
+                let private_key = general_purpose::STANDARD.encode(key_pair);
 
                 if let Err(e) = cli.upload_file(&private_key).await {
                     tracing::error!("failed to upload file {e}");
@@ -175,6 +175,14 @@ impl FirebaseWallet {
         self.photo_url = Some(cred.photo_url);
 
         Ok(evt)
+    }
+
+    pub async fn request_wallet_with_google(&mut self) -> Result<WalletEvent, String> {
+        let rng = SystemRandom::new();
+
+        let key_pair = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+        self.request_wallet_with_google_and_keypair(key_pair.as_ref())
+            .await
     }
 
     pub fn sign(&self, msg: &str) -> Option<Signature> {
