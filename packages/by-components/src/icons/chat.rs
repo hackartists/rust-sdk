@@ -51,6 +51,56 @@ pub fn RoundBubble(
 }
 
 #[component]
+pub fn RoundBubble2(
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "#FFFFFF".to_string())] fill: String,
+    #[props(default = "".to_string())] class: String,
+) -> Element {
+    rsx! {
+        svg {
+            class,
+            fill,
+            height,
+            view_box: "0 0 21 20",
+            width,
+            xmlns: "http://www.w3.org/2000/svg",
+            path {
+                clip_rule: "evenodd",
+                d: "M2.83303 10C2.83 11.1646 3.10209 12.3134 3.62715 13.3529C4.89688 15.8935 7.49281 17.4989 10.333 17.5C11.4976 17.503 12.6464 17.2309 13.6859 16.7059L17.833 17.5L17.0389 13.3529C17.5639 12.3134 17.836 11.1646 17.833 10C17.8319 7.1598 16.2265 4.56388 13.6859 3.29414C12.6464 2.76908 11.4976 2.49699 10.333 2.50003H9.89183C6.08378 2.71011 3.04312 5.75077 2.83303 9.55883V10Z",
+                fill_rule: "evenodd",
+                stroke: "#737373",
+                stroke_linecap: "round",
+                stroke_linejoin: "round",
+                stroke_width: "1.5",
+            }
+            line {
+                stroke: "#737373",
+                stroke_linecap: "round",
+                stroke_width: "1.5",
+                transform: "matrix(-1 0 0 1 14.083 8.30469)",
+                x1: "0.75",
+                x2: "6.75",
+                y1: "-0.75",
+                y2: "-0.75",
+            }
+            path {
+                d: "M13.458 10.3921L9.29134 10.3921",
+                stroke: "#737373",
+                stroke_linecap: "round",
+                stroke_width: "1.5",
+            }
+            path {
+                d: "M13.458 13.1533H11.7913",
+                stroke: "#737373",
+                stroke_linecap: "round",
+                stroke_width: "1.5",
+            }
+        }
+    }
+}
+
+#[component]
 pub fn SquareChat(
     #[props(default = "24".to_string())] width: String,
     #[props(default = "24".to_string())] height: String,
