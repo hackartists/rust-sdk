@@ -8,12 +8,17 @@ pub fn RichText(
     #[props(default = "rich-text".to_string())] id: String,
     content: String,
     onchange: EventHandler<String>,
+
+    #[props(default = false)] change_location: bool,
+    #[props(default = false)] remove_border: bool,
+    #[props(default = "".to_string())] placeholder: String,
 ) -> Element {
     let mut closure_ref = use_signal(|| None as Option<Closure<dyn FnMut(web_sys::Event)>>);
 
     use_effect({
         let id = id.clone();
         let onchange = onchange.clone();
+        let change_location = change_location;
 
         move || {
             let event_name = format!("content-updated-{}", id);
@@ -27,14 +32,20 @@ pub fn RichText(
                         const existingToolbars = parent.querySelectorAll('.ql-toolbar');
                         existingToolbars.forEach(t => t.remove());
 
-                        editor.__quill = new Quill(editor, {{ theme: "snow" }});
+                        editor.__quill = new Quill(editor, {{ theme: "snow", placeholder: "{placeholder}" }});
 
                         const toolbar = parent.querySelector('.ql-toolbar');
+                        const container = parent.querySelector('.ql-container');
+
                         if (toolbar) {{
                             toolbar.style.width = "100%";
                             toolbar.style.maxWidth = "none";
                             toolbar.style.boxSizing = "border-box";
                         }}
+
+                        {move_toolbar_js}
+                        {remove_border_js}
+                        {placeholder_style_css}
 
                         editor.__quill.on('text-change', function() {{
                             document.dispatchEvent(new CustomEvent("{event_name}"));
@@ -42,7 +53,56 @@ pub fn RichText(
                     }} else {{
                         setTimeout(tryInit, 200);
                     }}
+
+                    
                 }})();
+                "#,
+                id = id,
+                event_name = event_name,
+                placeholder = placeholder,
+                move_toolbar_js = if change_location {
+                    r#"
+                        if (toolbar && container) {
+                            const parent = toolbar.parentElement;
+                            container.remove();
+                            toolbar.remove();
+                            parent.appendChild(container);
+                            parent.appendChild(toolbar);
+                        }
+                    "#
+                } else {
+                    ""
+                },
+                remove_border_js = if remove_border {
+                    r#"
+                        setTimeout(() => {
+                            const container = parent.querySelector('.ql-container');
+                            if (container) {
+                                container.style.setProperty("border", "none", "important");
+                                container.style.setProperty("border-top", "none", "important");
+                                container.style.setProperty("border-bottom", "none", "important");
+                            }
+                            if (editor) {
+                                editor.style.setProperty("border", "none", "important");
+                                editor.style.setProperty("outline", "none", "important");
+                            }
+                        }, 0);
+                    "#
+                } else {
+                    ""
+                },
+                placeholder_style_css = r#"
+                    const styleId = "rich-text-placeholder-style";
+                    if (!document.getElementById(styleId)) {
+                        const style = document.createElement("style");
+                        style.id = styleId;
+                        style.innerHTML = `
+                            .ql-editor::before {
+                                color: #525252 !important;
+                            }
+                        `;
+                        document.head.appendChild(style);
+                    }
                 "#
             );
             let _ = eval(&init_js);
@@ -123,7 +183,7 @@ pub fn RichText(
         script { src: "https://cdn.jsdelivr.net/npm/quill@2.0.0-dev.4/dist/quill.min.js" }
         div {
             id: "{id}",
-            class: "rich-text-editor w-full min-h-[100px] overflow-y-auto border border-gray-300 rounded-md",
+            class: if remove_border { "rich-text-editor w-full min-h-[100px] overflow-y-auto rounded-md border-none" } else { "rich-text-editor w-full min-h-[100px] overflow-y-auto border border-gray-300 rounded-md" },
         }
     }
 }

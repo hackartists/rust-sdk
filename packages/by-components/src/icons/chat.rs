@@ -1,6 +1,106 @@
 use dioxus::prelude::*;
 
 #[component]
+pub fn RoundBubble(
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "#FFFFFF".to_string())] fill: String,
+    #[props(default = "".to_string())] class: String,
+) -> Element {
+    rsx! {
+
+        svg {
+            class,
+            fill,
+            height,
+            view_box: "0 0 24 24",
+            width,
+            xmlns: "http://www.w3.org/2000/svg",
+            path {
+                clip_rule: "evenodd",
+                d: "M21 12C21.0036 13.3975 20.6771 14.7761 20.047 16.0235C18.5233 19.0722 15.4082 20.9987 12 21C10.6025 21.0036 9.2239 20.6771 7.97648 20.047L3.00003 21L3.95297 16.0235C3.3229 14.7761 2.99639 13.3975 3.00003 12C3.00135 8.59176 4.92779 5.47665 7.97648 3.95297C9.2239 3.3229 10.6025 2.99639 12 3.00003H12.5294C17.0991 3.25213 20.7479 6.90093 21 11.4706V12Z",
+                fill_rule: "evenodd",
+                stroke: "black",
+                stroke_linecap: "round",
+                stroke_linejoin: "round",
+                stroke_width: "2",
+            }
+            line {
+                stroke: "black",
+                stroke_linecap: "round",
+                stroke_width: "2",
+                x1: "8.5",
+                x2: "15.5",
+                y1: "8.96582",
+                y2: "8.96582",
+            }
+            path {
+                d: "M8.25 12.4707L13.25 12.4707",
+                stroke: "black",
+                stroke_linecap: "round",
+                stroke_width: "2",
+            }
+            path {
+                d: "M8.25 15.7842H10.25",
+                stroke: "black",
+                stroke_linecap: "round",
+                stroke_width: "2",
+            }
+        }
+    }
+}
+
+#[component]
+pub fn RoundBubble2(
+    #[props(default = "24".to_string())] width: String,
+    #[props(default = "24".to_string())] height: String,
+    #[props(default = "#FFFFFF".to_string())] fill: String,
+    #[props(default = "".to_string())] class: String,
+) -> Element {
+    rsx! {
+        svg {
+            class,
+            fill,
+            height,
+            view_box: "0 0 21 20",
+            width,
+            xmlns: "http://www.w3.org/2000/svg",
+            path {
+                clip_rule: "evenodd",
+                d: "M2.83303 10C2.83 11.1646 3.10209 12.3134 3.62715 13.3529C4.89688 15.8935 7.49281 17.4989 10.333 17.5C11.4976 17.503 12.6464 17.2309 13.6859 16.7059L17.833 17.5L17.0389 13.3529C17.5639 12.3134 17.836 11.1646 17.833 10C17.8319 7.1598 16.2265 4.56388 13.6859 3.29414C12.6464 2.76908 11.4976 2.49699 10.333 2.50003H9.89183C6.08378 2.71011 3.04312 5.75077 2.83303 9.55883V10Z",
+                fill_rule: "evenodd",
+                stroke: "#737373",
+                stroke_linecap: "round",
+                stroke_linejoin: "round",
+                stroke_width: "1.5",
+            }
+            line {
+                stroke: "#737373",
+                stroke_linecap: "round",
+                stroke_width: "1.5",
+                transform: "matrix(-1 0 0 1 14.083 8.30469)",
+                x1: "0.75",
+                x2: "6.75",
+                y1: "-0.75",
+                y2: "-0.75",
+            }
+            path {
+                d: "M13.458 10.3921L9.29134 10.3921",
+                stroke: "#737373",
+                stroke_linecap: "round",
+                stroke_width: "1.5",
+            }
+            path {
+                d: "M13.458 13.1533H11.7913",
+                stroke: "#737373",
+                stroke_linecap: "round",
+                stroke_width: "1.5",
+            }
+        }
+    }
+}
+
+#[component]
 pub fn SquareChat(
     #[props(default = "24".to_string())] width: String,
     #[props(default = "24".to_string())] height: String,
