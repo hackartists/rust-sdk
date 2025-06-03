@@ -3497,7 +3497,7 @@ impl<'a> ApiModel<'a> {
         let mut parent_ids = Vec::new();
         let mut iter_type = "by_types::QueryResponse".to_string();
         let mut custom_query_type = None;
-        let mut graphql = true;
+        let mut graphql = false;
         let mut result_type: proc_macro2::TokenStream = "crate::Result".parse().unwrap();
         let mut read_action_names = IndexMap::<String, ActionField>::new();
         let actions = attr
