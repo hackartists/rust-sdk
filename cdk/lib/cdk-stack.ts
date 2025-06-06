@@ -224,7 +224,6 @@ export class CdkStack extends cdk.Stack {
         `https://stage.${domain}`,
         "http://localhost:*",
       ];
-      allowedOrigins.push();
 
       const assetsBucket = new s3.Bucket(this, "Bucket", {
         bucketName: domain,
